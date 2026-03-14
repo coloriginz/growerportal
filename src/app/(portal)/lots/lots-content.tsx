@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   Table,
   TableBody,
@@ -12,7 +12,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -21,7 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { RiSearchLine, RiExternalLinkLine } from "@remixicon/react";
+import { RiSearchLine, RiStackLine } from "@remixicon/react";
 import { useLanguage } from "@/components/providers/language-provider";
 import {
   formatCurrencyDetailed,
@@ -88,12 +87,14 @@ export function LotsContent({ growerId }: { growerId: string | null }) {
   });
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-semibold">{t("lots.title")}</h1>
+    <div className="page-content">
+      <div className="page-header">
+        <h1>{t("lots.title")}</h1>
+      </div>
 
       {/* Filters */}
-      <div className="flex flex-wrap gap-4">
-        <div className="relative flex-1">
+      <div className="filter-bar">
+        <div className="relative flex-1 min-w-[200px]">
           <RiSearchLine className="text-muted-foreground absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2" />
           <Input
             placeholder={t("common.search")}
@@ -146,13 +147,13 @@ export function LotsContent({ growerId }: { growerId: string | null }) {
                     </Link>
                   </TableCell>
                   <TableCell>{lot.productName}</TableCell>
-                  <TableCell>{lot.articleGroup}</TableCell>
-                  <TableCell className="text-right">{lot.colli}</TableCell>
-                  <TableCell className="text-right">{lot.stemLength}</TableCell>
-                  <TableCell className="text-right">{formatNumber(lot.totalStems)}</TableCell>
-                  <TableCell className="text-right">{formatPrice(lot.avgPrice)}</TableCell>
-                  <TableCell className="text-right">{formatCurrencyDetailed(lot.totalAmount)}</TableCell>
-                  <TableCell>{formatDate(lot.deliveryDate)}</TableCell>
+                  <TableCell className="text-muted-foreground">{lot.articleGroup}</TableCell>
+                  <TableCell className="text-right tabular-nums">{lot.colli}</TableCell>
+                  <TableCell className="text-right tabular-nums">{lot.stemLength}</TableCell>
+                  <TableCell className="text-right tabular-nums">{formatNumber(lot.totalStems)}</TableCell>
+                  <TableCell className="text-right tabular-nums">{formatPrice(lot.avgPrice)}</TableCell>
+                  <TableCell className="text-right tabular-nums">{formatCurrencyDetailed(lot.totalAmount)}</TableCell>
+                  <TableCell className="text-muted-foreground">{formatDate(lot.deliveryDate)}</TableCell>
                   <TableCell>
                     <Badge variant={statusVariant[lot.status]}>
                       {t(`lots.${lot.status === "in_transit" ? "inTransit" : lot.status}` as Parameters<typeof t>[0])}
@@ -168,9 +169,14 @@ export function LotsContent({ growerId }: { growerId: string | null }) {
                 </TableRow>
               ))}
               {filtered.length === 0 && !loading && (
-                <TableRow>
-                  <TableCell colSpan={11} className="text-muted-foreground text-center py-8">
-                    {t("common.noResults")}
+                <TableRow className="hover:bg-transparent">
+                  <TableCell colSpan={11} className="py-0">
+                    <div className="empty-state">
+                      <div className="empty-state-icon">
+                        <RiStackLine />
+                      </div>
+                      <p className="empty-state-text">{t("common.noResults")}</p>
+                    </div>
                   </TableCell>
                 </TableRow>
               )}

@@ -12,6 +12,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { RiShieldCheckLine } from "@remixicon/react";
 import { useLanguage } from "@/components/providers/language-provider";
 import { formatDate, formatNumber } from "@/lib/format";
 
@@ -50,8 +51,10 @@ export function QualityContent({ growerId }: { growerId: string | null }) {
   }, [growerId]);
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-semibold">{t("quality.title")}</h1>
+    <div className="page-content">
+      <div className="page-header">
+        <h1>{t("quality.title")}</h1>
+      </div>
 
       <Card>
         <CardContent className="p-0">
@@ -76,20 +79,25 @@ export function QualityContent({ growerId }: { growerId: string | null }) {
                   <TableCell>
                     <Link
                       href={`/lots/${issue.lot.id}`}
-                      className="text-primary hover:underline"
+                      className="text-primary font-medium hover:underline"
                     >
                       {issue.lot.lotNumber}
                     </Link>
                   </TableCell>
-                  <TableCell>{issue.lot.productName}</TableCell>
-                  <TableCell className="text-right">{formatNumber(issue.stems)}</TableCell>
-                  <TableCell>{formatDate(issue.date)}</TableCell>
+                  <TableCell className="text-muted-foreground">{issue.lot.productName}</TableCell>
+                  <TableCell className="text-right tabular-nums">{formatNumber(issue.stems)}</TableCell>
+                  <TableCell className="text-muted-foreground">{formatDate(issue.date)}</TableCell>
                 </TableRow>
               ))}
               {issues.length === 0 && !loading && (
-                <TableRow>
-                  <TableCell colSpan={6} className="text-muted-foreground text-center py-8">
-                    {t("common.noResults")}
+                <TableRow className="hover:bg-transparent">
+                  <TableCell colSpan={6} className="py-0">
+                    <div className="empty-state">
+                      <div className="empty-state-icon">
+                        <RiShieldCheckLine />
+                      </div>
+                      <p className="empty-state-text">{t("common.noResults")}</p>
+                    </div>
                   </TableCell>
                 </TableRow>
               )}

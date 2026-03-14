@@ -65,16 +65,16 @@ export function DocumentsContent({ growerId }: { growerId: string | null }) {
       : documents.filter((d) => d.type === typeFilter);
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">{t("documents.title")}</h1>
+    <div className="page-content">
+      <div className="page-header">
+        <h1>{t("documents.title")}</h1>
         <Button>
           <RiUploadLine className="mr-2 h-4 w-4" />
           {t("documents.uploadDocument")}
         </Button>
       </div>
 
-      <div className="flex gap-4">
+      <div className="filter-bar">
         <Select value={typeFilter} onValueChange={(v) => { if (v !== null) setTypeFilter(v); }}>
           <SelectTrigger className="w-[180px]">
             <SelectValue placeholder={t("documents.type")} />
@@ -107,12 +107,14 @@ export function DocumentsContent({ growerId }: { growerId: string | null }) {
                   <TableCell>
                     <Badge variant="secondary">{doc.type}</Badge>
                   </TableCell>
-                  <TableCell className="flex items-center gap-2">
-                    <RiFileTextLine className="text-muted-foreground h-4 w-4" />
-                    {doc.name}
+                  <TableCell>
+                    <div className="flex items-center gap-2">
+                      <RiFileTextLine className="text-muted-foreground h-4 w-4 shrink-0" />
+                      <span className="font-medium">{doc.name}</span>
+                    </div>
                   </TableCell>
-                  <TableCell>{formatDate(doc.createdAt)}</TableCell>
-                  <TableCell className="text-right">
+                  <TableCell className="text-muted-foreground">{formatDate(doc.createdAt)}</TableCell>
+                  <TableCell className="text-right tabular-nums text-muted-foreground">
                     {doc.fileSize ? formatFileSize(doc.fileSize) : "-"}
                   </TableCell>
                   <TableCell>
@@ -127,9 +129,14 @@ export function DocumentsContent({ growerId }: { growerId: string | null }) {
                 </TableRow>
               ))}
               {filtered.length === 0 && !loading && (
-                <TableRow>
-                  <TableCell colSpan={5} className="text-muted-foreground text-center py-8">
-                    {t("common.noResults")}
+                <TableRow className="hover:bg-transparent">
+                  <TableCell colSpan={5} className="py-0">
+                    <div className="empty-state">
+                      <div className="empty-state-icon">
+                        <RiFileTextLine />
+                      </div>
+                      <p className="empty-state-text">{t("common.noResults")}</p>
+                    </div>
                   </TableCell>
                 </TableRow>
               )}

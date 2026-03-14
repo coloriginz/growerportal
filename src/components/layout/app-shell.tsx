@@ -96,7 +96,7 @@ export function AppShell({ user, children }: AppShellProps) {
         )}
 
         {/* Navigation */}
-        <nav className="flex-1 space-y-1 px-3 py-4">
+        <nav className="flex-1 space-y-0.5 px-3 py-4">
           {filteredNav.map((item) => {
             const isActive = pathname.startsWith(item.href);
             const Icon = item.icon;
@@ -105,13 +105,13 @@ export function AppShell({ user, children }: AppShellProps) {
                 key={item.href}
                 href={item.href}
                 onClick={() => setMobileOpen(false)}
-                className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150 ${
                   isActive
-                    ? "bg-sidebar-primary text-sidebar-primary-foreground"
+                    ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-sm"
                     : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
                 }`}
               >
-                <Icon className="h-5 w-5" />
+                <Icon className="h-[18px] w-[18px] shrink-0" />
                 {t(item.labelKey as Parameters<typeof t>[0])}
               </Link>
             );
@@ -123,12 +123,14 @@ export function AppShell({ user, children }: AppShellProps) {
         {/* User section */}
         <div className="p-4">
           <div className="flex items-center gap-3">
-            <Avatar className="h-9 w-9">
-              <AvatarFallback className="text-xs">{initials}</AvatarFallback>
+            <Avatar className="h-9 w-9 ring-2 ring-sidebar-border">
+              <AvatarFallback className="bg-sidebar-accent text-xs font-semibold text-sidebar-accent-foreground">
+                {initials}
+              </AvatarFallback>
             </Avatar>
             <div className="flex-1 truncate">
               <p className="truncate text-sm font-medium">{user.name}</p>
-              <p className="text-sidebar-foreground/60 truncate text-xs">
+              <p className="text-sidebar-foreground/50 truncate text-xs">
                 {user.email}
               </p>
             </div>
@@ -140,6 +142,7 @@ export function AppShell({ user, children }: AppShellProps) {
               size="icon"
               onClick={() => signOut({ callbackUrl: "/login" })}
               title={t("auth.logout")}
+              className="text-sidebar-foreground/60 hover:text-sidebar-foreground"
             >
               <RiLogoutBoxLine className="h-5 w-5" />
             </Button>
@@ -180,7 +183,7 @@ export function AppShell({ user, children }: AppShellProps) {
         </header>
 
         {/* Page Content */}
-        <main className="flex-1 overflow-y-auto p-6">{children}</main>
+        <main className="flex-1 overflow-y-auto px-6 py-8 lg:px-10">{children}</main>
       </div>
     </div>
   );

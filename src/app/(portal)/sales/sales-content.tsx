@@ -18,11 +18,9 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  Legend,
   ResponsiveContainer,
-  LineChart,
-  Line,
 } from "recharts";
+import { RiPlantLine, RiMoneyEuroCircleLine, RiLineChartLine } from "@remixicon/react";
 import { useLanguage } from "@/components/providers/language-provider";
 import {
   formatCurrency,
@@ -66,9 +64,9 @@ export function SalesContent({ growerId }: { growerId: string | null }) {
   }, [growerId, period]);
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">{t("sales.title")}</h1>
+    <div className="page-content">
+      <div className="page-header">
+        <h1>{t("sales.title")}</h1>
       </div>
 
       {/* Period tabs */}
@@ -87,33 +85,42 @@ export function SalesContent({ growerId }: { growerId: string | null }) {
           {/* Summary cards */}
           <div className="grid gap-4 sm:grid-cols-3">
             <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-muted-foreground text-sm font-medium">
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="kpi-label">
                   {t("sales.totalStems")}
                 </CardTitle>
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-accent">
+                  <RiPlantLine className="h-[18px] w-[18px] text-accent-foreground" />
+                </div>
               </CardHeader>
               <CardContent>
-                <p className="text-2xl font-bold">{formatNumber(data.totalStems)}</p>
+                <p className="kpi-value">{formatNumber(data.totalStems)}</p>
               </CardContent>
             </Card>
             <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-muted-foreground text-sm font-medium">
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="kpi-label">
                   {t("sales.totalTurnover")}
                 </CardTitle>
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-accent">
+                  <RiMoneyEuroCircleLine className="h-[18px] w-[18px] text-accent-foreground" />
+                </div>
               </CardHeader>
               <CardContent>
-                <p className="text-2xl font-bold">{formatCurrency(data.totalTurnover)}</p>
+                <p className="kpi-value">{formatCurrency(data.totalTurnover)}</p>
               </CardContent>
             </Card>
             <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-muted-foreground text-sm font-medium">
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="kpi-label">
                   {t("sales.avgPrice")}
                 </CardTitle>
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-accent">
+                  <RiLineChartLine className="h-[18px] w-[18px] text-accent-foreground" />
+                </div>
               </CardHeader>
               <CardContent>
-                <p className="text-2xl font-bold">{formatPrice(data.avgPrice)}</p>
+                <p className="kpi-value">{formatPrice(data.avgPrice)}</p>
               </CardContent>
             </Card>
           </div>
@@ -127,14 +134,14 @@ export function SalesContent({ growerId }: { growerId: string | null }) {
               <CardContent>
                 <ResponsiveContainer width="100%" height={300}>
                   <BarChart data={data.daily}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                    <XAxis dataKey="date" fontSize={12} tickLine={false} axisLine={false} />
-                    <YAxis fontSize={12} tickLine={false} axisLine={false} />
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="oklch(0.91 0.01 80 / 0.8)" />
+                    <XAxis dataKey="date" fontSize={12} tickLine={false} axisLine={false} tick={{ fill: "oklch(0.50 0.02 60)" }} />
+                    <YAxis fontSize={12} tickLine={false} axisLine={false} tick={{ fill: "oklch(0.50 0.02 60)" }} />
                     <Tooltip formatter={(value: unknown) => formatNumber(value as number)} />
                     <Bar
                       dataKey="stems"
                       name={t("sales.stems")}
-                      fill="oklch(0.546 0.245 262.881)"
+                      fill="oklch(0.55 0.15 155)"
                       radius={[4, 4, 0, 0]}
                     />
                   </BarChart>
@@ -148,7 +155,7 @@ export function SalesContent({ growerId }: { growerId: string | null }) {
             <CardHeader>
               <CardTitle>{t("sales.salesType")}</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-0">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -161,10 +168,10 @@ export function SalesContent({ growerId }: { growerId: string | null }) {
                 <TableBody>
                   {data.bySalesType.map((row) => (
                     <TableRow key={row.salesType}>
-                      <TableCell>{row.salesType}</TableCell>
-                      <TableCell className="text-right">{formatNumber(row.stems)}</TableCell>
-                      <TableCell className="text-right">{formatCurrencyDetailed(row.turnover)}</TableCell>
-                      <TableCell className="text-right">{formatPrice(row.avgPrice)}</TableCell>
+                      <TableCell className="font-medium">{row.salesType}</TableCell>
+                      <TableCell className="text-right tabular-nums">{formatNumber(row.stems)}</TableCell>
+                      <TableCell className="text-right tabular-nums">{formatCurrencyDetailed(row.turnover)}</TableCell>
+                      <TableCell className="text-right tabular-nums">{formatPrice(row.avgPrice)}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -177,7 +184,7 @@ export function SalesContent({ growerId }: { growerId: string | null }) {
             <CardHeader>
               <CardTitle>{t("lots.product")}</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-0">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -190,10 +197,10 @@ export function SalesContent({ growerId }: { growerId: string | null }) {
                 <TableBody>
                   {data.byProduct.map((row) => (
                     <TableRow key={row.product}>
-                      <TableCell>{row.product}</TableCell>
-                      <TableCell className="text-right">{formatNumber(row.stems)}</TableCell>
-                      <TableCell className="text-right">{formatCurrencyDetailed(row.turnover)}</TableCell>
-                      <TableCell className="text-right">{formatPrice(row.avgPrice)}</TableCell>
+                      <TableCell className="font-medium">{row.product}</TableCell>
+                      <TableCell className="text-right tabular-nums">{formatNumber(row.stems)}</TableCell>
+                      <TableCell className="text-right tabular-nums">{formatCurrencyDetailed(row.turnover)}</TableCell>
+                      <TableCell className="text-right tabular-nums">{formatPrice(row.avgPrice)}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

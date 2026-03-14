@@ -12,8 +12,8 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { RiUserLine } from "@remixicon/react";
 import { useLanguage } from "@/components/providers/language-provider";
 import { formatDate } from "@/lib/format";
 import { toast } from "sonner";
@@ -85,9 +85,16 @@ export function ProfileContent({ growerId }: { growerId: string | null }) {
 
   if (!growerId) {
     return (
-      <div className="space-y-6">
-        <h1 className="text-2xl font-semibold">{t("profile.title")}</h1>
-        <p className="text-muted-foreground">{t("nav.selectGrower")}</p>
+      <div className="page-content">
+        <div className="page-header">
+          <h1>{t("profile.title")}</h1>
+        </div>
+        <div className="empty-state">
+          <div className="empty-state-icon">
+            <RiUserLine />
+          </div>
+          <p className="empty-state-text">{t("nav.selectGrower")}</p>
+        </div>
       </div>
     );
   }
@@ -95,8 +102,10 @@ export function ProfileContent({ growerId }: { growerId: string | null }) {
   if (loading || !profile) return null;
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-semibold">{t("profile.title")}</h1>
+    <div className="page-content">
+      <div className="page-header">
+        <h1>{t("profile.title")}</h1>
+      </div>
 
       {/* Grower Info */}
       <Card>
@@ -104,50 +113,51 @@ export function ProfileContent({ growerId }: { growerId: string | null }) {
           <CardTitle>{t("profile.growerInfo")}</CardTitle>
         </CardHeader>
         <CardContent>
-          <dl className="grid gap-4 sm:grid-cols-2">
+          <dl className="grid gap-x-8 gap-y-5 sm:grid-cols-2">
             <div>
-              <dt className="text-muted-foreground text-sm">Code</dt>
-              <dd className="font-medium">{profile.code}</dd>
+              <dt className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Code</dt>
+              <dd className="mt-1 font-medium">{profile.code}</dd>
             </div>
             <div>
-              <dt className="text-muted-foreground text-sm">{t("profile.company")}</dt>
-              <dd className="font-medium">{profile.company || profile.name}</dd>
+              <dt className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t("profile.company")}</dt>
+              <dd className="mt-1 font-medium">{profile.company || profile.name}</dd>
             </div>
             <div>
-              <dt className="text-muted-foreground text-sm">{t("profile.address")}</dt>
-              <dd className="font-medium">
+              <dt className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t("profile.address")}</dt>
+              <dd className="mt-1 font-medium">
                 {[profile.street, profile.postalCode, profile.city]
                   .filter(Boolean)
                   .join(", ")}
               </dd>
             </div>
             <div>
-              <dt className="text-muted-foreground text-sm">{t("profile.country")}</dt>
-              <dd className="font-medium">{profile.country}</dd>
+              <dt className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t("profile.country")}</dt>
+              <dd className="mt-1 font-medium">{profile.country}</dd>
             </div>
             <div>
-              <dt className="text-muted-foreground text-sm">{t("profile.phone")}</dt>
-              <dd className="font-medium">{profile.phone || "-"}</dd>
+              <dt className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t("profile.phone")}</dt>
+              <dd className="mt-1 font-medium">{profile.phone || "-"}</dd>
             </div>
             <div>
-              <dt className="text-muted-foreground text-sm">{t("profile.vatNumber")}</dt>
-              <dd className="font-medium">{profile.vatNumber || "-"}</dd>
+              <dt className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t("profile.vatNumber")}</dt>
+              <dd className="mt-1 font-medium">{profile.vatNumber || "-"}</dd>
             </div>
             {profile.ggn && (
               <div>
-                <dt className="text-muted-foreground text-sm">GGN</dt>
-                <dd className="font-medium">{profile.ggn}</dd>
+                <dt className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">GGN</dt>
+                <dd className="mt-1 font-medium">{profile.ggn}</dd>
               </div>
             )}
           </dl>
 
           {profile.commercie && (
             <>
-              <Separator className="my-4" />
+              <Separator className="my-6" />
               <div>
-                <dt className="text-muted-foreground text-sm">{t("profile.commercie")}</dt>
-                <dd className="font-medium">
-                  {profile.commercie.name} ({profile.commercie.email})
+                <dt className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t("profile.commercie")}</dt>
+                <dd className="mt-1 font-medium">
+                  {profile.commercie.name}{" "}
+                  <span className="text-muted-foreground font-normal">({profile.commercie.email})</span>
                 </dd>
               </div>
             </>
@@ -175,15 +185,15 @@ export function ProfileContent({ growerId }: { growerId: string | null }) {
                   <TableCell>
                     <Badge variant="secondary">{cert.type}</Badge>
                   </TableCell>
-                  <TableCell>{cert.number}</TableCell>
-                  <TableCell>
+                  <TableCell className="font-medium">{cert.number}</TableCell>
+                  <TableCell className="text-muted-foreground">
                     {cert.validUntil ? formatDate(cert.validUntil) : "-"}
                   </TableCell>
                 </TableRow>
               ))}
               {profile.certificates.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={3} className="text-muted-foreground text-center py-4">
+                <TableRow className="hover:bg-transparent">
+                  <TableCell colSpan={3} className="text-muted-foreground text-center py-10">
                     {t("common.noResults")}
                   </TableCell>
                 </TableRow>
@@ -200,7 +210,7 @@ export function ProfileContent({ growerId }: { growerId: string | null }) {
         </CardHeader>
         <CardContent className="space-y-4">
           <textarea
-            className="border-input bg-background ring-offset-background placeholder:text-muted-foreground focus-visible:ring-ring flex min-h-[100px] w-full rounded-md border px-3 py-2 text-sm focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none"
+            className="border-input bg-background ring-offset-background placeholder:text-muted-foreground focus-visible:ring-ring flex min-h-[120px] w-full rounded-lg border px-4 py-3 text-sm leading-relaxed transition-colors focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none"
             placeholder={t("profile.changeRequestPlaceholder")}
             value={changeMessage}
             onChange={(e) => setChangeMessage(e.target.value)}

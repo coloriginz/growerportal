@@ -71,20 +71,20 @@ export function LotDetail({ lot }: LotDetailProps) {
   const totalCosts = lot.costs.reduce((sum, c) => sum + parseFloat(c.amount), 0);
 
   return (
-    <div className="space-y-6">
+    <div className="page-content">
       {/* Header */}
       <div className="flex items-center gap-4">
         <Link href="/lots">
-          <Button variant="ghost" size="icon">
+          <Button variant="ghost" size="icon" className="shrink-0">
             <RiArrowLeftLine className="h-5 w-5" />
           </Button>
         </Link>
         <div>
-          <h1 className="text-2xl font-semibold">
+          <h1 className="text-2xl font-semibold tracking-tight">
             {t("lots.details")}: {lot.lotNumber}
           </h1>
-          <p className="text-muted-foreground text-sm">
-            {lot.productName} - {lot.articleGroup}
+          <p className="text-sm text-muted-foreground">
+            {lot.productName} &middot; {lot.articleGroup}
           </p>
         </div>
       </div>
@@ -93,32 +93,32 @@ export function LotDetail({ lot }: LotDetailProps) {
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <Card>
           <CardContent className="pt-6">
-            <p className="text-muted-foreground text-sm">{t("lots.colli")}</p>
-            <p className="text-xl font-semibold">{lot.colli}</p>
+            <p className="kpi-label">{t("lots.colli")}</p>
+            <p className="mt-1 text-2xl font-bold tabular-nums">{lot.colli}</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-6">
-            <p className="text-muted-foreground text-sm">{t("lots.stemLength")}</p>
-            <p className="text-xl font-semibold">{lot.stemLength} cm</p>
+            <p className="kpi-label">{t("lots.stemLength")}</p>
+            <p className="mt-1 text-2xl font-bold tabular-nums">{lot.stemLength} cm</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-6">
-            <p className="text-muted-foreground text-sm">{t("lots.totalStems")}</p>
-            <p className="text-xl font-semibold">{formatNumber(lot.totalStems)}</p>
+            <p className="kpi-label">{t("lots.totalStems")}</p>
+            <p className="mt-1 text-2xl font-bold tabular-nums">{formatNumber(lot.totalStems)}</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-6">
-            <p className="text-muted-foreground text-sm">{t("lots.avgPrice")}</p>
-            <p className="text-xl font-semibold">{formatPrice(parseFloat(lot.avgPrice))}</p>
+            <p className="kpi-label">{t("lots.avgPrice")}</p>
+            <p className="mt-1 text-2xl font-bold tabular-nums">{formatPrice(parseFloat(lot.avgPrice))}</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-6">
-            <p className="text-muted-foreground text-sm">{t("lots.totalAmount")}</p>
-            <p className="text-xl font-semibold">{formatCurrencyDetailed(parseFloat(lot.totalAmount))}</p>
+            <p className="kpi-label">{t("lots.totalAmount")}</p>
+            <p className="mt-1 text-2xl font-bold tabular-nums">{formatCurrencyDetailed(parseFloat(lot.totalAmount))}</p>
           </CardContent>
         </Card>
       </div>
@@ -127,9 +127,11 @@ export function LotDetail({ lot }: LotDetailProps) {
       {lot.salesSheet && (
         <Card>
           <CardContent className="flex items-center gap-3 pt-6">
-            <RiFileTextLine className="text-muted-foreground h-5 w-5" />
-            <span className="text-sm">{t("lots.salesSheet")}:</span>
-            <Link href={`/documents?type=salessheet`} className="text-primary text-sm hover:underline">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent">
+              <RiFileTextLine className="h-4 w-4 text-accent-foreground" />
+            </div>
+            <span className="text-sm text-muted-foreground">{t("lots.salesSheet")}:</span>
+            <Link href={`/documents?type=salessheet`} className="text-primary text-sm font-medium hover:underline">
               {lot.salesSheet.invoiceNumber}
             </Link>
           </CardContent>
@@ -161,9 +163,9 @@ export function LotDetail({ lot }: LotDetailProps) {
                   key={tx.id}
                   className={tx.isCorrection ? "text-muted-foreground italic" : ""}
                 >
-                  <TableCell>{formatDate(tx.date)}</TableCell>
+                  <TableCell className="text-muted-foreground">{formatDate(tx.date)}</TableCell>
                   <TableCell>
-                    {tx.isCorrection ? tx.correctionType : tx.salesType}
+                    <span className="font-medium">{tx.isCorrection ? tx.correctionType : tx.salesType}</span>
                     {tx.qualityCode && (
                       <Badge variant="outline" className="ml-2 text-xs">
                         {tx.qualityCode}
@@ -175,14 +177,14 @@ export function LotDetail({ lot }: LotDetailProps) {
                       </span>
                     )}
                   </TableCell>
-                  <TableCell>{tx.s1}</TableCell>
-                  <TableCell>{tx.s2}</TableCell>
-                  <TableCell>{tx.s3}</TableCell>
-                  <TableCell className="text-right">{tx.stems}</TableCell>
-                  <TableCell className="text-right">
+                  <TableCell className="text-muted-foreground">{tx.s1}</TableCell>
+                  <TableCell className="text-muted-foreground">{tx.s2}</TableCell>
+                  <TableCell className="text-muted-foreground">{tx.s3}</TableCell>
+                  <TableCell className="text-right tabular-nums">{tx.stems}</TableCell>
+                  <TableCell className="text-right tabular-nums">
                     {parseFloat(tx.pricePerStem) > 0 ? formatPrice(parseFloat(tx.pricePerStem)) : "-"}
                   </TableCell>
-                  <TableCell className="text-right">
+                  <TableCell className="text-right tabular-nums font-medium">
                     {parseFloat(tx.amount) > 0 ? formatCurrencyDetailed(parseFloat(tx.amount)) : "-"}
                   </TableCell>
                 </TableRow>
@@ -210,12 +212,12 @@ export function LotDetail({ lot }: LotDetailProps) {
                 {lot.costs.map((cost) => (
                   <TableRow key={cost.id}>
                     <TableCell>{cost.description}</TableCell>
-                    <TableCell className="text-right">{formatCurrencyDetailed(parseFloat(cost.amount))}</TableCell>
+                    <TableCell className="text-right tabular-nums">{formatCurrencyDetailed(parseFloat(cost.amount))}</TableCell>
                   </TableRow>
                 ))}
-                <TableRow className="font-semibold">
+                <TableRow className="font-semibold bg-muted/30">
                   <TableCell>Total</TableCell>
-                  <TableCell className="text-right">{formatCurrencyDetailed(totalCosts)}</TableCell>
+                  <TableCell className="text-right tabular-nums">{formatCurrencyDetailed(totalCosts)}</TableCell>
                 </TableRow>
               </TableBody>
             </Table>
@@ -246,8 +248,8 @@ export function LotDetail({ lot }: LotDetailProps) {
                       <Badge variant="destructive">{issue.code}</Badge>
                     </TableCell>
                     <TableCell>{issue.description}</TableCell>
-                    <TableCell className="text-right">{formatNumber(issue.stems)}</TableCell>
-                    <TableCell>{formatDate(issue.date)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{formatNumber(issue.stems)}</TableCell>
+                    <TableCell className="text-muted-foreground">{formatDate(issue.date)}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>

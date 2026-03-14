@@ -21,13 +21,6 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { RiAddLine, RiMailLine } from "@remixicon/react";
 import { useLanguage } from "@/components/providers/language-provider";
 import { toast } from "sonner";
@@ -105,9 +98,9 @@ export function AdminContent() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">{t("admin.title")}</h1>
+    <div className="page-content">
+      <div className="page-header">
+        <h1>{t("admin.title")}</h1>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger render={<Button />}>
             <RiAddLine className="mr-2 h-4 w-4" />
@@ -187,11 +180,13 @@ export function AdminContent() {
               {users.map((user) => (
                 <TableRow key={user.id}>
                   <TableCell className="font-medium">{user.name}</TableCell>
-                  <TableCell>{user.email}</TableCell>
+                  <TableCell className="text-muted-foreground">{user.email}</TableCell>
                   <TableCell>
                     <Badge variant="secondary">{user.role}</Badge>
                   </TableCell>
-                  <TableCell>{user.grower ? `${user.grower.code} - ${user.grower.name}` : "-"}</TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {user.grower ? `${user.grower.code} - ${user.grower.name}` : "-"}
+                  </TableCell>
                   <TableCell>
                     <Badge variant={user.isActive ? "default" : "outline"}>
                       {user.isActive ? t("admin.active") : t("admin.inactive")}

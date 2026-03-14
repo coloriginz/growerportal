@@ -121,6 +121,60 @@
     @apply border-border outline-ring/50;
   }
   body {
-    @apply bg-background text-foreground font-sans;
+    @apply bg-background text-foreground font-sans antialiased;
+  }
+}
+
+@layer components {
+  /* Page header pattern: consistent across all pages */
+  .page-header {
+    @apply flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between;
+  }
+  .page-header h1 {
+    @apply text-2xl font-semibold tracking-tight text-foreground;
+  }
+  .page-header p {
+    @apply text-sm text-muted-foreground;
+  }
+
+  /* KPI card enhancement */
+  .kpi-value {
+    @apply text-3xl font-bold tracking-tight tabular-nums;
+  }
+  .kpi-label {
+    @apply text-sm font-medium text-muted-foreground;
+  }
+  .kpi-change {
+    @apply mt-1.5 inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-medium;
+  }
+  .kpi-change-up {
+    @apply bg-emerald-50 text-emerald-700;
+  }
+  .kpi-change-down {
+    @apply bg-red-50 text-red-700;
+  }
+
+  /* Empty state pattern */
+  .empty-state {
+    @apply flex flex-col items-center justify-center gap-3 py-16 text-center;
+  }
+  .empty-state-icon {
+    @apply flex h-12 w-12 items-center justify-center rounded-full bg-muted;
+  }
+  .empty-state-icon svg {
+    @apply h-6 w-6 text-muted-foreground;
+  }
+  .empty-state-text {
+    @apply text-sm text-muted-foreground;
+  }
+
+  /* Filter bar pattern */
+  .filter-bar {
+    @apply flex flex-wrap items-center gap-3;
+  }
+
+  /* Section spacing */
+  .page-content {
+    @apply space-y-8;
   }
 }
