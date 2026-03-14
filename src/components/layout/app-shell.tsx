@@ -86,7 +86,7 @@ export function AppShell({ user, children }: AppShellProps) {
           <Image src="/logo.png" alt="Coloriginz" width={140} height={38} />
         </div>
 
-        <Separator />
+        <Separator className="bg-sidebar-border" />
 
         {/* Grower Selector (admin/commercie only) */}
         {showGrowerSelector && (
@@ -107,8 +107,8 @@ export function AppShell({ user, children }: AppShellProps) {
                 onClick={() => setMobileOpen(false)}
                 className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
                   isActive
-                    ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                    ? "bg-sidebar-primary text-sidebar-primary-foreground"
+                    : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
                 }`}
               >
                 <Icon className="h-5 w-5" />
@@ -118,7 +118,7 @@ export function AppShell({ user, children }: AppShellProps) {
           })}
         </nav>
 
-        <Separator />
+        <Separator className="bg-sidebar-border" />
 
         {/* User section */}
         <div className="p-4">
@@ -128,7 +128,7 @@ export function AppShell({ user, children }: AppShellProps) {
             </Avatar>
             <div className="flex-1 truncate">
               <p className="truncate text-sm font-medium">{user.name}</p>
-              <p className="text-muted-foreground truncate text-xs">
+              <p className="text-sidebar-foreground/60 truncate text-xs">
                 {user.email}
               </p>
             </div>
@@ -152,7 +152,7 @@ export function AppShell({ user, children }: AppShellProps) {
   return (
     <div className="flex min-h-screen">
       {/* Desktop Sidebar */}
-      <aside className="bg-card border-border hidden w-64 shrink-0 border-r lg:block">
+      <aside className="bg-sidebar text-sidebar-foreground border-sidebar-border hidden w-64 shrink-0 border-r lg:block">
         <div className="sticky top-0 h-screen overflow-y-auto">
           <NavContent />
         </div>
@@ -168,7 +168,7 @@ export function AppShell({ user, children }: AppShellProps) {
       {/* Main Content */}
       <div className="flex flex-1 flex-col">
         {/* Mobile Header */}
-        <header className="bg-card border-border flex h-16 items-center gap-4 border-b px-4 lg:hidden">
+        <header className="bg-sidebar text-sidebar-foreground border-sidebar-border flex h-16 items-center gap-4 border-b px-4 lg:hidden">
           <Button
             variant="ghost"
             size="icon"
