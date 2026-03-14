@@ -1,0 +1,38 @@
+import { Suspense } from "react";
+import { auth } from "@/lib/auth";
+import { prisma } from "@/lib/db";
+import { getActiveGrowerId } from "@/lib/grower-context";
+import { DashboardContent } from "./dashboard-content";
+import { Skeleton } from "@/components/ui/skeleton";
+
+interface Props {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}
+
+export default async function DashboardPage({ searchParams }: Props) {
+  const params = await searchParams;
+  const growerId = await getActiveGrowerId(params);
+
+  return (
+    <Suspense fallback={<DashboardSkeleton />}>
+      <DashboardContent growerId={growerId} />
+    </Suspense>
+  );
+}
+
+function DashboardSkeleton() {
+  return (
+    <div className="space-y-6">
+      <Skeleton className="h-8 w-48" />
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <Skeleton key={i} className="h-32" />
+        ))}
+      </div>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Skeleton className="h-80" />
+        <Skeleton className="h-80" />
+      </div>
+    </div>
+  );
+}
