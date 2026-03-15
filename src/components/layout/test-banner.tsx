@@ -54,8 +54,6 @@ export function TestBanner({ isAdmin }: TestBannerProps) {
     }
   }
 
-  const modeLabel = mode === "ethereal" ? "Test inbox" : redirectEmail || "No address set";
-
   return (
     <div className="flex items-center justify-center bg-red-600 px-4 py-1.5 text-xs font-semibold tracking-wide text-white">
       <span className="flex-1 text-center uppercase">Test Environment</span>

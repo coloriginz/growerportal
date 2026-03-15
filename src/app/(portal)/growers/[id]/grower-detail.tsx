@@ -92,6 +92,7 @@ export function GrowerDetail({ growerId }: { growerId: string }) {
   useEffect(() => {
     fetchGrower();
     fetchCommercieUsers();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [growerId]);
 
   async function fetchGrower() {

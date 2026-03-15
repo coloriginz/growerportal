@@ -35,7 +35,7 @@ export async function DELETE(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { error, session } = await requireAuth(["admin", "commercie"]);
+  const { error } = await requireAuth(["admin", "commercie"]);
   if (error) return error;
 
   const { id } = await params;

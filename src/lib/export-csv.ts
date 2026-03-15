@@ -1,5 +1,5 @@
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function exportToCSV(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   data: Record<string, any>[],
   filename: string,
   columns: { key: string; header: string }[]

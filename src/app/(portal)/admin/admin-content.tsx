@@ -42,7 +42,7 @@ interface UserRow {
 
 export function AdminContent() {
   const [users, setUsers] = useState<UserRow[]>([]);
-  const [_loading, setLoading] = useState(true);
+  const [, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const { t } = useLanguage();
 
