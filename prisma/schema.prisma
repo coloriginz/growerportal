@@ -221,6 +221,14 @@ model QualityIssue {
   @@index([lotId])
 }
 
+// ─── SETTINGS ───────────────────────────────────────────
+
+model Setting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
 // ─── CHANGE REQUESTS ─────────────────────────────────────
 
 model ChangeRequest {

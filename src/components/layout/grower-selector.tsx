@@ -1,17 +1,14 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-import { RiPlantLine, RiSearchLine } from "@remixicon/react";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { useState, useEffect, useMemo, useCallback } from "react";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
+import { RiPlantLine, RiSearchLine, RiArrowUpDownLine, RiCheckLine } from "@remixicon/react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Button } from "@/components/ui/button";
 import { useLanguage } from "@/components/providers/language-provider";
 import { Suspense } from "react";
+
+const STORAGE_KEY = "selectedGrowerId";
 
 interface GrowerOption {
   id: string;
@@ -23,11 +20,32 @@ interface GrowerOption {
 function GrowerSelectorInner() {
   const [growers, setGrowers] = useState<GrowerOption[]>([]);
   const [loading, setLoading] = useState(true);
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
   const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const { t } = useLanguage();
 
-  const selectedGrowerId = searchParams.get("growerId") || "";
+  // Read from URL first, fallback to localStorage
+  const urlGrowerId = searchParams.get("growerId");
+  const [storedGrowerId, setStoredGrowerId] = useState<string>("");
+
+  useEffect(() => {
+    const stored = localStorage.getItem(STORAGE_KEY) || "";
+    setStoredGrowerId(stored);
+  }, []);
+
+  const selectedGrowerId = urlGrowerId || storedGrowerId;
+
+  // Sync localStorage growerId to URL on mount/navigation
+  useEffect(() => {
+    if (!urlGrowerId && storedGrowerId) {
+      const params = new URLSearchParams(searchParams.toString());
+      params.set("growerId", storedGrowerId);
+      router.replace(`${pathname}?${params.toString()}`);
+    }
+  }, [urlGrowerId, storedGrowerId, pathname, searchParams, router]);
 
   useEffect(() => {
     async function fetchGrowers() {
@@ -44,61 +62,120 @@ function GrowerSelectorInner() {
     fetchGrowers();
   }, []);
 
-  function handleChange(growerId: string) {
+  const selectedGrower = growers.find((g) => g.id === selectedGrowerId);
+
+  const filtered = useMemo(() => {
+    if (!search) return growers;
+    const q = search.toLowerCase();
+    return growers.filter(
+      (g) =>
+        g.code.toLowerCase().includes(q) ||
+        g.name.toLowerCase().includes(q) ||
+        (g.company && g.company.toLowerCase().includes(q))
+    );
+  }, [growers, search]);
+
+  const handleSelect = useCallback((growerId: string) => {
     const params = new URLSearchParams(searchParams.toString());
-    if (growerId) {
-      params.set("growerId", growerId);
-    } else {
+    if (growerId === selectedGrowerId) {
       params.delete("growerId");
+      localStorage.removeItem(STORAGE_KEY);
+      setStoredGrowerId("");
+    } else {
+      params.set("growerId", growerId);
+      localStorage.setItem(STORAGE_KEY, growerId);
+      setStoredGrowerId(growerId);
     }
-    router.push(`?${params.toString()}`);
-  }
+    router.push(`${pathname}?${params.toString()}`);
+    setOpen(false);
+    setSearch("");
+  }, [searchParams, selectedGrowerId, router, pathname]);
 
   if (loading) {
-    return (
-      <div className="bg-muted h-10 animate-pulse rounded-md" />
-    );
+    return <div className="bg-muted h-10 animate-pulse rounded-md" />;
   }
 
   return (
-    <Select value={selectedGrowerId} onValueChange={(v) => { if (v !== null) handleChange(v); }}>
-      <SelectTrigger className="w-full">
-        <div className="flex items-center gap-2 truncate">
-          <RiPlantLine className="text-muted-foreground h-4 w-4 shrink-0" />
-          {selectedGrowerId ? (
-            (() => {
-              const g = growers.find((g) => g.id === selectedGrowerId);
-              return g ? (
-                <span className="truncate">
-                  <span className="font-medium">{g.code}</span>
-                  <span className="text-muted-foreground ml-2">{g.company || g.name}</span>
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger
+        render={
+          <Button
+            variant="outline"
+            role="combobox"
+            aria-expanded={open}
+            className="w-full justify-between text-left font-normal"
+          />
+        }
+      >
+          <div className="flex items-center gap-2 truncate">
+            <RiPlantLine className="text-muted-foreground h-4 w-4 shrink-0" />
+            {selectedGrower ? (
+              <span className="truncate">
+                <span className="font-medium">{selectedGrower.code}</span>
+                <span className="text-sidebar-foreground/60 ml-2 text-xs">
+                  {selectedGrower.company || selectedGrower.name}
                 </span>
-              ) : (
-                <SelectValue placeholder={t("nav.selectGrower")} />
-              );
-            })()
+              </span>
+            ) : (
+              <span className="text-muted-foreground">
+                {t("nav.selectGrower")}
+              </span>
+            )}
+          </div>
+          <RiArrowUpDownLine className="text-muted-foreground h-4 w-4 shrink-0" />
+      </PopoverTrigger>
+      <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+        <div className="border-b px-3 py-2">
+          <div className="flex items-center gap-2">
+            <RiSearchLine className="text-muted-foreground h-4 w-4 shrink-0" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search grower..."
+              className="placeholder:text-muted-foreground w-full bg-transparent text-sm outline-none"
+              autoFocus
+            />
+          </div>
+        </div>
+        <div className="max-h-60 overflow-y-auto p-1">
+          {filtered.length === 0 ? (
+            <p className="text-muted-foreground py-4 text-center text-sm">
+              No growers found
+            </p>
           ) : (
-            <span className="text-muted-foreground">{t("nav.selectGrower")}</span>
+            filtered.map((grower) => (
+              <button
+                key={grower.id}
+                type="button"
+                onClick={() => handleSelect(grower.id)}
+                className="hover:bg-accent hover:text-accent-foreground flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm transition-colors"
+              >
+                <RiCheckLine
+                  className={`h-4 w-4 shrink-0 ${
+                    grower.id === selectedGrowerId
+                      ? "opacity-100"
+                      : "opacity-0"
+                  }`}
+                />
+                <span className="font-medium">{grower.code}</span>
+                <span className="text-muted-foreground truncate text-xs">
+                  {grower.company || grower.name}
+                </span>
+              </button>
+            ))
           )}
         </div>
-      </SelectTrigger>
-      <SelectContent>
-        {growers.map((grower) => (
-          <SelectItem key={grower.id} value={grower.id}>
-            <span className="font-medium">{grower.code}</span>
-            <span className="text-muted-foreground ml-2">
-              {grower.company || grower.name}
-            </span>
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+      </PopoverContent>
+    </Popover>
   );
 }
 
 export function GrowerSelector() {
   return (
-    <Suspense fallback={<div className="bg-muted h-10 animate-pulse rounded-md" />}>
+    <Suspense
+      fallback={<div className="bg-muted h-10 animate-pulse rounded-md" />}
+    >
       <GrowerSelectorInner />
     </Suspense>
   );

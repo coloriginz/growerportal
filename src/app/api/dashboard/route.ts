@@ -7,7 +7,6 @@ import {
   startOfYear,
   subYears,
   format,
-  startOfMonth,
 } from "date-fns";
 
 export async function GET(request: NextRequest) {
@@ -37,7 +36,6 @@ export async function GET(request: NextRequest) {
   const yesterdayStart = startOfDay(subDays(now, 1));
   const ytdStart = startOfYear(now);
   const lastYearYtdStart = startOfYear(subYears(now, 1));
-  const lastYearYtdEnd = subYears(now, 0); // same date last year
   const lastYearSameDate = subYears(now, 1);
 
   const growerFilter = { lot: { growerId } };

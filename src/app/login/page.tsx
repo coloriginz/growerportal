@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useLanguage } from "@/components/providers/language-provider";
 import { LanguageSwitcher } from "@/components/language-switcher";
+import { isTest } from "@/lib/env";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -99,7 +100,7 @@ export default function LoginPage() {
             </Button>
           </form>
 
-          {process.env.NODE_ENV === "development" && (
+          {isTest && (
             <div className="mt-10 rounded-lg border border-dashed p-4">
               <p className="text-muted-foreground mb-3 text-xs font-semibold uppercase tracking-wider">
                 Demo Accounts

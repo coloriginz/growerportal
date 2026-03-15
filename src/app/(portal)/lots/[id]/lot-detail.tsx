@@ -12,7 +12,6 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
 import { RiArrowLeftLine, RiFileTextLine } from "@remixicon/react";
 import { useLanguage } from "@/components/providers/language-provider";
 import {

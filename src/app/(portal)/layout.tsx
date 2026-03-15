@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { AppShell } from "@/components/layout/app-shell";
@@ -13,5 +14,9 @@ export default async function PortalLayout({
     redirect("/login");
   }
 
-  return <AppShell user={session.user}>{children}</AppShell>;
+  return (
+    <Suspense>
+      <AppShell user={session.user}>{children}</AppShell>
+    </Suspense>
+  );
 }

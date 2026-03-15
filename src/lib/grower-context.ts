@@ -1,5 +1,4 @@
 import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/db";
 
 /**
  * Determines which grower's data to show based on the user's role.

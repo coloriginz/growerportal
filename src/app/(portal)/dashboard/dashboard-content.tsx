@@ -135,7 +135,7 @@ export function DashboardContent({ growerId }: { growerId: string | null }) {
           data.turnoverYTDLastYear) *
         100
       : 0;
-  const priceChange =
+  const _priceChange =
     data.avgPriceYTDLastYear > 0
       ? ((data.avgPriceYTD - data.avgPriceYTDLastYear) /
           data.avgPriceYTDLastYear) *

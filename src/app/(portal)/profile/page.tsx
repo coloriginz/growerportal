@@ -1,5 +1,4 @@
 import { Suspense } from "react";
-import { auth } from "@/lib/auth";
 import { getActiveGrowerId } from "@/lib/grower-context";
 import { ProfileContent } from "./profile-content";
 import { Skeleton } from "@/components/ui/skeleton";

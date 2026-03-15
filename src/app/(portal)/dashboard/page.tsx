@@ -1,6 +1,4 @@
 import { Suspense } from "react";
-import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/db";
 import { getActiveGrowerId } from "@/lib/grower-context";
 import { DashboardContent } from "./dashboard-content";
 import { Skeleton } from "@/components/ui/skeleton";

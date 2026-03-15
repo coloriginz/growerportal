@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { signOut } from "next-auth/react";
 import {
   RiDashboardLine,
@@ -12,19 +12,20 @@ import {
   RiFileTextLine,
   RiShieldCheckLine,
   RiUserLine,
-  RiSettings3Line,
+  RiUserSettingsLine,
   RiLogoutBoxLine,
   RiMenuLine,
-  RiCloseLine,
   RiPlantLine,
 } from "@remixicon/react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { useLanguage } from "@/components/providers/language-provider";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { GrowerSelector } from "@/components/layout/grower-selector";
+import { TestBanner } from "@/components/layout/test-banner";
+import { isTest } from "@/lib/env";
 import type { Role } from "@/types";
 
 interface AppShellProps {
@@ -45,17 +46,26 @@ interface NavItem {
   roles?: Role[];
 }
 
-const navItems: NavItem[] = [
+const mainNavItems: NavItem[] = [
   { href: "/dashboard", labelKey: "nav.dashboard", icon: RiDashboardLine },
   { href: "/sales", labelKey: "nav.sales", icon: RiShoppingCartLine },
   { href: "/lots", labelKey: "nav.lots", icon: RiStackLine },
   { href: "/documents", labelKey: "nav.documents", icon: RiFileTextLine },
   { href: "/quality", labelKey: "nav.quality", icon: RiShieldCheckLine },
   { href: "/profile", labelKey: "nav.profile", icon: RiUserLine },
+];
+
+const bottomNavItems: NavItem[] = [
+  {
+    href: "/growers",
+    labelKey: "nav.growers",
+    icon: RiPlantLine,
+    roles: ["admin", "commercie"],
+  },
   {
     href: "/admin",
-    labelKey: "nav.admin",
-    icon: RiSettings3Line,
+    labelKey: "nav.users",
+    icon: RiUserSettingsLine,
     roles: ["admin"],
   },
 ];
@@ -63,11 +73,16 @@ const navItems: NavItem[] = [
 export function AppShell({ user, children }: AppShellProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { t } = useLanguage();
+  const growerId = searchParams.get("growerId");
   const userRole = user.role as Role;
   const showGrowerSelector = userRole === "admin" || userRole === "commercie";
 
-  const filteredNav = navItems.filter(
+  const filteredMainNav = mainNavItems.filter(
+    (item) => !item.roles || item.roles.includes(userRole)
+  );
+  const filteredBottomNav = bottomNavItems.filter(
     (item) => !item.roles || item.roles.includes(userRole)
   );
 
@@ -97,13 +112,13 @@ export function AppShell({ user, children }: AppShellProps) {
 
         {/* Navigation */}
         <nav className="flex-1 space-y-0.5 px-3 py-4">
-          {filteredNav.map((item) => {
+          {filteredMainNav.map((item) => {
             const isActive = pathname.startsWith(item.href);
             const Icon = item.icon;
             return (
               <Link
                 key={item.href}
-                href={item.href}
+                href={growerId ? `${item.href}?growerId=${growerId}` : item.href}
                 onClick={() => setMobileOpen(false)}
                 className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150 ${
                   isActive
@@ -117,6 +132,34 @@ export function AppShell({ user, children }: AppShellProps) {
             );
           })}
         </nav>
+
+        {/* Bottom nav (internal only) */}
+        {filteredBottomNav.length > 0 && (
+          <>
+            <Separator className="bg-sidebar-border" />
+            <nav className="space-y-0.5 px-3 py-3">
+              {filteredBottomNav.map((item) => {
+                const isActive = pathname.startsWith(item.href);
+                const Icon = item.icon;
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    onClick={() => setMobileOpen(false)}
+                    className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150 ${
+                      isActive
+                        ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-sm"
+                        : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                    }`}
+                  >
+                    <Icon className="h-[18px] w-[18px] shrink-0" />
+                    {t(item.labelKey as Parameters<typeof t>[0])}
+                  </Link>
+                );
+              })}
+            </nav>
+          </>
+        )}
 
         <Separator className="bg-sidebar-border" />
 
@@ -153,7 +196,11 @@ export function AppShell({ user, children }: AppShellProps) {
   }
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-screen flex-col">
+      {/* Test Environment Banner */}
+      {isTest && <TestBanner isAdmin={userRole === "admin"} />}
+
+      <div className="flex flex-1">
       {/* Desktop Sidebar */}
       <aside className="bg-sidebar text-sidebar-foreground border-sidebar-border hidden w-64 shrink-0 border-r lg:block">
         <div className="sticky top-0 h-screen overflow-y-auto">
@@ -184,6 +231,7 @@ export function AppShell({ user, children }: AppShellProps) {
 
         {/* Page Content */}
         <main className="flex-1 overflow-y-auto px-6 py-8 lg:px-10">{children}</main>
+      </div>
       </div>
     </div>
   );
