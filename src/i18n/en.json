@@ -26,7 +26,8 @@
     "failedToLoad": "Failed to load data. Tap to retry.",
     "offline": "You are offline. Some features may be unavailable.",
     "total": "Total",
-    "description": "Description"
+    "description": "Description",
+    "clearFilters": "Clear filters"
   },
   "auth": {
     "login": "Sign In",

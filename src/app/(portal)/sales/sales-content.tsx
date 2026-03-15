@@ -43,9 +43,17 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { getISOWeek } from "date-fns";
+import { MultiSelectFilter } from "@/components/ui/multi-select-filter";
+import { RiFilterOffLine } from "@remixicon/react";
 import { PriceTrendChart } from "@/components/charts/price-trend-chart";
 import { StemLengthChart } from "@/components/charts/stem-length-chart";
 import { ChannelDistributionChart } from "@/components/charts/channel-distribution-chart";
+
+interface FiltersData {
+  products: string[];
+  salesTypes: string[];
+  stemLengths: string[];
+}
 
 interface TrendsData {
   priceTrend: Record<string, string | number>[];
@@ -75,7 +83,26 @@ export function SalesContent({ growerId }: { growerId: string | null }) {
   const [selectedYear, setSelectedYear] = useState(currentYear);
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [filterProducts, setFilterProducts] = useState<string[]>([]);
+  const [filterSalesTypes, setFilterSalesTypes] = useState<string[]>([]);
+  const [filterStemLengths, setFilterStemLengths] = useState<string[]>([]);
   const { t } = useLanguage();
+
+  // Fetch available filter options
+  const filtersUrl = useMemo(() => {
+    const params = new URLSearchParams();
+    if (growerId) params.set("growerId", growerId);
+    return `/api/sales/filters?${params}`;
+  }, [growerId]);
+  const { data: filterOptions } = useFetch<FiltersData>(filtersUrl);
+
+  const hasActiveFilters = filterProducts.length > 0 || filterSalesTypes.length > 0 || filterStemLengths.length > 0;
+
+  const clearAllFilters = () => {
+    setFilterProducts([]);
+    setFilterSalesTypes([]);
+    setFilterStemLengths([]);
+  };
 
   const url = useMemo(() => {
     const params = new URLSearchParams({ period });
@@ -88,8 +115,11 @@ export function SalesContent({ growerId }: { growerId: string | null }) {
       if (dateFrom) params.set("dateFrom", dateFrom);
       if (dateTo) params.set("dateTo", dateTo);
     }
+    for (const p of filterProducts) params.append("product", p);
+    for (const s of filterSalesTypes) params.append("salesType", s);
+    for (const l of filterStemLengths) params.append("stemLength", l.replace(" cm", ""));
     return `/api/sales?${params}`;
-  }, [growerId, period, selectedWeek, selectedYear, dateFrom, dateTo]);
+  }, [growerId, period, selectedWeek, selectedYear, dateFrom, dateTo, filterProducts, filterSalesTypes, filterStemLengths]);
   const { data, loading, error, lastUpdated, refetch } = useFetch<SalesData>(url);
 
   const trendsUrl = useMemo(() => {
@@ -200,6 +230,47 @@ export function SalesContent({ growerId }: { growerId: string | null }) {
           </div>
         )}
       </div>
+
+      {/* Filters */}
+      {filterOptions && (
+        <div className="flex flex-wrap items-center gap-2">
+          {filterOptions.products.length > 1 && (
+            <MultiSelectFilter
+              label={t("lots.product")}
+              options={filterOptions.products}
+              selected={filterProducts}
+              onChange={setFilterProducts}
+            />
+          )}
+          {filterOptions.salesTypes.length > 1 && (
+            <MultiSelectFilter
+              label={t("sales.salesType")}
+              options={filterOptions.salesTypes}
+              selected={filterSalesTypes}
+              onChange={setFilterSalesTypes}
+            />
+          )}
+          {filterOptions.stemLengths.length > 1 && (
+            <MultiSelectFilter
+              label={t("lots.stemLength")}
+              options={filterOptions.stemLengths}
+              selected={filterStemLengths}
+              onChange={setFilterStemLengths}
+            />
+          )}
+          {hasActiveFilters && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={clearAllFilters}
+              className="text-muted-foreground"
+            >
+              <RiFilterOffLine className="mr-1.5 h-4 w-4" />
+              {t("common.clearFilters")}
+            </Button>
+          )}
+        </div>
+      )}
 
       {data && !loading && (
         <>

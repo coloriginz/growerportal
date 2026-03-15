@@ -26,7 +26,8 @@
     "failedToLoad": "Laden mislukt. Tik om opnieuw te proberen.",
     "offline": "U bent offline. Sommige functies zijn mogelijk niet beschikbaar.",
     "total": "Totaal",
-    "description": "Omschrijving"
+    "description": "Omschrijving",
+    "clearFilters": "Filters wissen"
   },
   "auth": {
     "login": "Inloggen",
