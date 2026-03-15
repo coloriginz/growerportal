@@ -3,6 +3,7 @@ import "dotenv/config";
 import { PrismaClient } from "../src/generated/prisma/client";
 import { hash } from "bcryptjs";
 import { v4 as uuidv4 } from "uuid";
+import { getISOWeek } from "date-fns";
 
 const prisma = new PrismaClient();
 
@@ -124,9 +125,9 @@ async function main() {
 
   const commercieUser1 = await prisma.user.create({
     data: {
-      email: "ly.dao@coloriginz.com",
+      email: "iris.inkoper@coloriginz.com",
       passwordHash: commerciePasswordHash,
-      name: "Ly Dao",
+      name: "Iris Inkoper",
       role: "commercie",
       isActive: true,
     },
@@ -198,11 +199,11 @@ async function main() {
     const growerArticleGroups = pickN(ARTICLE_GROUPS, rand(2, 4));
 
     // Generate lots spanning 2025 and 2026
-    const now = new Date(2026, 2, 14); // March 14, 2026
-    const startDate = new Date(2025, 0, 1);
+    const now = new Date(2026, 2, 15); // March 15, 2026
+    const startDate = new Date(2024, 0, 1); // Jan 1, 2024 — for year-over-year comparison
 
-    // Create 8-20 salessheets per grower
-    const numSalesSheets = rand(8, 20);
+    // Create 16-35 salessheets per grower (more to cover 26 months)
+    const numSalesSheets = rand(16, 35);
     let lotCounter = 3880000 + i * 1000;
     let invoiceCounter = 397000 + i * 100;
 
@@ -434,6 +435,41 @@ async function main() {
     console.log(`  Created grower ${growerData.code} (${growerData.name})`);
   }
 
+  // ─── SEED SHIPMENT FORECASTS ─────────────────────────────
+  console.log("Creating shipment forecasts...");
+  await prisma.shipmentForecast.deleteMany();
+
+  const allGrowers = await prisma.grower.findMany({ select: { id: true } });
+  const currentWeekNow = getISOWeek(new Date(2026, 2, 15));
+  let forecastCount = 0;
+
+  for (const grower of allGrowers) {
+    // Each grower forecasts 2-4 products
+    const growerGroups = pickN(ARTICLE_GROUPS, rand(2, 4));
+    for (const group of growerGroups) {
+      const productName = pick(PRODUCTS[group]);
+      // Forecast from current week to ~12 weeks ahead
+      for (let w = currentWeekNow; w <= currentWeekNow + rand(8, 14); w++) {
+        const actualWeek = w > 52 ? w - 52 : w;
+        const actualYear = w > 52 ? 2027 : 2026;
+        const stems = rand(2, 30) * 100; // 200-3000 stems
+        await prisma.shipmentForecast.create({
+          data: {
+            growerId: grower.id,
+            productName,
+            articleGroup: group,
+            year: actualYear,
+            week: actualWeek,
+            stems,
+            trolleys: Math.ceil(stems / 600),
+            colli: Math.ceil(stems / 120),
+          },
+        });
+        forecastCount++;
+      }
+    }
+  }
+
   // Summary
   const growerCount = await prisma.grower.count();
   const userCount = await prisma.user.count();
@@ -447,9 +483,10 @@ async function main() {
   console.log(`  ${ssCount} sales sheets`);
   console.log(`  ${lotCount} lots`);
   console.log(`  ${txCount} transactions`);
+  console.log(`  ${forecastCount} forecasts`);
   console.log(`\nLogin credentials:`);
   console.log(`  Admin: admin@coloriginz.com / Colori2026!`);
-  console.log(`  Commercie: ly.dao@coloriginz.com / FloraDesk#24`);
+  console.log(`  Commercie: iris.inkoper@coloriginz.com / FloraDesk#24`);
   console.log(`  Grower (example): pcfup@example.com / GreenField99`);
 }
 

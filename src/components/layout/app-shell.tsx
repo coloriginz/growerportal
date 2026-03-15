@@ -113,6 +113,9 @@ export function AppShell({ user, children }: AppShellProps) {
         {/* Grower Selector (admin/commercie only) */}
         {showGrowerSelector && (
           <div className="px-4 py-3">
+            <p className="text-sidebar-foreground/60 mb-1.5 px-1 text-xs font-semibold uppercase tracking-wider">
+              {t("nav.selectGrower")}
+            </p>
             <GrowerSelector />
           </div>
         )}

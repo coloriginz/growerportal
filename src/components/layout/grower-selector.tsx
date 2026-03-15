@@ -95,7 +95,7 @@ function GrowerSelectorInner() {
               </span>
             ) : (
               <span className="text-muted-foreground">
-                {t("nav.selectGrower")}
+                {t("common.search")}
               </span>
             )}
           </div>
