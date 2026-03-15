@@ -201,15 +201,15 @@ export function AppShell({ user, children }: AppShellProps) {
   }
 
   return (
-    <div className="flex min-h-screen flex-col">
+    <div className="flex h-screen flex-col">
       {/* Test Environment Banner */}
       <OfflineIndicator />
       {isTest && <TestBanner isAdmin={userRole === "admin"} />}
 
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex min-h-0 flex-1">
       {/* Desktop Sidebar */}
-      <aside className="bg-sidebar text-sidebar-foreground border-sidebar-border hidden w-64 shrink-0 border-r lg:flex lg:flex-col">
-        <div className="flex-1 overflow-y-auto">
+      <aside className="bg-sidebar text-sidebar-foreground border-sidebar-border hidden w-64 shrink-0 border-r lg:block">
+        <div className="h-full overflow-y-auto">
           <NavContent />
         </div>
       </aside>
