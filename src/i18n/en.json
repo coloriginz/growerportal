@@ -64,7 +64,12 @@
     "topProducts": "Top Products",
     "recentLots": "Recent Lots",
     "netYieldPerStem": "Net Yield/Stem",
-    "qualityRate": "Quality Rate"
+    "qualityRate": "Quality Rate",
+    "companyOverview": "Company Overview",
+    "topGrowers": "Top Growers",
+    "upcomingForecasts": "Expected Shipments",
+    "grower": "Grower",
+    "selectToView": "Select to view"
   },
   "sales": {
     "title": "Sales",

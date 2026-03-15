@@ -103,7 +103,9 @@ export function AppShell({ user, children }: AppShellProps) {
       <div className="flex h-full flex-col">
         {/* Logo */}
         <div className="flex h-16 items-center px-6">
-          <Image src="/logo.png" alt="Coloriginz" width={140} height={38} className="dark:brightness-0 dark:invert" />
+          <Link href="/dashboard" onClick={() => setMobileOpen(false)}>
+            <Image src="/logo.png" alt="Coloriginz" width={140} height={38} className="dark:brightness-0 dark:invert" />
+          </Link>
         </div>
 
         <Separator className="bg-sidebar-border" />
@@ -237,7 +239,9 @@ export function AppShell({ user, children }: AppShellProps) {
           >
             <RiMenuLine className="h-5 w-5" />
           </Button>
-          <Image src="/logo.png" alt="Coloriginz" width={120} height={32} className="dark:brightness-0 dark:invert" />
+          <Link href="/dashboard">
+            <Image src="/logo.png" alt="Coloriginz" width={120} height={32} className="dark:brightness-0 dark:invert" />
+          </Link>
         </header>
 
         {/* Page Content */}

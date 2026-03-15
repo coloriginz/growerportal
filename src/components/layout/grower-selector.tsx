@@ -1,14 +1,12 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { RiPlantLine, RiSearchLine, RiArrowUpDownLine, RiCheckLine } from "@remixicon/react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { useLanguage } from "@/components/providers/language-provider";
 import { Suspense } from "react";
-
-const STORAGE_KEY = "selectedGrowerId";
 
 interface GrowerOption {
   id: string;
@@ -27,25 +25,8 @@ function GrowerSelectorInner() {
   const searchParams = useSearchParams();
   const { t } = useLanguage();
 
-  // Read from URL first, fallback to localStorage
-  const urlGrowerId = searchParams.get("growerId");
-  const [storedGrowerId, setStoredGrowerId] = useState<string>("");
-
-  useEffect(() => {
-    const stored = localStorage.getItem(STORAGE_KEY) || "";
-    setStoredGrowerId(stored);
-  }, []);
-
-  const selectedGrowerId = urlGrowerId || storedGrowerId;
-
-  // Sync localStorage growerId to URL on mount/navigation
-  useEffect(() => {
-    if (!urlGrowerId && storedGrowerId) {
-      const params = new URLSearchParams(searchParams.toString());
-      params.set("growerId", storedGrowerId);
-      router.replace(`${pathname}?${params.toString()}`);
-    }
-  }, [urlGrowerId, storedGrowerId, pathname, searchParams, router]);
+  // Read growerId only from URL (no persistence between sessions)
+  const selectedGrowerId = searchParams.get("growerId") || "";
 
   useEffect(() => {
     async function fetchGrowers() {
@@ -79,12 +60,8 @@ function GrowerSelectorInner() {
     const params = new URLSearchParams(searchParams.toString());
     if (growerId === selectedGrowerId) {
       params.delete("growerId");
-      localStorage.removeItem(STORAGE_KEY);
-      setStoredGrowerId("");
     } else {
       params.set("growerId", growerId);
-      localStorage.setItem(STORAGE_KEY, growerId);
-      setStoredGrowerId(growerId);
     }
     router.push(`${pathname}?${params.toString()}`);
     setOpen(false);

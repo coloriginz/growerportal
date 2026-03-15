@@ -108,7 +108,7 @@ export default function LoginPage() {
               <div className="space-y-1">
                 {[
                   { label: "Admin", email: "admin@coloriginz.com", password: "Colori2026!" },
-                  { label: "Commercie", email: "ly.dao@coloriginz.com", password: "FloraDesk#24" },
+                  { label: "Commercie", email: "iris.inkoper@coloriginz.com", password: "FloraDesk#24" },
                   { label: "Grower", email: "pcfup@example.com", password: "GreenField99" },
                 ].map((account) => (
                   <button

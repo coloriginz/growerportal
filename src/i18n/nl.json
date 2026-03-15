@@ -64,7 +64,12 @@
     "topProducts": "Top Producten",
     "recentLots": "Recente Partijen",
     "netYieldPerStem": "Netto Opbrengst/Steel",
-    "qualityRate": "Kwaliteitspercentage"
+    "qualityRate": "Kwaliteitspercentage",
+    "companyOverview": "Bedrijfsoverzicht",
+    "topGrowers": "Top Kwekers",
+    "upcomingForecasts": "Verwachte Aanvoer",
+    "grower": "Kweker",
+    "selectToView": "Selecteer om te bekijken"
   },
   "sales": {
     "title": "Verkopen",
