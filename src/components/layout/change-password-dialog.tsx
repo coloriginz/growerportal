@@ -6,7 +6,6 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -74,9 +73,9 @@ export function ChangePasswordDialog({ children }: { children: React.ReactNode }
         if (!nextOpen) reset();
       }}
     >
-      <DialogTrigger render={<span className="cursor-pointer" />}>
+      <span className="cursor-pointer" onClick={() => setOpen(true)}>
         {children}
-      </DialogTrigger>
+      </span>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{t("profile.changePassword")}</DialogTitle>
