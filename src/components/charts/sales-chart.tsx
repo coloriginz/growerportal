@@ -11,6 +11,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { formatCurrency, formatNumber } from "@/lib/format";
+import { getChartColor, getChartColorWithOpacity } from "@/lib/chart-colors";
 
 interface SalesChartProps {
   data: {
@@ -49,24 +50,26 @@ function CustomTooltip({ active, payload, label }: { active?: boolean; payload?:
 export function SalesChart({ data }: SalesChartProps) {
   const currentYear = new Date().getFullYear();
   const lastYear = currentYear - 1;
+  const color1 = getChartColor(0);
+  const color1Faded = getChartColorWithOpacity(0, 0.35);
 
   return (
     <ResponsiveContainer width="100%" height={300}>
       <BarChart data={data} barGap={2}>
-        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="oklch(0.91 0.01 80 / 0.8)" />
+        <CartesianGrid strokeDasharray="3 3" vertical={false} className="stroke-border/50" />
         <XAxis
           dataKey="month"
           fontSize={12}
           tickLine={false}
           axisLine={false}
-          tick={{ fill: "oklch(0.50 0.02 60)" }}
+          tick={{ fill: "currentColor" }} className="text-muted-foreground"
         />
         <YAxis
           fontSize={12}
           tickLine={false}
           axisLine={false}
           tickFormatter={(v) => formatNumber(v)}
-          tick={{ fill: "oklch(0.50 0.02 60)" }}
+          tick={{ fill: "currentColor" }} className="text-muted-foreground"
         />
         <Tooltip content={<CustomTooltip />} />
         <Legend
@@ -77,13 +80,13 @@ export function SalesChart({ data }: SalesChartProps) {
         <Bar
           dataKey="stems"
           name={`Stems ${currentYear}`}
-          fill="oklch(0.55 0.15 155)"
+          fill={color1}
           radius={[4, 4, 0, 0]}
         />
         <Bar
           dataKey="lastYearStems"
           name={`Stems ${lastYear}`}
-          fill="oklch(0.55 0.15 155 / 0.35)"
+          fill={color1Faded}
           radius={[4, 4, 0, 0]}
         />
       </BarChart>

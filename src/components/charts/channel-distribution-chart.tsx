@@ -1,0 +1,74 @@
+"use client";
+
+import {
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+} from "recharts";
+import { formatNumber } from "@/lib/format";
+import { getChartColor, getChartColorWithOpacity } from "@/lib/chart-colors";
+
+interface ChannelDistributionChartProps {
+  data: Record<string, string | number>[];
+  channels: string[];
+}
+
+function CustomTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ name: string; value: number; color: string }>; label?: string }) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="rounded-lg border border-border/50 bg-card px-3 py-2.5 shadow-lg">
+      <p className="mb-1.5 text-xs font-semibold text-foreground">{label}</p>
+      {payload.map((entry, i) => (
+        <div key={i} className="flex items-center gap-2 text-xs">
+          <span className="h-2 w-2 rounded-full" style={{ backgroundColor: entry.color }} />
+          <span className="text-muted-foreground">{entry.name}:</span>
+          <span className="font-medium tabular-nums text-foreground">{formatNumber(entry.value)}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export function ChannelDistributionChart({ data, channels }: ChannelDistributionChartProps) {
+  return (
+    <ResponsiveContainer width="100%" height={300}>
+      <AreaChart data={data}>
+        <CartesianGrid strokeDasharray="3 3" vertical={false} className="stroke-border/50" />
+        <XAxis
+          dataKey="month"
+          fontSize={12}
+          tickLine={false}
+          axisLine={false}
+          tick={{ fill: "currentColor" }}
+          className="text-muted-foreground"
+        />
+        <YAxis
+          fontSize={12}
+          tickLine={false}
+          axisLine={false}
+          tickFormatter={(v) => formatNumber(v)}
+          tick={{ fill: "currentColor" }}
+          className="text-muted-foreground"
+        />
+        <Tooltip content={<CustomTooltip />} />
+        <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: "12px", paddingTop: "8px" }} />
+        {channels.map((channel, index) => (
+          <Area
+            key={channel}
+            type="monotone"
+            dataKey={channel}
+            name={channel}
+            stackId="1"
+            stroke={getChartColor(index)}
+            fill={getChartColorWithOpacity(index, 0.6)}
+          />
+        ))}
+      </AreaChart>
+    </ResponsiveContainer>
+  );
+}

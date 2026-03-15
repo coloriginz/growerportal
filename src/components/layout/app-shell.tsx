@@ -23,9 +23,11 @@ import { Separator } from "@/components/ui/separator";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { useLanguage } from "@/components/providers/language-provider";
 import { LanguageSwitcher } from "@/components/language-switcher";
+import { ThemeSwitcher } from "@/components/theme-switcher";
 import { GrowerSelector } from "@/components/layout/grower-selector";
 import { TestBanner } from "@/components/layout/test-banner";
 import { OfflineIndicator } from "@/components/layout/offline-indicator";
+import { ChangePasswordDialog } from "@/components/layout/change-password-dialog";
 import { isTest } from "@/lib/env";
 import type { Role } from "@/types";
 
@@ -99,7 +101,7 @@ export function AppShell({ user, children }: AppShellProps) {
       <div className="flex h-full flex-col">
         {/* Logo */}
         <div className="flex h-16 items-center px-6">
-          <Image src="/logo.png" alt="Coloriginz" width={140} height={38} />
+          <Image src="/logo.png" alt="Coloriginz" width={140} height={38} className="dark:brightness-0 dark:invert" />
         </div>
 
         <Separator className="bg-sidebar-border" />
@@ -166,21 +168,26 @@ export function AppShell({ user, children }: AppShellProps) {
 
         {/* User section */}
         <div className="p-4">
-          <div className="flex items-center gap-3">
-            <Avatar className="h-9 w-9 ring-2 ring-sidebar-border">
-              <AvatarFallback className="bg-sidebar-accent text-xs font-semibold text-sidebar-accent-foreground">
-                {initials}
-              </AvatarFallback>
-            </Avatar>
-            <div className="flex-1 truncate">
-              <p className="truncate text-sm font-medium">{user.name}</p>
-              <p className="text-sidebar-foreground/50 truncate text-xs">
-                {user.email}
-              </p>
+          <ChangePasswordDialog>
+            <div className="flex items-center gap-3 rounded-lg px-1 py-1 -mx-1 transition-colors hover:bg-sidebar-accent">
+              <Avatar className="h-9 w-9 ring-2 ring-sidebar-border">
+                <AvatarFallback className="bg-sidebar-accent text-xs font-semibold text-sidebar-accent-foreground">
+                  {initials}
+                </AvatarFallback>
+              </Avatar>
+              <div className="flex-1 truncate">
+                <p className="truncate text-sm font-medium">{user.name}</p>
+                <p className="text-sidebar-foreground/50 truncate text-xs">
+                  {user.email}
+                </p>
+              </div>
             </div>
-          </div>
+          </ChangePasswordDialog>
           <div className="mt-3 flex items-center justify-between">
-            <LanguageSwitcher />
+            <div className="flex items-center gap-1">
+              <LanguageSwitcher />
+              <ThemeSwitcher />
+            </div>
             <Button
               variant="ghost"
               size="icon"
@@ -197,15 +204,15 @@ export function AppShell({ user, children }: AppShellProps) {
   }
 
   return (
-    <div className="flex min-h-screen flex-col">
+    <div className="flex h-screen flex-col">
       {/* Test Environment Banner */}
       <OfflineIndicator />
       {isTest && <TestBanner isAdmin={userRole === "admin"} />}
 
-      <div className="flex flex-1">
+      <div className="flex min-h-0 flex-1">
       {/* Desktop Sidebar */}
       <aside className="bg-sidebar text-sidebar-foreground border-sidebar-border hidden w-64 shrink-0 border-r lg:block">
-        <div className="sticky top-0 h-screen overflow-y-auto">
+        <div className="h-full overflow-y-auto">
           <NavContent />
         </div>
       </aside>
@@ -218,9 +225,9 @@ export function AppShell({ user, children }: AppShellProps) {
       </Sheet>
 
       {/* Main Content */}
-      <div className="flex flex-1 flex-col">
+      <div className="flex min-w-0 flex-1 flex-col">
         {/* Mobile Header */}
-        <header className="bg-sidebar text-sidebar-foreground border-sidebar-border flex h-16 items-center gap-4 border-b px-4 lg:hidden">
+        <header className="bg-sidebar text-sidebar-foreground border-sidebar-border flex h-16 shrink-0 items-center gap-4 border-b px-4 lg:hidden">
           <Button
             variant="ghost"
             size="icon"
@@ -228,7 +235,7 @@ export function AppShell({ user, children }: AppShellProps) {
           >
             <RiMenuLine className="h-5 w-5" />
           </Button>
-          <Image src="/logo.png" alt="Coloriginz" width={120} height={32} />
+          <Image src="/logo.png" alt="Coloriginz" width={120} height={32} className="dark:brightness-0 dark:invert" />
         </header>
 
         {/* Page Content */}

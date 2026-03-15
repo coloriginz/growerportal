@@ -27,6 +27,7 @@ import { formatTime } from "@/lib/format";
 import { RiRefreshLine } from "@remixicon/react";
 import { useLanguage } from "@/components/providers/language-provider";
 import { formatDate, formatNumber } from "@/lib/format";
+import { translateQualityCode } from "@/lib/quality-codes";
 
 interface QualityRow {
   id: string;
@@ -188,7 +189,7 @@ export function QualityContent({ growerId }: { growerId: string | null }) {
                   <TableCell>
                     <Badge variant="destructive">{issue.code}</Badge>
                   </TableCell>
-                  <TableCell>{issue.description}</TableCell>
+                  <TableCell>{translateQualityCode(issue.code, issue.description, t)}</TableCell>
                   <TableCell>
                     <Link
                       href={`/lots/${issue.lot.id}`}

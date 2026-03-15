@@ -26,7 +26,8 @@
     "failedToLoad": "Failed to load data. Tap to retry.",
     "offline": "You are offline. Some features may be unavailable.",
     "total": "Total",
-    "description": "Description"
+    "description": "Description",
+    "clearFilters": "Clear filters"
   },
   "auth": {
     "login": "Sign In",
@@ -82,7 +83,11 @@
     "auction": "Auction",
     "stems": "Stems",
     "turnover": "Turnover",
-    "price": "Price"
+    "price": "Price",
+    "priceTrend": "Price Trend per Product",
+    "stemLengthBreakdown": "Sales by Stem Length",
+    "channelDistribution": "Channel Distribution over Time",
+    "yearlyTrends": "Yearly Trends"
   },
   "lots": {
     "title": "Lots",
@@ -142,7 +147,13 @@
     "totalIssues": "Total Issues",
     "totalAffectedStems": "Affected Stems",
     "qualityRate": "Quality Rate",
-    "mostCommonIssue": "Most Common Issue"
+    "mostCommonIssue": "Most Common Issue",
+    "code_110": "Few damaged flowers/bud/fruit",
+    "code_120": "Discoloured flowers",
+    "code_130": "Botrytis",
+    "code_154": "Few impure flowers",
+    "code_160": "Bent stems",
+    "code_170": "Dehydrated"
   },
   "profile": {
     "title": "Profile",
@@ -160,7 +171,15 @@
     "requestChange": "Request Change",
     "changeRequestPlaceholder": "Describe the change you would like to request...",
     "changeRequestSent": "Your change request has been sent",
-    "pendingRequests": "Pending Requests"
+    "pendingRequests": "Pending Requests",
+    "changePassword": "Change Password",
+    "currentPassword": "Current Password",
+    "newPassword": "New Password",
+    "confirmPassword": "Confirm New Password",
+    "passwordChanged": "Password changed successfully",
+    "passwordMismatch": "New passwords do not match",
+    "passwordTooShort": "Password must be at least 8 characters",
+    "currentPasswordWrong": "Current password is incorrect"
   },
   "admin": {
     "title": "User Management",

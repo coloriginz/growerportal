@@ -152,8 +152,59 @@ export function LotsContent({ growerId }: { growerId: string | null }) {
         </Select>
       </div>
 
-      {/* Lots table */}
-      <Card>
+      {/* Mobile card list */}
+      <div className="space-y-3 md:hidden">
+        {filtered.map((lot) => (
+          <Link key={lot.id} href={`/lots/${lot.id}`} className="block">
+            <Card className="transition-colors hover:bg-accent/50">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="font-medium text-primary">{lot.lotNumber}</span>
+                  <div className="flex items-center gap-1.5">
+                    {lot.hasQualityIssues && (
+                      <Badge variant="destructive" className="text-xs">Q</Badge>
+                    )}
+                    <Badge variant={statusVariant[lot.status]}>
+                      {t(`lots.${lot.status === "in_transit" ? "inTransit" : lot.status}` as Parameters<typeof t>[0])}
+                    </Badge>
+                  </div>
+                </div>
+                <p className="text-sm text-foreground">{lot.productName}</p>
+                <p className="text-xs text-muted-foreground mb-3">{lot.articleGroup}</p>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">{t("lots.totalStems")}</span>
+                    <span className="tabular-nums font-medium">{formatNumber(lot.totalStems)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">{t("lots.avgPrice")}</span>
+                    <span className="tabular-nums font-medium">{formatPrice(lot.avgPrice)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">{t("lots.totalAmount")}</span>
+                    <span className="tabular-nums font-medium">{formatCurrencyDetailed(lot.totalAmount)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">{t("lots.deliveryDate")}</span>
+                    <span className="tabular-nums">{formatDate(lot.deliveryDate)}</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </Link>
+        ))}
+        {filtered.length === 0 && !loading && (
+          <div className="empty-state">
+            <div className="empty-state-icon">
+              <RiStackLine />
+            </div>
+            <p className="empty-state-text">{t("common.noResults")}</p>
+          </div>
+        )}
+      </div>
+
+      {/* Desktop lots table */}
+      <Card className="hidden md:block">
         <CardContent className="p-0">
           <Table>
             <TableHeader>

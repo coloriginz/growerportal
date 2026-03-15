@@ -14,6 +14,11 @@ export async function GET(request: NextRequest) {
   const yearParam = params.get("year") ? parseInt(params.get("year")!) : null;
   const growerId = resolveGrowerId(session!, requestedGrowerId);
 
+  // Multi-select filters
+  const filterProducts = params.getAll("product");
+  const filterSalesTypes = params.getAll("salesType");
+  const filterStemLengths = params.getAll("stemLength").map((s) => parseInt(s));
+
   if (!growerId) {
     return NextResponse.json({
       totalStems: 0, totalTurnover: 0, avgPrice: 0,
@@ -47,6 +52,13 @@ export async function GET(request: NextRequest) {
       dateTo = endOfISOWeek(weekDate);
       break;
     }
+    case "custom": {
+      const fromParam = params.get("dateFrom");
+      const toParam = params.get("dateTo");
+      dateFrom = fromParam ? startOfDay(new Date(fromParam)) : startOfYear(now);
+      dateTo = toParam ? startOfDay(new Date(toParam + "T23:59:59")) : undefined;
+      break;
+    }
     case "ytd":
     default:
       dateFrom = startOfYear(now);
@@ -57,11 +69,18 @@ export async function GET(request: NextRequest) {
     ? { gte: dateFrom, lte: dateTo }
     : { gte: dateFrom };
 
-  const baseWhere = {
-    lot: { growerId },
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const lotFilter: Record<string, any> = { growerId };
+  if (filterProducts.length > 0) lotFilter.productName = { in: filterProducts };
+  if (filterStemLengths.length > 0) lotFilter.stemLength = { in: filterStemLengths };
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const baseWhere: Record<string, any> = {
+    lot: lotFilter,
     isCorrection: false,
     date: dateFilter,
   };
+  if (filterSalesTypes.length > 0) baseWhere.salesType = { in: filterSalesTypes };
 
   // Totals
   const totals = await prisma.transaction.aggregate({

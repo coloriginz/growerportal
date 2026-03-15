@@ -20,6 +20,7 @@ import {
   formatPrice,
   formatDate,
 } from "@/lib/format";
+import { translateQualityCode } from "@/lib/quality-codes";
 
 interface LotDetailProps {
   lot: {
@@ -246,7 +247,7 @@ export function LotDetail({ lot }: LotDetailProps) {
                     <TableCell>
                       <Badge variant="destructive">{issue.code}</Badge>
                     </TableCell>
-                    <TableCell>{issue.description}</TableCell>
+                    <TableCell>{translateQualityCode(issue.code, issue.description, t)}</TableCell>
                     <TableCell className="text-right tabular-nums">{formatNumber(issue.stems)}</TableCell>
                     <TableCell className="text-muted-foreground">{formatDate(issue.date)}</TableCell>
                   </TableRow>
