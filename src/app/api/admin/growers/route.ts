@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
   const activationToken = uuidv4();
 
   // Create grower and user in a transaction
-  const result = await prisma.$transaction(async (tx: typeof prisma) => {
+  const result = await prisma.$transaction(async (tx) => {
     const grower = await tx.grower.create({
       data: {
         code,
