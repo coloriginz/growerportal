@@ -203,7 +203,7 @@ export function LotDetail({ lot }: LotDetailProps) {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Description</TableHead>
+                  <TableHead>{t("common.description")}</TableHead>
                   <TableHead className="text-right">{t("lots.totalAmount")}</TableHead>
                 </TableRow>
               </TableHeader>
@@ -215,7 +215,7 @@ export function LotDetail({ lot }: LotDetailProps) {
                   </TableRow>
                 ))}
                 <TableRow className="font-semibold bg-muted/30">
-                  <TableCell>Total</TableCell>
+                  <TableCell>{t("common.total")}</TableCell>
                   <TableCell className="text-right tabular-nums">{formatCurrencyDetailed(totalCosts)}</TableCell>
                 </TableRow>
               </TableBody>

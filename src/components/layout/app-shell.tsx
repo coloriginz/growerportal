@@ -25,6 +25,7 @@ import { useLanguage } from "@/components/providers/language-provider";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { GrowerSelector } from "@/components/layout/grower-selector";
 import { TestBanner } from "@/components/layout/test-banner";
+import { OfflineIndicator } from "@/components/layout/offline-indicator";
 import { isTest } from "@/lib/env";
 import type { Role } from "@/types";
 
@@ -198,6 +199,7 @@ export function AppShell({ user, children }: AppShellProps) {
   return (
     <div className="flex min-h-screen flex-col">
       {/* Test Environment Banner */}
+      <OfflineIndicator />
       {isTest && <TestBanner isAdmin={userRole === "admin"} />}
 
       <div className="flex flex-1">

@@ -18,7 +18,15 @@
     "date": "Datum",
     "actions": "Acties",
     "yes": "Ja",
-    "no": "Nee"
+    "no": "Nee",
+    "exportCSV": "Exporteer CSV",
+    "lastUpdated": "Laatst bijgewerkt",
+    "refresh": "Vernieuwen",
+    "retry": "Opnieuw",
+    "failedToLoad": "Laden mislukt. Tik om opnieuw te proberen.",
+    "offline": "U bent offline. Sommige functies zijn mogelijk niet beschikbaar.",
+    "total": "Totaal",
+    "description": "Omschrijving"
   },
   "auth": {
     "login": "Inloggen",
@@ -52,7 +60,9 @@
     "vsLastYear": "t.o.v. vorig jaar",
     "salesOverview": "Verkoopoverzicht",
     "topProducts": "Top Producten",
-    "recentLots": "Recente Partijen"
+    "recentLots": "Recente Partijen",
+    "netYieldPerStem": "Netto Opbrengst/Steel",
+    "qualityRate": "Kwaliteitspercentage"
   },
   "sales": {
     "title": "Verkopen",
@@ -66,6 +76,7 @@
     "thisMonth": "Deze Maand",
     "ytd": "Jaar tot Datum",
     "custom": "Aangepast",
+    "weekNr": "Week",
     "salesType": "Verkoopkanaal",
     "directSales": "Directe Verkoop",
     "auction": "Veiling",
@@ -127,7 +138,11 @@
     "description": "Omschrijving",
     "affectedStems": "Getroffen Stelen",
     "lot": "Partij",
-    "date": "Datum"
+    "date": "Datum",
+    "totalIssues": "Totaal Issues",
+    "totalAffectedStems": "Getroffen Stelen",
+    "qualityRate": "Kwaliteitspercentage",
+    "mostCommonIssue": "Meest Voorkomende Issue"
   },
   "profile": {
     "title": "Profiel",

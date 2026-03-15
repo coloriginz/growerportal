@@ -18,7 +18,15 @@
     "date": "Date",
     "actions": "Actions",
     "yes": "Yes",
-    "no": "No"
+    "no": "No",
+    "exportCSV": "Export CSV",
+    "lastUpdated": "Last updated",
+    "refresh": "Refresh",
+    "retry": "Retry",
+    "failedToLoad": "Failed to load data. Tap to retry.",
+    "offline": "You are offline. Some features may be unavailable.",
+    "total": "Total",
+    "description": "Description"
   },
   "auth": {
     "login": "Sign In",
@@ -52,7 +60,9 @@
     "vsLastYear": "vs. last year",
     "salesOverview": "Sales Overview",
     "topProducts": "Top Products",
-    "recentLots": "Recent Lots"
+    "recentLots": "Recent Lots",
+    "netYieldPerStem": "Net Yield/Stem",
+    "qualityRate": "Quality Rate"
   },
   "sales": {
     "title": "Sales",
@@ -66,6 +76,7 @@
     "thisMonth": "This Month",
     "ytd": "Year to Date",
     "custom": "Custom",
+    "weekNr": "Week",
     "salesType": "Sales Channel",
     "directSales": "Direct Sales",
     "auction": "Auction",
@@ -127,7 +138,11 @@
     "description": "Description",
     "affectedStems": "Affected Stems",
     "lot": "Lot",
-    "date": "Date"
+    "date": "Date",
+    "totalIssues": "Total Issues",
+    "totalAffectedStems": "Affected Stems",
+    "qualityRate": "Quality Rate",
+    "mostCommonIssue": "Most Common Issue"
   },
   "profile": {
     "title": "Profile",

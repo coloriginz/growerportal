@@ -47,6 +47,9 @@ function CustomTooltip({ active, payload, label }: { active?: boolean; payload?:
 }
 
 export function SalesChart({ data }: SalesChartProps) {
+  const currentYear = new Date().getFullYear();
+  const lastYear = currentYear - 1;
+
   return (
     <ResponsiveContainer width="100%" height={300}>
       <BarChart data={data} barGap={2}>
@@ -73,13 +76,13 @@ export function SalesChart({ data }: SalesChartProps) {
         />
         <Bar
           dataKey="stems"
-          name="Stems 2026"
+          name={`Stems ${currentYear}`}
           fill="oklch(0.55 0.15 155)"
           radius={[4, 4, 0, 0]}
         />
         <Bar
           dataKey="lastYearStems"
-          name="Stems 2025"
+          name={`Stems ${lastYear}`}
           fill="oklch(0.55 0.15 155 / 0.35)"
           radius={[4, 4, 0, 0]}
         />

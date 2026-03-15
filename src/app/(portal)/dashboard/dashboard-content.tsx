@@ -1,7 +1,18 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useMemo } from "react";
+import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   RiPlantLine,
   RiMoneyEuroCircleLine,
@@ -9,11 +20,15 @@ import {
   RiCalendarLine,
   RiArrowUpSLine,
   RiArrowDownSLine,
+  RiShieldCheckLine,
 } from "@remixicon/react";
 import { useLanguage } from "@/components/providers/language-provider";
 import { SalesChart } from "@/components/charts/sales-chart";
 import { TopProductsChart } from "@/components/charts/top-products-chart";
-import { formatCurrency, formatNumber } from "@/lib/format";
+import { formatCurrency, formatNumber, formatPrice, formatDate, formatTime } from "@/lib/format";
+import { useFetch } from "@/hooks/use-fetch";
+import { ErrorState } from "@/components/ui/error-state";
+import { RiRefreshLine } from "@remixicon/react";
 
 interface DashboardData {
   stemsToday: number;
@@ -24,8 +39,11 @@ interface DashboardData {
   turnoverYTDLastYear: number;
   avgPriceYTD: number;
   avgPriceYTDLastYear: number;
+  netYieldPerStem: number;
+  qualityRate: number;
   monthlySales: { month: string; stems: number; turnover: number; lastYearStems: number; lastYearTurnover: number }[];
   topProducts: { name: string; stems: number; turnover: number }[];
+  recentLots: { id: string; lotNumber: string; productName: string; totalStems: number; avgPrice: number; deliveryDate: string; status: string }[];
 }
 
 function KpiCard({
@@ -34,12 +52,14 @@ function KpiCard({
   subtitle,
   icon: Icon,
   change,
+  changeLabel,
 }: {
   title: string;
   value: string;
   subtitle?: string;
   icon: React.ElementType;
   change?: number;
+  changeLabel?: string;
 }) {
   return (
     <Card>
@@ -63,7 +83,7 @@ function KpiCard({
               <RiArrowDownSLine className="h-3.5 w-3.5" />
             )}
             {change >= 0 ? "+" : ""}
-            {change.toFixed(1)}% vs. last year
+            {change.toFixed(1)}% {changeLabel}
           </span>
         )}
         {subtitle && (
@@ -102,24 +122,20 @@ function DashboardSkeleton() {
 }
 
 export function DashboardContent({ growerId }: { growerId: string | null }) {
-  const [data, setData] = useState<DashboardData | null>(null);
-  const [loading, setLoading] = useState(true);
   const { t } = useLanguage();
-
-  useEffect(() => {
-    async function fetchData() {
-      try {
-        const params = growerId ? `?growerId=${growerId}` : "";
-        const res = await fetch(`/api/dashboard${params}`);
-        if (res.ok) {
-          setData(await res.json());
-        }
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchData();
+  const url = useMemo(() => {
+    const params = growerId ? `?growerId=${growerId}` : "";
+    return `/api/dashboard${params}`;
   }, [growerId]);
+  const { data, loading, error, lastUpdated, refetch } = useFetch<DashboardData>(url);
+
+  if (error) {
+    return (
+      <div className="page-content">
+        <ErrorState onRetry={refetch} />
+      </div>
+    );
+  }
 
   if (loading || !data) {
     return <DashboardSkeleton />;
@@ -135,17 +151,28 @@ export function DashboardContent({ growerId }: { growerId: string | null }) {
           data.turnoverYTDLastYear) *
         100
       : 0;
-  const _priceChange =
+  const priceChange =
     data.avgPriceYTDLastYear > 0
       ? ((data.avgPriceYTD - data.avgPriceYTDLastYear) /
           data.avgPriceYTDLastYear) *
         100
       : 0;
+  const vsLastYear = t("dashboard.vsLastYear");
 
   return (
     <div className="page-content">
       <div className="page-header">
         <h1>{t("dashboard.title")}</h1>
+        <div className="flex items-center gap-2">
+          {lastUpdated && (
+            <span className="text-xs text-muted-foreground">
+              {t("common.lastUpdated")}: {formatTime(lastUpdated)}
+            </span>
+          )}
+          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={refetch}>
+            <RiRefreshLine className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
 
       {/* KPI Cards */}
@@ -165,12 +192,35 @@ export function DashboardContent({ growerId }: { growerId: string | null }) {
           value={formatNumber(data.stemsYTD)}
           icon={RiLineChartLine}
           change={stemsChange}
+          changeLabel={vsLastYear}
         />
         <KpiCard
           title={t("dashboard.turnoverYTD")}
           value={formatCurrency(data.turnoverYTD)}
           icon={RiMoneyEuroCircleLine}
           change={turnoverChange}
+          changeLabel={vsLastYear}
+        />
+      </div>
+
+      {/* Secondary KPI Cards */}
+      <div className="grid gap-4 sm:grid-cols-3">
+        <KpiCard
+          title={t("dashboard.avgPrice")}
+          value={formatPrice(data.avgPriceYTD)}
+          icon={RiLineChartLine}
+          change={priceChange}
+          changeLabel={vsLastYear}
+        />
+        <KpiCard
+          title={t("dashboard.netYieldPerStem")}
+          value={formatPrice(data.netYieldPerStem)}
+          icon={RiMoneyEuroCircleLine}
+        />
+        <KpiCard
+          title={t("dashboard.qualityRate")}
+          value={`${data.qualityRate.toFixed(1)}%`}
+          icon={RiShieldCheckLine}
         />
       </div>
 
@@ -194,6 +244,49 @@ export function DashboardContent({ growerId }: { growerId: string | null }) {
           </CardContent>
         </Card>
       </div>
+
+      {/* Recent Lots */}
+      {data.recentLots.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>{t("dashboard.recentLots")}</CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>{t("lots.lotNumber")}</TableHead>
+                  <TableHead>{t("lots.product")}</TableHead>
+                  <TableHead className="text-right">{t("lots.totalStems")}</TableHead>
+                  <TableHead className="text-right">{t("lots.avgPrice")}</TableHead>
+                  <TableHead>{t("lots.deliveryDate")}</TableHead>
+                  <TableHead>{t("lots.status")}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {data.recentLots.map((lot) => (
+                  <TableRow key={lot.id}>
+                    <TableCell className="font-medium">
+                      <Link href={`/lots/${lot.id}`} className="text-primary hover:underline">
+                        {lot.lotNumber}
+                      </Link>
+                    </TableCell>
+                    <TableCell>{lot.productName}</TableCell>
+                    <TableCell className="text-right tabular-nums">{formatNumber(lot.totalStems)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{formatPrice(lot.avgPrice)}</TableCell>
+                    <TableCell className="text-muted-foreground">{formatDate(lot.deliveryDate)}</TableCell>
+                    <TableCell>
+                      <Badge variant={lot.status === "sold" ? "default" : lot.status === "selling" ? "secondary" : "outline"}>
+                        {t(`lots.${lot.status === "in_transit" ? "inTransit" : lot.status}` as Parameters<typeof t>[0])}
+                      </Badge>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

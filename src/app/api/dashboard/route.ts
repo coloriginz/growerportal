@@ -26,8 +26,11 @@ export async function GET(request: NextRequest) {
       turnoverYTDLastYear: 0,
       avgPriceYTD: 0,
       avgPriceYTDLastYear: 0,
+      netYieldPerStem: 0,
+      qualityRate: 100,
       monthlySales: [],
       topProducts: [],
+      recentLots: [],
     });
   }
 
@@ -158,6 +161,44 @@ export async function GET(request: NextRequest) {
     .sort((a, b) => b.stems - a.stems)
     .slice(0, 8);
 
+  // Total costs YTD (from salessheets)
+  const costsAgg = await prisma.salesSheet.aggregate({
+    where: {
+      growerId,
+      invoiceDate: { gte: ytdStart },
+    },
+    _sum: { totalCosts: true },
+  });
+  const totalCostsYTD = Number(costsAgg._sum.totalCosts) || 0;
+  const netYieldPerStem = stemsYTD > 0 ? (turnoverYTD - totalCostsYTD) / stemsYTD : 0;
+
+  // Quality rate YTD
+  const qualityStemsAgg = await prisma.qualityIssue.aggregate({
+    where: {
+      growerId,
+      date: { gte: ytdStart },
+    },
+    _sum: { stems: true },
+  });
+  const qualityStems = qualityStemsAgg._sum.stems || 0;
+  const qualityRate = stemsYTD > 0 ? ((stemsYTD - qualityStems) / stemsYTD) * 100 : 100;
+
+  // Recent lots
+  const recentLots = await prisma.lot.findMany({
+    where: { growerId },
+    orderBy: { deliveryDate: "desc" },
+    take: 5,
+    select: {
+      id: true,
+      lotNumber: true,
+      productName: true,
+      totalStems: true,
+      avgPrice: true,
+      deliveryDate: true,
+      status: true,
+    },
+  });
+
   return NextResponse.json({
     stemsToday: todayAgg._sum.stems || 0,
     stemsYesterday: yesterdayAgg._sum.stems || 0,
@@ -168,7 +209,14 @@ export async function GET(request: NextRequest) {
     avgPriceYTD: stemsYTD > 0 ? turnoverYTD / stemsYTD : 0,
     avgPriceYTDLastYear:
       stemsYTDLastYear > 0 ? turnoverYTDLastYear / stemsYTDLastYear : 0,
+    netYieldPerStem,
+    qualityRate,
     monthlySales,
     topProducts: topProductsList,
+    recentLots: recentLots.map((l) => ({
+      ...l,
+      avgPrice: Number(l.avgPrice),
+      deliveryDate: l.deliveryDate.toISOString(),
+    })),
   });
 }

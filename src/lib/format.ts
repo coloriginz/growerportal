@@ -37,6 +37,13 @@ export function formatDate(date: Date | string): string {
   }).format(new Date(date));
 }
 
+export function formatTime(date: Date | string): string {
+  return new Intl.DateTimeFormat("nl-NL", {
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(date));
+}
+
 export function formatFileSize(bytes: number): string {
   if (bytes === 0) return "0 B";
   const k = 1024;

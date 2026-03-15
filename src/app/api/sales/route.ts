@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireAuth, resolveGrowerId } from "@/lib/api-helpers";
-import { startOfDay, subDays, startOfWeek, startOfMonth, startOfYear, format } from "date-fns";
+import { startOfDay, subDays, startOfWeek, startOfMonth, startOfYear, format, getISOWeek, setISOWeek, setYear, endOfISOWeek, startOfISOWeek } from "date-fns";
 
 export async function GET(request: NextRequest) {
   const { error, session } = await requireAuth();
@@ -10,6 +10,8 @@ export async function GET(request: NextRequest) {
   const params = request.nextUrl.searchParams;
   const requestedGrowerId = params.get("growerId");
   const period = params.get("period") || "ytd";
+  const weekNumber = params.get("week") ? parseInt(params.get("week")!) : null;
+  const yearParam = params.get("year") ? parseInt(params.get("year")!) : null;
   const growerId = resolveGrowerId(session!, requestedGrowerId);
 
   if (!growerId) {
@@ -21,6 +23,7 @@ export async function GET(request: NextRequest) {
 
   const now = new Date();
   let dateFrom: Date;
+  let dateTo: Date | undefined;
 
   switch (period) {
     case "today":
@@ -28,6 +31,7 @@ export async function GET(request: NextRequest) {
       break;
     case "yesterday":
       dateFrom = startOfDay(subDays(now, 1));
+      dateTo = startOfDay(now);
       break;
     case "week":
       dateFrom = startOfWeek(now, { weekStartsOn: 1 });
@@ -35,14 +39,22 @@ export async function GET(request: NextRequest) {
     case "month":
       dateFrom = startOfMonth(now);
       break;
+    case "weeknr": {
+      const yr = yearParam || now.getFullYear();
+      const wk = weekNumber || getISOWeek(now);
+      const weekDate = setISOWeek(setYear(new Date(yr, 0, 4), yr), wk);
+      dateFrom = startOfISOWeek(weekDate);
+      dateTo = endOfISOWeek(weekDate);
+      break;
+    }
     case "ytd":
     default:
       dateFrom = startOfYear(now);
       break;
   }
 
-  const dateFilter = period === "yesterday"
-    ? { gte: dateFrom, lt: startOfDay(now) }
+  const dateFilter = dateTo
+    ? { gte: dateFrom, lte: dateTo }
     : { gte: dateFrom };
 
   const baseWhere = {
@@ -107,10 +119,35 @@ export async function GET(request: NextRequest) {
     dailyMap.set(day, existing);
   }
 
+  // Year-over-year comparison for weeknr mode
+  let lastYearComparison = null;
+  if (period === "weeknr" && dateTo) {
+    const lyFrom = new Date(dateFrom);
+    lyFrom.setFullYear(lyFrom.getFullYear() - 1);
+    const lyTo = new Date(dateTo);
+    lyTo.setFullYear(lyTo.getFullYear() - 1);
+    const lyTotals = await prisma.transaction.aggregate({
+      where: {
+        lot: { growerId },
+        isCorrection: false,
+        date: { gte: lyFrom, lte: lyTo },
+      },
+      _sum: { stems: true, amount: true },
+    });
+    const lyStems = lyTotals._sum.stems || 0;
+    const lyTurnover = Number(lyTotals._sum.amount) || 0;
+    lastYearComparison = {
+      totalStems: lyStems,
+      totalTurnover: lyTurnover,
+      avgPrice: lyStems > 0 ? lyTurnover / lyStems : 0,
+    };
+  }
+
   return NextResponse.json({
     totalStems,
     totalTurnover,
     avgPrice: totalStems > 0 ? totalTurnover / totalStems : 0,
+    lastYearComparison,
     bySalesType: bySalesType.map((b: { salesType: string; _sum: { stems: number | null; amount: unknown } }) => ({
       salesType: b.salesType,
       stems: b._sum.stems || 0,

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState, useMemo } from "react";
 import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -20,7 +20,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { RiSearchLine, RiStackLine } from "@remixicon/react";
+import { Button } from "@/components/ui/button";
+import { RiSearchLine, RiStackLine, RiDownloadLine } from "@remixicon/react";
+import { exportToCSV } from "@/lib/export-csv";
+import { useFetch } from "@/hooks/use-fetch";
+import { ErrorState } from "@/components/ui/error-state";
+import { formatTime } from "@/lib/format";
+import { RiRefreshLine } from "@remixicon/react";
 import { useLanguage } from "@/components/providers/language-provider";
 import {
   formatCurrencyDetailed,
@@ -54,29 +60,26 @@ const statusVariant: Record<LotStatus, "default" | "secondary" | "destructive" |
 };
 
 export function LotsContent({ growerId }: { growerId: string | null }) {
-  const [lots, setLots] = useState<LotRow[]>([]);
-  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const { t } = useLanguage();
 
-  useEffect(() => {
-    async function fetchLots() {
-      try {
-        const params = new URLSearchParams();
-        if (growerId) params.set("growerId", growerId);
-        const res = await fetch(`/api/lots?${params}`);
-        if (res.ok) {
-          setLots(await res.json());
-        }
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchLots();
+  const url = useMemo(() => {
+    const params = new URLSearchParams();
+    if (growerId) params.set("growerId", growerId);
+    return `/api/lots?${params}`;
   }, [growerId]);
+  const { data: lots, loading, error, lastUpdated, refetch } = useFetch<LotRow[]>(url);
 
-  const filtered = lots.filter((lot) => {
+  if (error) {
+    return (
+      <div className="page-content">
+        <ErrorState onRetry={refetch} />
+      </div>
+    );
+  }
+
+  const filtered = (lots || []).filter((lot) => {
     const matchesSearch =
       !search ||
       lot.lotNumber.toLowerCase().includes(search.toLowerCase()) ||
@@ -90,6 +93,39 @@ export function LotsContent({ growerId }: { growerId: string | null }) {
     <div className="page-content">
       <div className="page-header">
         <h1>{t("lots.title")}</h1>
+        <div className="flex items-center gap-2">
+          {filtered.length > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() =>
+                exportToCSV(filtered, "lots-export", [
+                { key: "lotNumber", header: "Lot Number" },
+                { key: "productName", header: "Product" },
+                { key: "articleGroup", header: "Article Group" },
+                { key: "colli", header: "Colli" },
+                { key: "stemLength", header: "Length (cm)" },
+                { key: "totalStems", header: "Stems" },
+                { key: "avgPrice", header: "Avg Price" },
+                { key: "totalAmount", header: "Amount" },
+                { key: "deliveryDate", header: "Delivery Date" },
+                { key: "status", header: "Status" },
+              ])
+            }
+          >
+            <RiDownloadLine className="mr-2 h-4 w-4" />
+            {t("common.exportCSV")}
+          </Button>
+          )}
+          {lastUpdated && (
+            <span className="text-xs text-muted-foreground">
+              {formatTime(lastUpdated)}
+            </span>
+          )}
+          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={refetch}>
+            <RiRefreshLine className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
 
       {/* Filters */}
