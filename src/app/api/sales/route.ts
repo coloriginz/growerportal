@@ -47,6 +47,13 @@ export async function GET(request: NextRequest) {
       dateTo = endOfISOWeek(weekDate);
       break;
     }
+    case "custom": {
+      const fromParam = params.get("dateFrom");
+      const toParam = params.get("dateTo");
+      dateFrom = fromParam ? startOfDay(new Date(fromParam)) : startOfYear(now);
+      dateTo = toParam ? startOfDay(new Date(toParam + "T23:59:59")) : undefined;
+      break;
+    }
     case "ytd":
     default:
       dateFrom = startOfYear(now);

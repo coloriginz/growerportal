@@ -82,7 +82,11 @@
     "auction": "Auction",
     "stems": "Stems",
     "turnover": "Turnover",
-    "price": "Price"
+    "price": "Price",
+    "priceTrend": "Price Trend per Product",
+    "stemLengthBreakdown": "Sales by Stem Length",
+    "channelDistribution": "Channel Distribution over Time",
+    "yearlyTrends": "Yearly Trends"
   },
   "lots": {
     "title": "Lots",
@@ -142,7 +146,13 @@
     "totalIssues": "Total Issues",
     "totalAffectedStems": "Affected Stems",
     "qualityRate": "Quality Rate",
-    "mostCommonIssue": "Most Common Issue"
+    "mostCommonIssue": "Most Common Issue",
+    "code_110": "Few damaged flowers/bud/fruit",
+    "code_120": "Discoloured flowers",
+    "code_130": "Botrytis",
+    "code_154": "Few impure flowers",
+    "code_160": "Bent stems",
+    "code_170": "Dehydrated"
   },
   "profile": {
     "title": "Profile",

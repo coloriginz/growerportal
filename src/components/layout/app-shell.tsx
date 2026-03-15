@@ -23,6 +23,7 @@ import { Separator } from "@/components/ui/separator";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { useLanguage } from "@/components/providers/language-provider";
 import { LanguageSwitcher } from "@/components/language-switcher";
+import { ThemeSwitcher } from "@/components/theme-switcher";
 import { GrowerSelector } from "@/components/layout/grower-selector";
 import { TestBanner } from "@/components/layout/test-banner";
 import { OfflineIndicator } from "@/components/layout/offline-indicator";
@@ -180,7 +181,10 @@ export function AppShell({ user, children }: AppShellProps) {
             </div>
           </div>
           <div className="mt-3 flex items-center justify-between">
-            <LanguageSwitcher />
+            <div className="flex items-center gap-1">
+              <LanguageSwitcher />
+              <ThemeSwitcher />
+            </div>
             <Button
               variant="ghost"
               size="icon"

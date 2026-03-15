@@ -13,51 +13,46 @@ import {
 import { formatNumber } from "@/lib/format";
 import { getChartColor } from "@/lib/chart-colors";
 
-interface TopProductsChartProps {
-  data: { name: string; stems: number; turnover: number }[];
+interface StemLengthChartProps {
+  data: { length: string; stems: number; turnover: number; avgPrice: number }[];
 }
 
-// Custom tooltip with polished styling
-function CustomTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ value: number; color: string }>; label?: string }) {
+function CustomTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ value: number }>; label?: string }) {
   if (!active || !payload?.length) return null;
+  const item = payload[0];
   return (
     <div className="rounded-lg border border-border/50 bg-card px-3 py-2.5 shadow-lg">
       <p className="mb-1 text-xs font-semibold text-foreground">{label}</p>
       <p className="text-xs tabular-nums text-muted-foreground">
-        {formatNumber(payload[0].value)} stems
+        {formatNumber(item.value)} stems
       </p>
     </div>
   );
 }
 
-export function TopProductsChart({ data }: TopProductsChartProps) {
+export function StemLengthChart({ data }: StemLengthChartProps) {
   return (
     <ResponsiveContainer width="100%" height={300}>
-      <BarChart data={data} layout="vertical" barSize={20}>
-        <CartesianGrid strokeDasharray="3 3" horizontal={false} className="stroke-border/50" />
+      <BarChart data={data}>
+        <CartesianGrid strokeDasharray="3 3" vertical={false} className="stroke-border/50" />
         <XAxis
-          type="number"
+          dataKey="length"
+          fontSize={12}
+          tickLine={false}
+          axisLine={false}
+          tick={{ fill: "currentColor" }}
+          className="text-muted-foreground"
+        />
+        <YAxis
           fontSize={12}
           tickLine={false}
           axisLine={false}
           tickFormatter={(v) => formatNumber(v)}
-          tick={{ fill: "currentColor" }} className="text-muted-foreground"
-        />
-        <YAxis
-          type="category"
-          dataKey="name"
-          fontSize={12}
-          tickLine={false}
-          axisLine={false}
-          width={120}
-          tick={{ fill: "currentColor" }} className="text-muted-foreground"
+          tick={{ fill: "currentColor" }}
+          className="text-muted-foreground"
         />
         <Tooltip content={<CustomTooltip />} />
-        <Bar
-          dataKey="stems"
-          name="Stems"
-          radius={[0, 4, 4, 0]}
-        >
+        <Bar dataKey="stems" name="Stems" radius={[4, 4, 0, 0]}>
           {data.map((_, index) => (
             <Cell key={index} fill={getChartColor(index)} />
           ))}

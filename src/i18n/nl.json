@@ -82,7 +82,11 @@
     "auction": "Veiling",
     "stems": "Stelen",
     "turnover": "Omzet",
-    "price": "Prijs"
+    "price": "Prijs",
+    "priceTrend": "Prijstrend per Product",
+    "stemLengthBreakdown": "Verkoop per Steellengte",
+    "channelDistribution": "Kanaaldistributie over Tijd",
+    "yearlyTrends": "Jaarlijkse Trends"
   },
   "lots": {
     "title": "Partijen",
@@ -142,7 +146,13 @@
     "totalIssues": "Totaal Issues",
     "totalAffectedStems": "Getroffen Stelen",
     "qualityRate": "Kwaliteitspercentage",
-    "mostCommonIssue": "Meest Voorkomende Issue"
+    "mostCommonIssue": "Meest Voorkomende Issue",
+    "code_110": "Enkele beschadigde bloemen/knop/vrucht",
+    "code_120": "Verkleurde bloemen",
+    "code_130": "Botrytis",
+    "code_154": "Enkele onzuivere bloemen",
+    "code_160": "Kromme stelen",
+    "code_170": "Uitgedroogd"
   },
   "profile": {
     "title": "Profiel",

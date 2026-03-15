@@ -43,6 +43,17 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { getISOWeek } from "date-fns";
+import { PriceTrendChart } from "@/components/charts/price-trend-chart";
+import { StemLengthChart } from "@/components/charts/stem-length-chart";
+import { ChannelDistributionChart } from "@/components/charts/channel-distribution-chart";
+
+interface TrendsData {
+  priceTrend: Record<string, string | number>[];
+  products: string[];
+  stemLengthBreakdown: { length: string; stems: number; turnover: number; avgPrice: number }[];
+  channelDistribution: Record<string, string | number>[];
+  channels: string[];
+}
 
 interface SalesData {
   totalStems: number;
@@ -54,7 +65,7 @@ interface SalesData {
   daily: { date: string; stems: number; turnover: number }[];
 }
 
-type Period = "today" | "yesterday" | "week" | "month" | "ytd" | "weeknr";
+type Period = "today" | "yesterday" | "week" | "month" | "ytd" | "weeknr" | "custom";
 
 export function SalesContent({ growerId }: { growerId: string | null }) {
   const [period, setPeriod] = useState<Period>("ytd");
@@ -62,6 +73,8 @@ export function SalesContent({ growerId }: { growerId: string | null }) {
   const currentYear = new Date().getFullYear();
   const [selectedWeek, setSelectedWeek] = useState(currentWeek);
   const [selectedYear, setSelectedYear] = useState(currentYear);
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const { t } = useLanguage();
 
   const url = useMemo(() => {
@@ -71,9 +84,20 @@ export function SalesContent({ growerId }: { growerId: string | null }) {
       params.set("week", String(selectedWeek));
       params.set("year", String(selectedYear));
     }
+    if (period === "custom") {
+      if (dateFrom) params.set("dateFrom", dateFrom);
+      if (dateTo) params.set("dateTo", dateTo);
+    }
     return `/api/sales?${params}`;
-  }, [growerId, period, selectedWeek, selectedYear]);
+  }, [growerId, period, selectedWeek, selectedYear, dateFrom, dateTo]);
   const { data, loading, error, lastUpdated, refetch } = useFetch<SalesData>(url);
+
+  const trendsUrl = useMemo(() => {
+    const params = new URLSearchParams();
+    if (growerId) params.set("growerId", growerId);
+    return `/api/sales/trends?${params}`;
+  }, [growerId]);
+  const { data: trends } = useFetch<TrendsData>(trendsUrl);
 
   if (error) {
     return (
@@ -131,8 +155,26 @@ export function SalesContent({ growerId }: { growerId: string | null }) {
             <TabsTrigger value="month">{t("sales.thisMonth")}</TabsTrigger>
             <TabsTrigger value="ytd">{t("sales.ytd")}</TabsTrigger>
             <TabsTrigger value="weeknr">{t("sales.weekNr")}</TabsTrigger>
+            <TabsTrigger value="custom">{t("sales.custom")}</TabsTrigger>
           </TabsList>
         </Tabs>
+        {period === "custom" && (
+          <div className="flex items-center gap-2">
+            <input
+              type="date"
+              value={dateFrom}
+              onChange={(e) => setDateFrom(e.target.value)}
+              className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+            />
+            <span className="text-sm text-muted-foreground">—</span>
+            <input
+              type="date"
+              value={dateTo}
+              onChange={(e) => setDateTo(e.target.value)}
+              className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+            />
+          </div>
+        )}
         {period === "weeknr" && (
           <div className="flex items-center gap-2">
             <Select value={String(selectedWeek)} onValueChange={(v) => { if (v !== null) setSelectedWeek(parseInt(v)); }}>
@@ -228,14 +270,14 @@ export function SalesContent({ growerId }: { growerId: string | null }) {
               <CardContent>
                 <ResponsiveContainer width="100%" height={300}>
                   <BarChart data={data.daily}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="oklch(0.91 0.01 80 / 0.8)" />
-                    <XAxis dataKey="date" fontSize={12} tickLine={false} axisLine={false} tick={{ fill: "oklch(0.50 0.02 60)" }} />
-                    <YAxis fontSize={12} tickLine={false} axisLine={false} tick={{ fill: "oklch(0.50 0.02 60)" }} />
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} className="stroke-border/50" />
+                    <XAxis dataKey="date" fontSize={12} tickLine={false} axisLine={false} tick={{ fill: "currentColor" }} className="text-muted-foreground" />
+                    <YAxis fontSize={12} tickLine={false} axisLine={false} tick={{ fill: "currentColor" }} className="text-muted-foreground" />
                     <Tooltip formatter={(value: unknown) => formatNumber(value as number)} />
                     <Bar
                       dataKey="stems"
                       name={t("sales.stems")}
-                      fill="oklch(0.55 0.15 155)"
+                      fill="var(--chart-1)"
                       radius={[4, 4, 0, 0]}
                     />
                   </BarChart>
@@ -301,6 +343,46 @@ export function SalesContent({ growerId }: { growerId: string | null }) {
               </Table>
             </CardContent>
           </Card>
+        </>
+      )}
+
+      {/* Yearly trends section */}
+      {trends && (
+        <>
+          <h2 className="text-lg font-semibold mt-4">{t("sales.yearlyTrends")}</h2>
+
+          {trends.priceTrend.length > 0 && trends.products.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle>{t("sales.priceTrend")}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <PriceTrendChart data={trends.priceTrend} products={trends.products} />
+              </CardContent>
+            </Card>
+          )}
+
+          {trends.stemLengthBreakdown.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle>{t("sales.stemLengthBreakdown")}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <StemLengthChart data={trends.stemLengthBreakdown} />
+              </CardContent>
+            </Card>
+          )}
+
+          {trends.channelDistribution.length > 0 && trends.channels.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle>{t("sales.channelDistribution")}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ChannelDistributionChart data={trends.channelDistribution} channels={trends.channels} />
+              </CardContent>
+            </Card>
+          )}
         </>
       )}
     </div>
