@@ -171,7 +171,15 @@
     "requestChange": "Request Change",
     "changeRequestPlaceholder": "Describe the change you would like to request...",
     "changeRequestSent": "Your change request has been sent",
-    "pendingRequests": "Pending Requests"
+    "pendingRequests": "Pending Requests",
+    "changePassword": "Change Password",
+    "currentPassword": "Current Password",
+    "newPassword": "New Password",
+    "confirmPassword": "Confirm New Password",
+    "passwordChanged": "Password changed successfully",
+    "passwordMismatch": "New passwords do not match",
+    "passwordTooShort": "Password must be at least 8 characters",
+    "currentPasswordWrong": "Current password is incorrect"
   },
   "admin": {
     "title": "User Management",

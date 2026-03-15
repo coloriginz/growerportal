@@ -171,7 +171,15 @@
     "requestChange": "Wijziging Aanvragen",
     "changeRequestPlaceholder": "Beschrijf de wijziging die u wilt aanvragen...",
     "changeRequestSent": "Uw wijzigingsverzoek is verzonden",
-    "pendingRequests": "Openstaande Verzoeken"
+    "pendingRequests": "Openstaande Verzoeken",
+    "changePassword": "Wachtwoord Wijzigen",
+    "currentPassword": "Huidig Wachtwoord",
+    "newPassword": "Nieuw Wachtwoord",
+    "confirmPassword": "Bevestig Nieuw Wachtwoord",
+    "passwordChanged": "Wachtwoord succesvol gewijzigd",
+    "passwordMismatch": "Nieuwe wachtwoorden komen niet overeen",
+    "passwordTooShort": "Wachtwoord moet minimaal 8 tekens bevatten",
+    "currentPasswordWrong": "Huidig wachtwoord is onjuist"
   },
   "admin": {
     "title": "Gebruikersbeheer",
