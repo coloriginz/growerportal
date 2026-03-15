@@ -109,8 +109,8 @@ async function main() {
   await prisma.grower.deleteMany();
 
   console.log("Creating admin and commercie users...");
-  const adminPasswordHash = await hash("admin123", 12);
-  const commerciePasswordHash = await hash("commercie123", 12);
+  const adminPasswordHash = await hash("Colori2026!", 12);
+  const commerciePasswordHash = await hash("FloraDesk#24", 12);
 
   const adminUser = await prisma.user.create({
     data: {
@@ -145,7 +145,7 @@ async function main() {
   const commercieUsers = [commercieUser1, commercieUser2];
 
   console.log("Creating 20 growers with data...");
-  const growerPasswordHash = await hash("grower123", 12);
+  const growerPasswordHash = await hash("GreenField99", 12);
 
   for (let i = 0; i < GROWERS.length; i++) {
     const growerData = GROWERS[i];
@@ -448,9 +448,9 @@ async function main() {
   console.log(`  ${lotCount} lots`);
   console.log(`  ${txCount} transactions`);
   console.log(`\nLogin credentials:`);
-  console.log(`  Admin: admin@coloriginz.com / admin123`);
-  console.log(`  Commercie: ly.dao@coloriginz.com / commercie123`);
-  console.log(`  Grower (example): pcfup@example.com / grower123`);
+  console.log(`  Admin: admin@coloriginz.com / Colori2026!`);
+  console.log(`  Commercie: ly.dao@coloriginz.com / FloraDesk#24`);
+  console.log(`  Grower (example): pcfup@example.com / GreenField99`);
 }
 
 main()

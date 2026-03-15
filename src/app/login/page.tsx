@@ -107,9 +107,9 @@ export default function LoginPage() {
               </p>
               <div className="space-y-1">
                 {[
-                  { label: "Admin", email: "admin@coloriginz.com", password: "admin123" },
-                  { label: "Commercie", email: "ly.dao@coloriginz.com", password: "commercie123" },
-                  { label: "Grower", email: "pcfup@example.com", password: "grower123" },
+                  { label: "Admin", email: "admin@coloriginz.com", password: "Colori2026!" },
+                  { label: "Commercie", email: "ly.dao@coloriginz.com", password: "FloraDesk#24" },
+                  { label: "Grower", email: "pcfup@example.com", password: "GreenField99" },
                 ].map((account) => (
                   <button
                     key={account.email}
