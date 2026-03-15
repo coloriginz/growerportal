@@ -49,7 +49,8 @@
     "admin": "Beheer",
     "growers": "Kwekers",
     "users": "Gebruikers",
-    "selectGrower": "Selecteer Kweker"
+    "selectGrower": "Selecteer Kweker",
+    "forecasts": "Aanvoerplanning"
   },
   "dashboard": {
     "title": "Dashboard",
@@ -232,6 +233,36 @@
     "selectCommercie": "Selecteer accountmanager...",
     "noCommercieAssigned": "Geen accountmanager toegewezen",
     "email": "E-mail"
+  },
+  "forecasts": {
+    "title": "Aanvoerplanning",
+    "subtitle": "Plan uw wekelijkse aanvoer per product",
+    "product": "Product",
+    "week": "Week",
+    "stems": "Stelen",
+    "trolleys": "Karren",
+    "colli": "Colli",
+    "total": "Totaal",
+    "addProduct": "Product toevoegen",
+    "copyWeek": "Week kopieren",
+    "copyWeekTitle": "Weekdata Kopieren",
+    "sourceWeek": "Bronweek",
+    "numberOfWeeks": "Aantal weken kopieren",
+    "copyWarning": "Bestaande data in doelweken wordt overschreven",
+    "copy": "Kopieren",
+    "copied": "Weekdata succesvol gekopieerd",
+    "saved": "Opgeslagen",
+    "saveError": "Opslaan van forecast mislukt",
+    "noProducts": "Nog geen aanvoerplanning. Begin met het toevoegen van een product.",
+    "selectProduct": "Selecteer of typ een productnaam...",
+    "currentWeek": "Huidige week",
+    "pastWeek": "Verstreken weken kunnen niet worden bewerkt",
+    "jumpToCurrentWeek": "Ga naar huidige week",
+    "removeProduct": "Product verwijderen",
+    "removeProductConfirm": "Alle forecasts voor dit product verwijderen?",
+    "exportCSV": "Exporteer CSV",
+    "articleGroup": "Artikelgroep",
+    "clickToNavigate": "Klik op een week om de tabel te navigeren"
   },
   "activate": {
     "title": "Stel uw wachtwoord in",

@@ -49,7 +49,8 @@
     "admin": "Administration",
     "growers": "Growers",
     "users": "Users",
-    "selectGrower": "Select Grower"
+    "selectGrower": "Select Grower",
+    "forecasts": "Forecasts"
   },
   "dashboard": {
     "title": "Dashboard",
@@ -232,6 +233,36 @@
     "selectCommercie": "Select account manager...",
     "noCommercieAssigned": "No account manager assigned",
     "email": "Email"
+  },
+  "forecasts": {
+    "title": "Shipment Forecasts",
+    "subtitle": "Plan your weekly shipments per product",
+    "product": "Product",
+    "week": "Week",
+    "stems": "Stems",
+    "trolleys": "Trolleys",
+    "colli": "Colli",
+    "total": "Total",
+    "addProduct": "Add product",
+    "copyWeek": "Copy week",
+    "copyWeekTitle": "Copy Week Data",
+    "sourceWeek": "Source week",
+    "numberOfWeeks": "Number of weeks to copy",
+    "copyWarning": "Existing data in target weeks will be overwritten",
+    "copy": "Copy",
+    "copied": "Week data copied successfully",
+    "saved": "Saved",
+    "saveError": "Failed to save forecast",
+    "noProducts": "No forecasts yet. Start by adding a product below.",
+    "selectProduct": "Select or type a product name...",
+    "currentWeek": "Current week",
+    "pastWeek": "Past weeks cannot be edited",
+    "jumpToCurrentWeek": "Go to current week",
+    "removeProduct": "Remove product",
+    "removeProductConfirm": "Remove all forecasts for this product?",
+    "exportCSV": "Export CSV",
+    "articleGroup": "Article group",
+    "clickToNavigate": "Click on a week to navigate the table"
   },
   "activate": {
     "title": "Set Your Password",

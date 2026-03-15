@@ -58,6 +58,7 @@ model Grower {
   documents      Document[]
   qualityIssues  QualityIssue[]
   changeRequests ChangeRequest[]
+  forecasts      ShipmentForecast[]
 
   @@index([commercieId])
 }
@@ -219,6 +220,28 @@ model QualityIssue {
 
   @@index([growerId])
   @@index([lotId])
+}
+
+// ─── SHIPMENT FORECASTS ─────────────────────────────
+
+model ShipmentForecast {
+  id           String   @id @default(uuid())
+  growerId     String
+  grower       Grower   @relation(fields: [growerId], references: [id], onDelete: Cascade)
+  productName  String
+  articleGroup String?
+  year         Int
+  week         Int
+  stems        Int
+  trolleys     Int?
+  colli        Int?
+  createdById  String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([growerId, productName, year, week])
+  @@index([growerId])
+  @@index([year, week])
 }
 
 // ─── SETTINGS ───────────────────────────────────────────

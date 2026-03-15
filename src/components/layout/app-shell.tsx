@@ -16,6 +16,7 @@ import {
   RiLogoutBoxLine,
   RiMenuLine,
   RiPlantLine,
+  RiCalendarScheduleLine,
 } from "@remixicon/react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -55,6 +56,7 @@ const mainNavItems: NavItem[] = [
   { href: "/lots", labelKey: "nav.lots", icon: RiStackLine },
   { href: "/documents", labelKey: "nav.documents", icon: RiFileTextLine },
   { href: "/quality", labelKey: "nav.quality", icon: RiShieldCheckLine },
+  { href: "/forecasts", labelKey: "nav.forecasts", icon: RiCalendarScheduleLine },
   { href: "/profile", labelKey: "nav.profile", icon: RiUserLine },
 ];
 
