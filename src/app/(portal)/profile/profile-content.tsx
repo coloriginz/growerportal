@@ -13,8 +13,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { Input } from "@/components/ui/input";
-import { RiUserLine, RiLockLine, RiEyeLine, RiEyeOffLine } from "@remixicon/react";
+import { RiUserLine } from "@remixicon/react";
 import { useLanguage } from "@/components/providers/language-provider";
 import { formatDate } from "@/lib/format";
 import { toast } from "sonner";
@@ -39,116 +38,6 @@ interface GrowerProfile {
     validFrom: string | null;
     validUntil: string | null;
   }[];
-}
-
-function ChangePasswordSection() {
-  const [currentPassword, setCurrentPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [showCurrent, setShowCurrent] = useState(false);
-  const [showNew, setShowNew] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const { t } = useLanguage();
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (newPassword !== confirmPassword) {
-      toast.error(t("profile.passwordMismatch"));
-      return;
-    }
-    if (newPassword.length < 8) {
-      toast.error(t("profile.passwordTooShort"));
-      return;
-    }
-    setSaving(true);
-    try {
-      const res = await fetch("/api/profile/password", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ currentPassword, newPassword }),
-      });
-      if (res.ok) {
-        toast.success(t("profile.passwordChanged"));
-        setCurrentPassword("");
-        setNewPassword("");
-        setConfirmPassword("");
-      } else {
-        const data = await res.json();
-        if (res.status === 403) {
-          toast.error(t("profile.currentPasswordWrong"));
-        } else {
-          toast.error(data.error || "Error");
-        }
-      }
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <RiLockLine className="h-5 w-5" />
-          {t("profile.changePassword")}
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-4 max-w-md">
-          <div>
-            <label className="text-sm font-medium mb-1.5 block">{t("profile.currentPassword")}</label>
-            <div className="relative">
-              <Input
-                type={showCurrent ? "text" : "password"}
-                value={currentPassword}
-                onChange={(e) => setCurrentPassword(e.target.value)}
-                required
-              />
-              <button
-                type="button"
-                onClick={() => setShowCurrent(!showCurrent)}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-              >
-                {showCurrent ? <RiEyeOffLine className="h-4 w-4" /> : <RiEyeLine className="h-4 w-4" />}
-              </button>
-            </div>
-          </div>
-          <div>
-            <label className="text-sm font-medium mb-1.5 block">{t("profile.newPassword")}</label>
-            <div className="relative">
-              <Input
-                type={showNew ? "text" : "password"}
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                required
-                minLength={8}
-              />
-              <button
-                type="button"
-                onClick={() => setShowNew(!showNew)}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-              >
-                {showNew ? <RiEyeOffLine className="h-4 w-4" /> : <RiEyeLine className="h-4 w-4" />}
-              </button>
-            </div>
-          </div>
-          <div>
-            <label className="text-sm font-medium mb-1.5 block">{t("profile.confirmPassword")}</label>
-            <Input
-              type="password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              required
-              minLength={8}
-            />
-          </div>
-          <Button type="submit" disabled={saving || !currentPassword || !newPassword || !confirmPassword}>
-            {saving ? t("common.save") + "..." : t("profile.changePassword")}
-          </Button>
-        </form>
-      </CardContent>
-    </Card>
-  );
 }
 
 export function ProfileContent({ growerId }: { growerId: string | null }) {
@@ -200,7 +89,6 @@ export function ProfileContent({ growerId }: { growerId: string | null }) {
         <div className="page-header">
           <h1>{t("profile.title")}</h1>
         </div>
-        <ChangePasswordSection />
         <div className="empty-state">
           <div className="empty-state-icon">
             <RiUserLine />
@@ -314,9 +202,6 @@ export function ProfileContent({ growerId }: { growerId: string | null }) {
           </Table>
         </CardContent>
       </Card>
-
-      {/* Change Password */}
-      <ChangePasswordSection />
 
       {/* Change Request */}
       <Card>

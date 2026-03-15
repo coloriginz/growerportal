@@ -27,6 +27,7 @@ import { ThemeSwitcher } from "@/components/theme-switcher";
 import { GrowerSelector } from "@/components/layout/grower-selector";
 import { TestBanner } from "@/components/layout/test-banner";
 import { OfflineIndicator } from "@/components/layout/offline-indicator";
+import { ChangePasswordDialog } from "@/components/layout/change-password-dialog";
 import { isTest } from "@/lib/env";
 import type { Role } from "@/types";
 
@@ -167,19 +168,21 @@ export function AppShell({ user, children }: AppShellProps) {
 
         {/* User section */}
         <div className="p-4">
-          <div className="flex items-center gap-3">
-            <Avatar className="h-9 w-9 ring-2 ring-sidebar-border">
-              <AvatarFallback className="bg-sidebar-accent text-xs font-semibold text-sidebar-accent-foreground">
-                {initials}
-              </AvatarFallback>
-            </Avatar>
-            <div className="flex-1 truncate">
-              <p className="truncate text-sm font-medium">{user.name}</p>
-              <p className="text-sidebar-foreground/50 truncate text-xs">
-                {user.email}
-              </p>
+          <ChangePasswordDialog>
+            <div className="flex items-center gap-3 rounded-lg px-1 py-1 -mx-1 transition-colors hover:bg-sidebar-accent">
+              <Avatar className="h-9 w-9 ring-2 ring-sidebar-border">
+                <AvatarFallback className="bg-sidebar-accent text-xs font-semibold text-sidebar-accent-foreground">
+                  {initials}
+                </AvatarFallback>
+              </Avatar>
+              <div className="flex-1 truncate">
+                <p className="truncate text-sm font-medium">{user.name}</p>
+                <p className="text-sidebar-foreground/50 truncate text-xs">
+                  {user.email}
+                </p>
+              </div>
             </div>
-          </div>
+          </ChangePasswordDialog>
           <div className="mt-3 flex items-center justify-between">
             <div className="flex items-center gap-1">
               <LanguageSwitcher />
