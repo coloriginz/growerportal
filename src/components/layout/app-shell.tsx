@@ -206,10 +206,10 @@ export function AppShell({ user, children }: AppShellProps) {
       <OfflineIndicator />
       {isTest && <TestBanner isAdmin={userRole === "admin"} />}
 
-      <div className="flex flex-1">
+      <div className="flex flex-1 overflow-hidden">
       {/* Desktop Sidebar */}
-      <aside className="bg-sidebar text-sidebar-foreground border-sidebar-border hidden w-64 shrink-0 border-r lg:block">
-        <div className="sticky top-0 h-screen overflow-y-auto">
+      <aside className="bg-sidebar text-sidebar-foreground border-sidebar-border hidden w-64 shrink-0 border-r lg:flex lg:flex-col">
+        <div className="flex-1 overflow-y-auto">
           <NavContent />
         </div>
       </aside>
@@ -222,9 +222,9 @@ export function AppShell({ user, children }: AppShellProps) {
       </Sheet>
 
       {/* Main Content */}
-      <div className="flex flex-1 flex-col">
+      <div className="flex min-w-0 flex-1 flex-col">
         {/* Mobile Header */}
-        <header className="bg-sidebar text-sidebar-foreground border-sidebar-border flex h-16 items-center gap-4 border-b px-4 lg:hidden">
+        <header className="bg-sidebar text-sidebar-foreground border-sidebar-border flex h-16 shrink-0 items-center gap-4 border-b px-4 lg:hidden">
           <Button
             variant="ghost"
             size="icon"
