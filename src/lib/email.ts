@@ -81,12 +81,17 @@ interface SendEmailOptions {
   attachments?: nodemailer.SendMailOptions["attachments"];
 }
 
+export interface SendEmailResult {
+  info: SMTPTransport.SentMessageInfo;
+  previewUrl: string | false;
+}
+
 export async function sendEmail({
   to,
   subject,
   html,
   attachments,
-}: SendEmailOptions): Promise<SMTPTransport.SentMessageInfo> {
+}: SendEmailOptions): Promise<SendEmailResult> {
   const { transport, useEthereal, redirectTo } = await getTransport();
 
   const from = useEthereal
@@ -104,12 +109,14 @@ export async function sendEmail({
     attachments,
   });
 
+  let previewUrl: string | false = false;
+
   if (useEthereal) {
-    const previewUrl = nodemailer.getTestMessageUrl(info);
+    previewUrl = nodemailer.getTestMessageUrl(info);
     console.log("[Email] Ethereal preview URL:", previewUrl);
   } else if (redirectTo) {
     console.log(`[Email] Redirected mail for ${to} → ${redirectTo}`);
   }
 
-  return info;
+  return { info, previewUrl };
 }

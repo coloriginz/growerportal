@@ -37,7 +37,22 @@
     "loginTitle": "Welkom terug",
     "loginSubtitle": "Log in op uw Kwekersportaal account",
     "invalidCredentials": "Ongeldig e-mailadres of wachtwoord",
-    "accountInactive": "Uw account is nog niet geactiveerd"
+    "accountInactive": "Uw account is nog niet geactiveerd",
+    "forgotPassword": "Wachtwoord vergeten?",
+    "forgotPasswordTitle": "Wachtwoord Resetten",
+    "forgotPasswordSubtitle": "Voer uw e-mailadres in en we sturen u een resetlink.",
+    "resetLinkSent": "Als er een account bestaat met dat e-mailadres, hebben we een resetlink gestuurd.",
+    "sendResetLink": "Resetlink Versturen",
+    "sending": "Verzenden...",
+    "resetPasswordTitle": "Nieuw Wachtwoord Instellen",
+    "resetPasswordSubtitle": "Voer hieronder uw nieuwe wachtwoord in.",
+    "resetPassword": "Wachtwoord Resetten",
+    "resetting": "Resetten...",
+    "passwordResetSuccess": "Wachtwoord Succesvol Gereset",
+    "passwordResetSuccessMessage": "Uw wachtwoord is gereset. U kunt nu inloggen met uw nieuwe wachtwoord.",
+    "invalidResetLink": "Ongeldige of Verlopen Link",
+    "invalidResetLinkMessage": "Deze resetlink is niet meer geldig. Vraag een nieuwe aan.",
+    "backToLogin": "Terug naar Inloggen"
   },
   "nav": {
     "dashboard": "Dashboard",

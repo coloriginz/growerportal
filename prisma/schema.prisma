@@ -18,9 +18,11 @@ model User {
   name           String
   role           String   @default("grower") // grower, commercie, admin
   isActive       Boolean  @default(false)
-  activationToken String? @unique
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  activationToken    String?   @unique
+  resetToken         String?   @unique
+  resetTokenExpiry   DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
   // Grower-specific: link to grower profile
   growerId       String?  @unique

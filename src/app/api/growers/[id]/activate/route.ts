@@ -15,7 +15,7 @@ async function sendActivationEmail(
   email: string,
   name: string,
   activationToken: string
-) {
+): Promise<string | false> {
   const activationUrl = `${process.env.APP_URL}/activate?token=${activationToken}`;
 
   const html = activationEmailHtml({
@@ -23,7 +23,7 @@ async function sendActivationEmail(
     activationUrl,
   });
 
-  await sendEmail({
+  const { previewUrl } = await sendEmail({
     to: email,
     subject: "Activate your Coloriginz Grower Portal account",
     html,
@@ -35,6 +35,8 @@ async function sendActivationEmail(
       },
     ],
   });
+
+  return previewUrl;
 }
 
 export async function POST(
@@ -77,11 +79,12 @@ export async function POST(
     });
 
     // Send activation email
-    await sendActivationEmail(email, grower.name, activationToken);
+    const previewUrl = await sendActivationEmail(email, grower.name, activationToken);
 
     return NextResponse.json({
       userId: grower.user.id,
       activationToken,
+      ...(previewUrl && { previewUrl }),
     });
   }
 
@@ -105,10 +108,11 @@ export async function POST(
   });
 
   // Send activation email
-  await sendActivationEmail(email, grower.name, activationToken);
+  const previewUrl = await sendActivationEmail(email, grower.name, activationToken);
 
   return NextResponse.json({
     userId: user.id,
     activationToken,
+    ...(previewUrl && { previewUrl }),
   }, { status: 201 });
 }

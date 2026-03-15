@@ -19,14 +19,24 @@ export async function GET(request: NextRequest) {
     });
   }
 
+  // Parse filters (same as main sales route)
+  const filterProducts = params.getAll("product");
+  const filterSalesTypes = params.getAll("salesType");
+  const filterStemLengths = params.getAll("stemLength").map((s) => parseInt(s));
+
   const now = new Date();
   const yearStart = startOfYear(now);
 
-  const baseWhere = {
-    lot: { growerId },
+  const lotFilter: Record<string, unknown> = { growerId };
+  if (filterProducts.length > 0) lotFilter.productName = { in: filterProducts };
+  if (filterStemLengths.length > 0) lotFilter.stemLength = { in: filterStemLengths };
+
+  const baseWhere: Record<string, unknown> = {
+    lot: lotFilter,
     isCorrection: false,
     date: { gte: yearStart },
   };
+  if (filterSalesTypes.length > 0) baseWhere.salesType = { in: filterSalesTypes };
 
   // 1. Price trend per product (monthly avg price per stem)
   const transactions = await prisma.transaction.findMany({

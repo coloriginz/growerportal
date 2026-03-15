@@ -18,6 +18,11 @@ const batchSchema = z.object({
   forecasts: z.array(forecastSchema),
 });
 
+const deleteProductSchema = z.object({
+  growerId: z.string().optional(),
+  productName: z.string().min(1),
+});
+
 export async function GET(request: NextRequest) {
   const { error, session } = await requireAuth();
   if (error) return error;
@@ -170,4 +175,34 @@ export async function POST(request: NextRequest) {
   }
 
   return NextResponse.json({ results });
+}
+
+export async function DELETE(request: NextRequest) {
+  const { error, session } = await requireAuth();
+  if (error) return error;
+
+  const body = await request.json();
+  const parsed = deleteProductSchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: "Invalid data", details: parsed.error.flatten() },
+      { status: 400 }
+    );
+  }
+
+  const requestedGrowerId = parsed.data.growerId || null;
+  const growerId = resolveGrowerId(session!, requestedGrowerId);
+
+  if (!growerId) {
+    return NextResponse.json({ error: "No grower specified" }, { status: 400 });
+  }
+
+  const deleted = await prisma.shipmentForecast.deleteMany({
+    where: {
+      growerId,
+      productName: parsed.data.productName,
+    },
+  });
+
+  return NextResponse.json({ deleted: deleted.count });
 }

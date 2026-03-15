@@ -37,7 +37,22 @@
     "loginTitle": "Welcome back",
     "loginSubtitle": "Sign in to your Grower Portal account",
     "invalidCredentials": "Invalid email or password",
-    "accountInactive": "Your account is not yet activated"
+    "accountInactive": "Your account is not yet activated",
+    "forgotPassword": "Forgot password?",
+    "forgotPasswordTitle": "Reset Password",
+    "forgotPasswordSubtitle": "Enter your email address and we'll send you a reset link.",
+    "resetLinkSent": "If an account exists with that email, we've sent a password reset link.",
+    "sendResetLink": "Send Reset Link",
+    "sending": "Sending...",
+    "resetPasswordTitle": "Set New Password",
+    "resetPasswordSubtitle": "Enter your new password below.",
+    "resetPassword": "Reset Password",
+    "resetting": "Resetting...",
+    "passwordResetSuccess": "Password Reset Successful",
+    "passwordResetSuccessMessage": "Your password has been reset. You can now sign in with your new password.",
+    "invalidResetLink": "Invalid or Expired Link",
+    "invalidResetLinkMessage": "This password reset link is no longer valid. Please request a new one.",
+    "backToLogin": "Back to Sign In"
   },
   "nav": {
     "dashboard": "Dashboard",

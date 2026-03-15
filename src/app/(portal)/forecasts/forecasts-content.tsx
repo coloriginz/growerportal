@@ -325,19 +325,11 @@ export function ForecastsContent({ growerId }: { growerId: string | null }) {
       if (!growerId) return;
       if (!confirm(t("forecasts.removeProductConfirm"))) return;
 
-      // Delete all forecasts for this product in visible range
-      const toDelete = visibleWeeks.map((w) => ({
-        productName,
-        year: w.year,
-        week: w.week,
-        stems: 0,
-      }));
-
       try {
         await fetch("/api/forecasts", {
-          method: "POST",
+          method: "DELETE",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ growerId, forecasts: toDelete }),
+          body: JSON.stringify({ growerId, productName }),
         });
       } catch {
         // Ignore errors on delete
@@ -345,8 +337,9 @@ export function ForecastsContent({ growerId }: { growerId: string | null }) {
 
       setActiveProducts((prev) => prev.filter((p) => p.name !== productName));
       refetch();
+      refetchYear();
     },
-    [growerId, visibleWeeks, t, refetch]
+    [growerId, t, refetch, refetchYear]
   );
 
   const exportCSV = useCallback(() => {

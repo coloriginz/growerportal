@@ -125,8 +125,11 @@ export function SalesContent({ growerId }: { growerId: string | null }) {
   const trendsUrl = useMemo(() => {
     const params = new URLSearchParams();
     if (growerId) params.set("growerId", growerId);
+    for (const p of filterProducts) params.append("product", p);
+    for (const s of filterSalesTypes) params.append("salesType", s);
+    for (const l of filterStemLengths) params.append("stemLength", l.replace(" cm", ""));
     return `/api/sales/trends?${params}`;
-  }, [growerId]);
+  }, [growerId, filterProducts, filterSalesTypes, filterStemLengths]);
   const { data: trends } = useFetch<TrendsData>(trendsUrl);
 
   if (error) {

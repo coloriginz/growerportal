@@ -172,7 +172,19 @@ export function GrowerDetail({ growerId }: { growerId: string }) {
         body: JSON.stringify({ email: activationEmail }),
       });
       if (res.ok) {
-        toast.success(t("growers.activationSent"));
+        const data = await res.json();
+        if (data.previewUrl) {
+          toast.success(t("growers.activationSent"), {
+            description: "Ethereal preview available",
+            action: {
+              label: "Open",
+              onClick: () => window.open(data.previewUrl, "_blank"),
+            },
+            duration: 15000,
+          });
+        } else {
+          toast.success(t("growers.activationSent"));
+        }
         setActivationEmail("");
         fetchGrower();
       } else {
@@ -321,26 +333,30 @@ export function GrowerDetail({ growerId }: { growerId: string }) {
           <CardContent>
             <div className="max-w-sm space-y-2">
               <Label>{t("growers.accountManager")}</Label>
-              <Select
-                value={form.commercieId || "none"}
-                onValueChange={(v) => {
-                  if (v !== null) setForm({ ...form, commercieId: v === "none" ? "" : v });
-                }}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder={t("growers.selectCommercie")} />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">
-                    {t("growers.noCommercieAssigned")}
-                  </SelectItem>
-                  {commercieUsers.map((u) => (
-                    <SelectItem key={u.id} value={u.id}>
-                      {u.name}
+              {commercieUsers.length > 0 ? (
+                <Select
+                  value={form.commercieId || "none"}
+                  onValueChange={(v) => {
+                    if (v !== null) setForm({ ...form, commercieId: v === "none" ? "" : v });
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={t("growers.selectCommercie")} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">
+                      {t("growers.noCommercieAssigned")}
                     </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                    {commercieUsers.map((u) => (
+                      <SelectItem key={u.id} value={u.id}>
+                        {u.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <div className="bg-muted h-10 animate-pulse rounded-md" />
+              )}
             </div>
           </CardContent>
         </Card>

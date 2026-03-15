@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useLanguage } from "@/components/providers/language-provider";
 import { LanguageSwitcher } from "@/components/language-switcher";
+import Link from "next/link";
 import { isTest } from "@/lib/env";
 
 export default function LoginPage() {
@@ -87,6 +88,15 @@ export default function LoginPage() {
                 autoComplete="current-password"
                 className="h-11"
               />
+            </div>
+
+            <div className="flex justify-end -mt-1">
+              <Link
+                href="/forgot-password"
+                className="text-sm text-muted-foreground hover:text-foreground underline"
+              >
+                {t("auth.forgotPassword")}
+              </Link>
             </div>
 
             {error && (
