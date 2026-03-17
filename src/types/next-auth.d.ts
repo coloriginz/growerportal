@@ -5,6 +5,7 @@ declare module "next-auth" {
     role?: string;
     growerId?: string | null;
     growerCode?: string | null;
+    transporterId?: string | null;
   }
 
   interface Session {
@@ -15,6 +16,7 @@ declare module "next-auth" {
       role: string;
       growerId: string | null;
       growerCode: string | null;
+      transporterId: string | null;
     };
   }
 }
@@ -24,5 +26,6 @@ declare module "next-auth/jwt" {
     role?: string;
     growerId?: string | null;
     growerCode?: string | null;
+    transporterId?: string | null;
   }
 }

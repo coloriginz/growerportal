@@ -41,6 +41,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           role: user.role,
           growerId: user.growerId,
           growerCode: user.grower?.code,
+          transporterId: user.transporterId,
         };
       },
     }),
@@ -54,6 +55,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         token.role = user.role;
         token.growerId = user.growerId;
         token.growerCode = user.growerCode;
+        token.transporterId = user.transporterId;
       }
       return token;
     },
@@ -63,6 +65,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         session.user.role = token.role as string;
         session.user.growerId = token.growerId as string | null;
         session.user.growerCode = token.growerCode as string | null;
+        session.user.transporterId = token.transporterId as string | null;
       }
       return session;
     },

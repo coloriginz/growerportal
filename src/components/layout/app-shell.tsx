@@ -17,6 +17,10 @@ import {
   RiMenuLine,
   RiPlantLine,
   RiCalendarScheduleLine,
+  RiBox3Line,
+  RiTruckLine,
+  RiReceiptLine,
+  RiSettings3Line,
 } from "@remixicon/react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -39,6 +43,7 @@ interface AppShellProps {
     email: string;
     role: string;
     growerId: string | null;
+    fustEnabled?: boolean;
   };
   children: React.ReactNode;
 }
@@ -60,6 +65,13 @@ const mainNavItems: NavItem[] = [
   { href: "/profile", labelKey: "nav.profile", icon: RiUserLine },
 ];
 
+const fustNavItems: NavItem[] = [
+  { href: "/fust", labelKey: "nav.fustOrders", icon: RiBox3Line, roles: ["grower"] },
+  { href: "/fust/orders", labelKey: "nav.fustOrders", icon: RiBox3Line, roles: ["commercie", "admin"] },
+  { href: "/fust/pickups", labelKey: "nav.fustPickups", icon: RiTruckLine, roles: ["transporteur"] },
+  { href: "/fust/invoices", labelKey: "nav.fustInvoices", icon: RiReceiptLine, roles: ["finance"] },
+];
+
 const bottomNavItems: NavItem[] = [
   {
     href: "/growers",
@@ -73,6 +85,12 @@ const bottomNavItems: NavItem[] = [
     icon: RiUserSettingsLine,
     roles: ["admin"],
   },
+  {
+    href: "/fust/settings",
+    labelKey: "nav.fustSettings",
+    icon: RiSettings3Line,
+    roles: ["admin"],
+  },
 ];
 
 export function AppShell({ user, children }: AppShellProps) {
@@ -84,9 +102,24 @@ export function AppShell({ user, children }: AppShellProps) {
   const userRole = user.role as Role;
   const showGrowerSelector = userRole === "admin" || userRole === "commercie";
 
+  const growerMainRoles: Role[] = ["grower", "commercie", "admin"];
   const filteredMainNav = mainNavItems.filter(
     (item) => !item.roles || item.roles.includes(userRole)
-  );
+  ).filter((item) => {
+    // Hide standard portal pages from transporteur/finance (they only see fust)
+    if (!growerMainRoles.includes(userRole) && !item.roles) {
+      return item.href === "/dashboard" || item.href === "/profile";
+    }
+    return true;
+  });
+
+  // Fust nav: growers only see it if fustEnabled, others see by role
+  const filteredFustNav = fustNavItems.filter((item) => {
+    if (!item.roles?.includes(userRole)) return false;
+    if (userRole === "grower" && !user.fustEnabled) return false;
+    return true;
+  });
+
   const filteredBottomNav = bottomNavItems.filter(
     (item) => !item.roles || item.roles.includes(userRole)
   );
@@ -123,7 +156,7 @@ export function AppShell({ user, children }: AppShellProps) {
         {/* Navigation */}
         <nav className="flex-1 space-y-0.5 px-3 py-4">
           {filteredMainNav.map((item) => {
-            const isActive = pathname.startsWith(item.href);
+            const isActive = pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(item.href));
             const Icon = item.icon;
             return (
               <Link
@@ -141,6 +174,32 @@ export function AppShell({ user, children }: AppShellProps) {
               </Link>
             );
           })}
+
+          {/* Fust nav items */}
+          {filteredFustNav.length > 0 && (
+            <>
+              <Separator className="bg-sidebar-border !my-3" />
+              {filteredFustNav.map((item) => {
+                const isActive = pathname.startsWith(item.href);
+                const Icon = item.icon;
+                return (
+                  <Link
+                    key={item.href}
+                    href={growerId ? `${item.href}?growerId=${growerId}` : item.href}
+                    onClick={() => setMobileOpen(false)}
+                    className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150 ${
+                      isActive
+                        ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-sm"
+                        : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                    }`}
+                  >
+                    <Icon className="h-[18px] w-[18px] shrink-0" />
+                    {t(item.labelKey as Parameters<typeof t>[0])}
+                  </Link>
+                );
+              })}
+            </>
+          )}
         </nav>
 
         {/* Bottom nav (internal only) */}

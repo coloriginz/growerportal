@@ -16,7 +16,7 @@ model User {
   email          String   @unique
   passwordHash   String?
   name           String
-  role           String   @default("grower") // grower, commercie, admin
+  role           String   @default("grower") // grower, commercie, admin, transporteur, finance
   isActive       Boolean  @default(false)
   activationToken    String?   @unique
   resetToken         String?   @unique
@@ -30,6 +30,10 @@ model User {
 
   // Commercie: growers assigned to this user
   assignedGrowers Grower[] @relation("CommercieGrowers")
+
+  // Transporteur: link to transporter company
+  transporterId  String?
+  transporter    Transporter? @relation(fields: [transporterId], references: [id])
 }
 
 // ─── GROWER ──────────────────────────────────────────────
@@ -61,6 +65,13 @@ model Grower {
   qualityIssues  QualityIssue[]
   changeRequests ChangeRequest[]
   forecasts      ShipmentForecast[]
+
+  // Fust
+  fustEnabled          Boolean      @default(false)
+  defaultTransporterId String?
+  defaultTransporter   Transporter? @relation("DefaultTransporter", fields: [defaultTransporterId], references: [id])
+  fustOrders           FustOrder[]
+  fustCharges          FustGrowerCharge[]
 
   @@index([commercieId])
 }
@@ -267,4 +278,157 @@ model ChangeRequest {
   handledBy   String?
 
   @@index([growerId])
+}
+
+// ─── FUST (CONTAINER/CRATE ORDERING) ────────────────────
+
+model Transporter {
+  id        String   @id @default(uuid())
+  name      String
+  email     String?
+  phone     String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users     User[]
+  growers   Grower[]   @relation("DefaultTransporter")
+  pickups   FustPickup[]
+}
+
+model FustType {
+  id           String  @id @default(uuid())
+  code         String  @unique
+  name         String
+  category     String  // emmers, karren, kratten, dozen, opzetrekken, overig
+  pricePerUnit Decimal @db.Decimal(8,2)
+  imageUrl     String?
+  isActive     Boolean @default(true)
+  sortOrder    Int     @default(0)
+
+  orderItems    FustOrderItem[]
+  deliveryItems FustDeliveryItem[]
+  invoiceItems  FustInvoiceItem[]
+}
+
+model FustOrder {
+  id              String    @id @default(uuid())
+  orderNumber     String    @unique
+  growerId        String
+  grower          Grower    @relation(fields: [growerId], references: [id], onDelete: Cascade)
+  status          String    @default("pending") // pending, approved, rejected, scheduled, in_transit, delivered, cancelled
+  requestedDate   DateTime?
+  notes           String?
+  rejectionReason String?
+  createdById     String?
+  approvedById    String?
+  approvedAt      DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  items    FustOrderItem[]
+  delivery FustDelivery?
+
+  @@index([growerId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model FustOrderItem {
+  id         String    @id @default(uuid())
+  orderId    String
+  order      FustOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  fustTypeId String
+  fustType   FustType  @relation(fields: [fustTypeId], references: [id])
+  quantity   Int
+
+  @@unique([orderId, fustTypeId])
+}
+
+model FustPickup {
+  id            String      @id @default(uuid())
+  transporterId String
+  transporter   Transporter @relation(fields: [transporterId], references: [id])
+  pickupDate    DateTime
+  status        String      @default("planned") // planned, picked_up, completed
+  rfhReference  String?
+  notes         String?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  deliveries FustDelivery[]
+
+  @@index([transporterId])
+  @@index([pickupDate])
+}
+
+model FustDelivery {
+  id          String      @id @default(uuid())
+  orderId     String      @unique
+  order       FustOrder   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  pickupId    String?
+  pickup      FustPickup? @relation(fields: [pickupId], references: [id])
+  status      String      @default("pending") // pending, in_transit, delivered
+  deliveredAt DateTime?
+  notes       String?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  items FustDeliveryItem[]
+
+  @@index([pickupId])
+}
+
+model FustDeliveryItem {
+  id         String       @id @default(uuid())
+  deliveryId String
+  delivery   FustDelivery @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
+  fustTypeId String
+  fustType   FustType     @relation(fields: [fustTypeId], references: [id])
+  quantity   Int
+
+  @@unique([deliveryId, fustTypeId])
+}
+
+model FustInvoice {
+  id            String    @id @default(uuid())
+  invoiceNumber String?
+  invoiceDate   DateTime?
+  totalAmount   Decimal   @db.Decimal(10,2)
+  status        String    @default("pending") // pending, matched, charged, paid
+  pdfUrl        String?
+  notes         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  items   FustInvoiceItem[]
+  charges FustGrowerCharge[]
+
+  @@index([status])
+}
+
+model FustInvoiceItem {
+  id         String      @id @default(uuid())
+  invoiceId  String
+  invoice    FustInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  fustTypeId String
+  fustType   FustType    @relation(fields: [fustTypeId], references: [id])
+  quantity   Int
+  unitPrice  Decimal     @db.Decimal(8,2)
+  totalPrice Decimal     @db.Decimal(10,2)
+}
+
+model FustGrowerCharge {
+  id          String      @id @default(uuid())
+  invoiceId   String
+  invoice     FustInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  growerId    String
+  grower      Grower      @relation(fields: [growerId], references: [id])
+  amount      Decimal     @db.Decimal(10,2)
+  description String?
+  status      String      @default("pending") // pending, invoiced, paid
+  createdAt   DateTime    @default(now())
+
+  @@index([growerId])
+  @@index([invoiceId])
 }
