@@ -257,7 +257,7 @@ export function AppShell({ user, children }: AppShellProps) {
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => signOut({ callbackUrl: "/login" })}
+              onClick={() => signOut({ callbackUrl: `${window.location.origin}/login` })}
               title={t("auth.logout")}
               className="text-sidebar-foreground/60 hover:text-sidebar-foreground"
             >
