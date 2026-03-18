@@ -7,7 +7,7 @@ interface Props {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
 
-export default async function FustPage({ searchParams }: Props) {
+export default async function FustPortalPage({ searchParams }: Props) {
   const params = await searchParams;
   const growerId = await getActiveGrowerId(params);
 

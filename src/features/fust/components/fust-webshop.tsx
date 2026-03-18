@@ -73,7 +73,7 @@ interface CartItem {
   quantity: number;
 }
 
-interface FustContentProps {
+interface FustWebshopProps {
   growerId: string | null;
 }
 
@@ -100,7 +100,7 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-export function FustContent({ growerId }: FustContentProps) {
+export function FustWebshop({ growerId }: FustWebshopProps) {
   const { t } = useLanguage();
   const [cart, setCart] = useState<Map<string, CartItem>>(new Map());
   const [requestedDate, setRequestedDate] = useState("");

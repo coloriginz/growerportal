@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireAuth } from "@/lib/api-helpers";
 import { put } from "@vercel/blob";
-import { parseFustInvoicePdf } from "@/lib/fust-invoice-parser";
+import { parseFustInvoicePdf } from "@/features/fust/lib/invoice-parser";
 
 export async function GET(request: NextRequest) {
   const { error, session } = await requireAuth(["finance", "admin"]);

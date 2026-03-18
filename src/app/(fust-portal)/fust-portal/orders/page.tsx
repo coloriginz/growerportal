@@ -1,11 +1,11 @@
 import { Suspense } from "react";
-import { FustInvoices } from "@/features/fust/components";
+import { FustOrders } from "@/features/fust/components";
 import { Skeleton } from "@/components/ui/skeleton";
 
-export default function FustInvoicesPage() {
+export default function FustPortalOrdersPage() {
   return (
     <Suspense fallback={<Skeleton className="h-96" />}>
-      <FustInvoices />
+      <FustOrders />
     </Suspense>
   );
 }

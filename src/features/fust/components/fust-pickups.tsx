@@ -118,7 +118,7 @@ function StatusBadge({ status }: { status: string }) {
 
 // ─── Main Component ───
 
-export function PickupsContent() {
+export function FustPickups() {
   const { t } = useLanguage();
   const [dateFilter, setDateFilter] = useState("");
   const [showNewDialog, setShowNewDialog] = useState(false);

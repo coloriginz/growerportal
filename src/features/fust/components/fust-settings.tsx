@@ -59,7 +59,7 @@ interface SettingsData {
   growers: GrowerSetting[];
 }
 
-export function FustSettingsContent() {
+export function FustSettings() {
   const { t } = useLanguage();
   const { data, loading, refetch } = useFetch<SettingsData>("/api/fust/settings");
   const [saving, setSaving] = useState<string | null>(null);

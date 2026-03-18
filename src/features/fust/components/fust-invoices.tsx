@@ -136,7 +136,7 @@ function ChargeStatusBadge({ status }: { status: string }) {
 
 // ─── Main Component ─────────────────────────────────────
 
-export function InvoicesContent() {
+export function FustInvoices() {
   const { t } = useLanguage();
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);

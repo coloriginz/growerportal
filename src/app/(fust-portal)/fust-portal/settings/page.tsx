@@ -4,10 +4,10 @@ import { auth } from "@/lib/auth";
 import { FustSettings } from "@/features/fust/components";
 import { Skeleton } from "@/components/ui/skeleton";
 
-export default async function FustSettingsPage() {
+export default async function FustPortalSettingsPage() {
   const session = await auth();
   if (session?.user.role !== "admin") {
-    redirect("/dashboard");
+    redirect("/fust-portal");
   }
 
   return (

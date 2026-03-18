@@ -89,7 +89,7 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-export function FustOrdersContent() {
+export function FustOrders() {
   const { t } = useLanguage();
   const searchParams = useSearchParams();
   const growerId = searchParams.get("growerId");
