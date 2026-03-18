@@ -42,6 +42,13 @@ export default function LoginPage() {
 
   return (
     <div className="grid min-h-screen lg:grid-cols-2">
+      {/* Test Environment Banner */}
+      {isTest && (
+        <div className="col-span-full flex items-center justify-center bg-red-600 px-4 py-1.5 text-xs font-semibold tracking-wide text-white uppercase">
+          Test Environment
+        </div>
+      )}
+
       {/* Left: Login Form */}
       <div className="flex flex-col justify-center px-8 py-12 lg:px-16">
         <div className="mx-auto w-full max-w-sm">
