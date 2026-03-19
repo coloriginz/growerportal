@@ -195,7 +195,7 @@ export function FustShell({ user, children }: FustShellProps) {
 
   return (
     <div className="flex h-screen flex-col">
-      {isTest && <TestBanner isAdmin={userRole === "admin"} />}
+      {isTest && <TestBanner userRole={userRole} isAdmin={userRole === "admin"} />}
       <div className="flex min-h-0 flex-1">
         {/* Desktop Sidebar */}
         <aside className="bg-sidebar text-sidebar-foreground border-sidebar-border hidden w-64 shrink-0 border-r lg:block">

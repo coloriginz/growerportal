@@ -273,7 +273,7 @@ export function AppShell({ user, children }: AppShellProps) {
     <div className="flex h-screen flex-col">
       {/* Test Environment Banner */}
       <OfflineIndicator />
-      {isTest && <TestBanner isAdmin={userRole === "admin"} />}
+      {isTest && <TestBanner userRole={userRole} isAdmin={userRole === "admin"} />}
 
       <div className="flex min-h-0 flex-1">
       {/* Desktop Sidebar */}

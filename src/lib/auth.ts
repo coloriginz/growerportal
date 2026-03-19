@@ -50,12 +50,25 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     strategy: "jwt",
   },
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, trigger, session: updateData }) {
       if (user) {
         token.role = user.role;
         token.growerId = user.growerId;
         token.growerCode = user.growerCode;
         token.transporterId = user.transporterId;
+      }
+      // Re-read from DB when client calls update() (e.g. after role switch)
+      if (trigger === "update" && updateData?.refreshFromDb) {
+        const dbUser = await prisma.user.findUnique({
+          where: { id: token.sub! },
+          include: { grower: true },
+        });
+        if (dbUser) {
+          token.role = dbUser.role;
+          token.growerId = dbUser.growerId;
+          token.growerCode = dbUser.grower?.code ?? null;
+          token.transporterId = dbUser.transporterId;
+        }
       }
       return token;
     },
