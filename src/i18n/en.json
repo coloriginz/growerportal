@@ -221,7 +221,8 @@
     "activationLinkSent": "Activation link has been sent",
     "role": "Role",
     "active": "Active",
-    "inactive": "Inactive"
+    "inactive": "Inactive",
+    "transporterRequired": "A transporter must be selected for transporteur users"
   },
   "growers": {
     "title": "Growers",

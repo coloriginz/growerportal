@@ -12,6 +12,7 @@ import {
   RiMenuLine,
   RiGroupLine,
   RiPriceTag3Line,
+  RiUserSettingsLine,
 } from "@remixicon/react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -52,6 +53,7 @@ const navItems: NavItem[] = [
 ];
 
 const adminItems: NavItem[] = [
+  { href: "/fust-portal/users", labelKey: "admin.users", icon: RiUserSettingsLine, roles: ["admin"] },
   { href: "/fust-portal/settings?tab=growers", labelKey: "fust.growerAccess", icon: RiGroupLine, roles: ["admin"] },
   { href: "/fust-portal/settings?tab=types", labelKey: "fust.fustTypes", icon: RiPriceTag3Line, roles: ["admin"] },
   { href: "/fust-portal/settings?tab=transporters", labelKey: "fust.transporters", icon: RiTruckLine, roles: ["admin"] },

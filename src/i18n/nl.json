@@ -221,7 +221,8 @@
     "activationLinkSent": "Activatielink is verstuurd",
     "role": "Rol",
     "active": "Actief",
-    "inactive": "Inactief"
+    "inactive": "Inactief",
+    "transporterRequired": "Een transporteur moet geselecteerd worden voor transporteur gebruikers"
   },
   "growers": {
     "title": "Kwekers",
