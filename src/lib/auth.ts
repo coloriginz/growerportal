@@ -57,7 +57,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         token.growerCode = user.growerCode;
         token.transporterId = user.transporterId;
       }
-      // Re-read from DB when client calls update() (e.g. after role switch)
+      // Re-read from DB when client calls update() (e.g. after profile change)
       if (trigger === "update" && updateData?.refreshFromDb) {
         const dbUser = await prisma.user.findUnique({
           where: { id: token.sub! },
@@ -69,6 +69,11 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           token.growerCode = dbUser.grower?.code ?? null;
           token.transporterId = dbUser.transporterId;
         }
+      }
+      // Test mode role override — only stored in JWT, not in DB.
+      // On re-login the token is created fresh from DB (original role).
+      if (trigger === "update" && updateData?.switchRole) {
+        token.role = updateData.switchRole;
       }
       return token;
     },

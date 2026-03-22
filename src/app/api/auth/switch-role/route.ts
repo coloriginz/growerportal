@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/api-helpers";
 import { isTest } from "@/lib/env";
-import { prisma } from "@/lib/db";
 import { ROLES } from "@/types";
 
 export async function POST(request: NextRequest) {
@@ -20,17 +19,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid role" }, { status: 400 });
   }
 
-  // Update user role in DB
-  const updated = await prisma.user.update({
-    where: { id: session!.user.id },
-    data: { role },
-    include: { grower: true },
-  });
-
+  // Don't change the DB — role override lives only in the JWT token.
+  // On re-login, the token is created fresh from the DB (original role).
   return NextResponse.json({
-    role: updated.role,
-    growerId: updated.growerId,
-    growerCode: updated.grower?.code ?? null,
-    transporterId: updated.transporterId,
+    role,
+    originalRole: session!.user.role,
   });
 }

@@ -55,16 +55,11 @@ function RoleSwitcher({ currentRole }: { currentRole: string }) {
     if (role === currentRole || switching) return;
     setSwitching(true);
     try {
-      const res = await fetch("/api/auth/switch-role", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ role }),
-      });
-      if (res.ok) {
-        await update({ refreshFromDb: true });
-        router.refresh();
-        window.location.reload();
-      }
+      // Override role in JWT only — not persisted to DB.
+      // On re-login, token is created fresh from DB (original role).
+      await update({ switchRole: role });
+      router.refresh();
+      window.location.reload();
     } finally {
       setSwitching(false);
       setOpen(false);
