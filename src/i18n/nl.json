@@ -440,6 +440,27 @@
     "selectPdf": "Selecteer een PDF bestand",
     "dragDropPdf": "Sleep een PDF bestand of klik om te selecteren",
     "viewCharges": "Kosten Bekijken",
-    "createCharges": "Kosten Aanmaken"
+    "createCharges": "Kosten Aanmaken",
+    "editGrower": "Kweker Toegang Bewerken",
+    "editTransporter": "Transporteur Bewerken",
+    "newTransporter": "Nieuwe Transporteur",
+    "editFustType": "Fusttype Bewerken",
+    "newFustType": "Nieuw Fusttype",
+    "deleteTransporter": "Transporteur Verwijderen",
+    "deleteFustType": "Fusttype Verwijderen",
+    "deleteConfirm": "Weet u het zeker?",
+    "deleteTransporterConfirm": "Weet u zeker dat u deze transporteur wilt verwijderen? Dit kan niet ongedaan worden gemaakt.",
+    "deleteFustTypeConfirm": "Weet u zeker dat u dit fusttype wilt verwijderen? Dit kan niet ongedaan worden gemaakt.",
+    "cannotDeleteInUse": "Kan niet verwijderen: dit item is in gebruik. Deactiveer het in plaats daarvan.",
+    "save": "Opslaan",
+    "cancel": "Annuleren",
+    "delete": "Verwijderen",
+    "create": "Aanmaken",
+    "sortOrder": "Sorteervolgorde",
+    "pricePerUnit": "Prijs per stuk",
+    "company": "Bedrijf",
+    "transporterRequired": "Een standaard transporteur is verplicht bij het inschakelen van fust",
+    "deleted": "Succesvol verwijderd",
+    "created": "Succesvol aangemaakt"
   }
 }

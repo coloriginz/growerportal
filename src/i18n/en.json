@@ -440,6 +440,27 @@
     "selectPdf": "Select a PDF file",
     "dragDropPdf": "Drag and drop a PDF file or click to select",
     "viewCharges": "View Charges",
-    "createCharges": "Create Charges"
+    "createCharges": "Create Charges",
+    "editGrower": "Edit Grower Access",
+    "editTransporter": "Edit Transporter",
+    "newTransporter": "New Transporter",
+    "editFustType": "Edit Fust Type",
+    "newFustType": "New Fust Type",
+    "deleteTransporter": "Delete Transporter",
+    "deleteFustType": "Delete Fust Type",
+    "deleteConfirm": "Are you sure you want to delete this?",
+    "deleteTransporterConfirm": "Are you sure you want to delete this transporter? This action cannot be undone.",
+    "deleteFustTypeConfirm": "Are you sure you want to delete this fust type? This action cannot be undone.",
+    "cannotDeleteInUse": "Cannot delete: this item is in use. Deactivate it instead.",
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "create": "Create",
+    "sortOrder": "Sort Order",
+    "pricePerUnit": "Price per Unit",
+    "company": "Company",
+    "transporterRequired": "A default transporter is required when enabling fust access",
+    "deleted": "Deleted successfully",
+    "created": "Created successfully"
   }
 }
