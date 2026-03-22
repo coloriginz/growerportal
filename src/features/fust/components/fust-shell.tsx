@@ -8,7 +8,6 @@ import {
   RiBox3Line,
   RiTruckLine,
   RiReceiptLine,
-  RiSettings3Line,
   RiLogoutBoxLine,
   RiMenuLine,
   RiGroupLine,
