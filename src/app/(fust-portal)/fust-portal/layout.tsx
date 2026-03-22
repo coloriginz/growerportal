@@ -12,7 +12,7 @@ export default async function FustPortalLayout({
   const session = await auth();
 
   if (!session?.user) {
-    redirect("/login");
+    redirect("/fust-login");
   }
 
   // Check fustEnabled for grower users

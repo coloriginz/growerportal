@@ -181,7 +181,7 @@ export function FustShell({ user, children }: FustShellProps) {
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => signOut({ callbackUrl: `${window.location.origin}/login` })}
+              onClick={() => signOut({ callbackUrl: `${window.location.origin}/fust-login` })}
               title={t("auth.logout")}
               className="text-sidebar-foreground/60 hover:text-sidebar-foreground"
             >
