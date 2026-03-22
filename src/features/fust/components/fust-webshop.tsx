@@ -76,6 +76,7 @@ interface CartItem {
 
 interface FustWebshopProps {
   growerId: string | null;
+  userRole?: string;
 }
 
 const CATEGORY_ORDER = ["emmers", "opzetrekken", "karren", "kratten", "dozen", "overig"];
@@ -101,8 +102,9 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-export function FustWebshop({ growerId }: FustWebshopProps) {
+export function FustWebshop({ growerId, userRole }: FustWebshopProps) {
   const { t } = useLanguage();
+  const canOrder = userRole === "grower";
   const [cart, setCart] = useState<Map<string, CartItem>>(new Map());
   const [requestedDate, setRequestedDate] = useState("");
   const [notes, setNotes] = useState("");
@@ -260,8 +262,8 @@ export function FustWebshop({ growerId }: FustWebshopProps) {
                         <TableHead>{t("fust.code")}</TableHead>
                         <TableHead>{t("fust.name")}</TableHead>
                         <TableHead className="text-right">{t("fust.price")}</TableHead>
-                        <TableHead className="text-center w-40">{t("fust.quantity")}</TableHead>
-                        <TableHead className="text-right">{t("fust.subtotal")}</TableHead>
+                        {canOrder && <TableHead className="text-center w-40">{t("fust.quantity")}</TableHead>}
+                        {canOrder && <TableHead className="text-right">{t("fust.subtotal")}</TableHead>}
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -276,38 +278,42 @@ export function FustWebshop({ growerId }: FustWebshopProps) {
                             <TableCell className="text-right whitespace-nowrap">
                               {formatCurrencyDetailed(Number(ft.pricePerUnit))}
                             </TableCell>
-                            <TableCell>
-                              <div className="flex items-center justify-center gap-1.5">
-                                <Button
-                                  variant="outline"
-                                  size="icon"
-                                  className="h-7 w-7"
-                                  onClick={() => updateCart(ft, -1)}
-                                  disabled={qty === 0}
-                                >
-                                  <RiSubtractLine className="h-3.5 w-3.5" />
-                                </Button>
-                                <Input
-                                  type="number"
-                                  min={0}
-                                  value={qty || ""}
-                                  placeholder="0"
-                                  onChange={(e) => setCartQuantity(ft, parseInt(e.target.value) || 0)}
-                                  className="h-7 w-14 text-center text-sm [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                                />
-                                <Button
-                                  variant="outline"
-                                  size="icon"
-                                  className="h-7 w-7"
-                                  onClick={() => updateCart(ft, 1)}
-                                >
-                                  <RiAddLine className="h-3.5 w-3.5" />
-                                </Button>
-                              </div>
-                            </TableCell>
-                            <TableCell className="text-right font-medium whitespace-nowrap">
-                              {qty > 0 ? formatCurrencyDetailed(subtotal) : "-"}
-                            </TableCell>
+                            {canOrder && (
+                              <TableCell>
+                                <div className="flex items-center justify-center gap-1.5">
+                                  <Button
+                                    variant="outline"
+                                    size="icon"
+                                    className="h-7 w-7"
+                                    onClick={() => updateCart(ft, -1)}
+                                    disabled={qty === 0}
+                                  >
+                                    <RiSubtractLine className="h-3.5 w-3.5" />
+                                  </Button>
+                                  <Input
+                                    type="number"
+                                    min={0}
+                                    value={qty || ""}
+                                    placeholder="0"
+                                    onChange={(e) => setCartQuantity(ft, parseInt(e.target.value) || 0)}
+                                    className="h-7 w-14 text-center text-sm [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                                  />
+                                  <Button
+                                    variant="outline"
+                                    size="icon"
+                                    className="h-7 w-7"
+                                    onClick={() => updateCart(ft, 1)}
+                                  >
+                                    <RiAddLine className="h-3.5 w-3.5" />
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            )}
+                            {canOrder && (
+                              <TableCell className="text-right font-medium whitespace-nowrap">
+                                {qty > 0 ? formatCurrencyDetailed(subtotal) : "-"}
+                              </TableCell>
+                            )}
                           </TableRow>
                         );
                       })}
@@ -318,7 +324,7 @@ export function FustWebshop({ growerId }: FustWebshopProps) {
             ))}
 
             {/* Cart Summary / Checkout */}
-            {cart.size > 0 && (
+            {canOrder && cart.size > 0 && (
               <div className="sticky bottom-4 z-10">
                 <Card className="border-primary/20 bg-card p-4 shadow-lg">
                   <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
