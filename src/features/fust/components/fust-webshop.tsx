@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
@@ -247,61 +248,71 @@ export function FustWebshop({ growerId }: FustWebshopProps) {
 
         {/* ─── TAB: Order (Webshop) ─── */}
         <TabsContent value="order">
-          <div className="mt-4 space-y-8">
-            {Array.from(groupedTypes.entries()).map(([category, types]) => (
+          <div className="mt-4 space-y-6">
+            {Array.from(groupedTypes.entries()).map(([category, types], catIndex) => (
               <div key={category}>
+                {catIndex > 0 && <Separator className="mb-6" />}
                 <h2 className="mb-3 text-lg font-semibold">{categoryLabel(category)}</h2>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                  {types.map((ft) => {
-                    const cartItem = cart.get(ft.id);
-                    const qty = cartItem?.quantity || 0;
-                    return (
-                      <Card key={ft.id} className="flex flex-col gap-3 p-4">
-                        <div className="flex items-start gap-3">
-                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted">
-                            <RiBox3Line className="h-5 w-5 text-muted-foreground" />
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <p className="text-sm font-medium leading-tight">{ft.name}</p>
-                            <p className="text-xs text-muted-foreground">{ft.code}</p>
-                          </div>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm font-semibold">
-                            {formatCurrencyDetailed(Number(ft.pricePerUnit))}
-                            <span className="text-xs font-normal text-muted-foreground"> {t("fust.perUnit")}</span>
-                          </span>
-                          <div className="flex items-center gap-1.5">
-                            <Button
-                              variant="outline"
-                              size="icon"
-                              className="h-7 w-7"
-                              onClick={() => updateCart(ft, -1)}
-                              disabled={qty === 0}
-                            >
-                              <RiSubtractLine className="h-3.5 w-3.5" />
-                            </Button>
-                            <Input
-                              type="number"
-                              min={0}
-                              value={qty || ""}
-                              placeholder="0"
-                              onChange={(e) => setCartQuantity(ft, parseInt(e.target.value) || 0)}
-                              className="h-7 w-14 text-center text-sm [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                            />
-                            <Button
-                              variant="outline"
-                              size="icon"
-                              className="h-7 w-7"
-                              onClick={() => updateCart(ft, 1)}
-                            >
-                              <RiAddLine className="h-3.5 w-3.5" />
-                            </Button>
-                          </div>
-                        </div>
-                      </Card>
-                    );
-                  })}
+                <div className="overflow-x-auto rounded-lg border">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>{t("fust.code")}</TableHead>
+                        <TableHead>{t("fust.name")}</TableHead>
+                        <TableHead className="text-right">{t("fust.price")}</TableHead>
+                        <TableHead className="text-center w-40">{t("fust.quantity")}</TableHead>
+                        <TableHead className="text-right">{t("fust.subtotal")}</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {types.map((ft) => {
+                        const cartItem = cart.get(ft.id);
+                        const qty = cartItem?.quantity || 0;
+                        const subtotal = Number(ft.pricePerUnit) * qty;
+                        return (
+                          <TableRow key={ft.id} className={qty > 0 ? "bg-primary/5" : ""}>
+                            <TableCell className="font-mono text-sm">{ft.code}</TableCell>
+                            <TableCell className="font-medium">{ft.name}</TableCell>
+                            <TableCell className="text-right whitespace-nowrap">
+                              {formatCurrencyDetailed(Number(ft.pricePerUnit))}
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center justify-center gap-1.5">
+                                <Button
+                                  variant="outline"
+                                  size="icon"
+                                  className="h-7 w-7"
+                                  onClick={() => updateCart(ft, -1)}
+                                  disabled={qty === 0}
+                                >
+                                  <RiSubtractLine className="h-3.5 w-3.5" />
+                                </Button>
+                                <Input
+                                  type="number"
+                                  min={0}
+                                  value={qty || ""}
+                                  placeholder="0"
+                                  onChange={(e) => setCartQuantity(ft, parseInt(e.target.value) || 0)}
+                                  className="h-7 w-14 text-center text-sm [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                                />
+                                <Button
+                                  variant="outline"
+                                  size="icon"
+                                  className="h-7 w-7"
+                                  onClick={() => updateCart(ft, 1)}
+                                >
+                                  <RiAddLine className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-right font-medium whitespace-nowrap">
+                              {qty > 0 ? formatCurrencyDetailed(subtotal) : "-"}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
                 </div>
               </div>
             ))}
