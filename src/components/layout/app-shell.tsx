@@ -21,6 +21,9 @@ import {
   RiTruckLine,
   RiReceiptLine,
   RiSettings3Line,
+  RiArrowDownSLine,
+  RiGroupLine,
+  RiPriceTag3Line,
 } from "@remixicon/react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -53,6 +56,7 @@ interface NavItem {
   labelKey: string;
   icon: React.ElementType;
   roles?: Role[];
+  children?: NavItem[];
 }
 
 const mainNavItems: NavItem[] = [
@@ -90,11 +94,19 @@ const bottomNavItems: NavItem[] = [
     labelKey: "nav.fustSettings",
     icon: RiSettings3Line,
     roles: ["admin"],
+    children: [
+      { href: "/fust/settings?tab=growers", labelKey: "fust.growerAccess", icon: RiGroupLine },
+      { href: "/fust/settings?tab=types", labelKey: "fust.fustTypes", icon: RiPriceTag3Line },
+      { href: "/fust/settings?tab=transporters", labelKey: "fust.transporters", icon: RiTruckLine },
+    ],
   },
 ];
 
 export function AppShell({ user, children }: AppShellProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [fustSettingsOpen, setFustSettingsOpen] = useState(() =>
+    typeof window !== "undefined" && window.location.pathname.startsWith("/fust/settings")
+  );
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { t } = useLanguage();
@@ -210,6 +222,58 @@ export function AppShell({ user, children }: AppShellProps) {
               {filteredBottomNav.map((item) => {
                 const isActive = pathname.startsWith(item.href);
                 const Icon = item.icon;
+
+                // Collapsible item with children
+                if (item.children) {
+                  const currentTab = searchParams.get("tab");
+                  return (
+                    <div key={item.href}>
+                      <button
+                        onClick={() => {
+                          setFustSettingsOpen(!fustSettingsOpen);
+                          if (!isActive) {
+                            // Navigate to the first child
+                          }
+                        }}
+                        className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150 ${
+                          isActive
+                            ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                            : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                        }`}
+                      >
+                        <Icon className="h-[18px] w-[18px] shrink-0" />
+                        <span className="flex-1 text-left">{t(item.labelKey as Parameters<typeof t>[0])}</span>
+                        <RiArrowDownSLine className={`h-4 w-4 shrink-0 transition-transform ${fustSettingsOpen ? "rotate-180" : ""}`} />
+                      </button>
+                      {fustSettingsOpen && (
+                        <div className="ml-4 mt-0.5 space-y-0.5 border-l border-sidebar-border pl-3">
+                          {item.children.map((child) => {
+                            const [childPath, childQuery] = child.href.split("?");
+                            const childTab = new URLSearchParams(childQuery).get("tab");
+                            const isChildActive = pathname.startsWith(childPath) && currentTab === childTab;
+                            const ChildIcon = child.icon;
+                            return (
+                              <Link
+                                key={child.href}
+                                href={child.href}
+                                onClick={() => setMobileOpen(false)}
+                                className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150 ${
+                                  isChildActive
+                                    ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-sm"
+                                    : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                                }`}
+                              >
+                                <ChildIcon className="h-4 w-4 shrink-0" />
+                                {t(child.labelKey as Parameters<typeof t>[0])}
+                              </Link>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                }
+
                 return (
                   <Link
                     key={item.href}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useLanguage } from "@/components/providers/language-provider";
 import { useFetch } from "@/hooks/use-fetch";
 import { formatCurrencyDetailed } from "@/lib/format";
@@ -86,6 +87,9 @@ export function FustSettings() {
     }
   };
 
+  const searchParams = useSearchParams();
+  const defaultTab = searchParams.get("tab") || "growers";
+
   if (loading || !data) {
     return <Skeleton className="h-96" />;
   }
@@ -94,7 +98,7 @@ export function FustSettings() {
     <div className="space-y-6">
       <h1 className="text-2xl font-bold tracking-tight">{t("fust.settings")}</h1>
 
-      <Tabs defaultValue="growers">
+      <Tabs defaultValue={defaultTab} key={defaultTab}>
         <TabsList>
           <TabsTrigger value="growers">{t("fust.growerAccess")}</TabsTrigger>
           <TabsTrigger value="types">{t("fust.fustTypes")}</TabsTrigger>

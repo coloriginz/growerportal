@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { signOut } from "next-auth/react";
 import {
   RiBox3Line,
@@ -12,6 +12,8 @@ import {
   RiLogoutBoxLine,
   RiMenuLine,
   RiDashboardLine,
+  RiGroupLine,
+  RiPriceTag3Line,
 } from "@remixicon/react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -52,12 +54,16 @@ const navItems: NavItem[] = [
 ];
 
 const adminItems: NavItem[] = [
-  { href: "/fust-portal/settings", labelKey: "nav.fustSettings", icon: RiSettings3Line, roles: ["admin"] },
+  { href: "/fust-portal/settings?tab=growers", labelKey: "fust.growerAccess", icon: RiGroupLine, roles: ["admin"] },
+  { href: "/fust-portal/settings?tab=types", labelKey: "fust.fustTypes", icon: RiPriceTag3Line, roles: ["admin"] },
+  { href: "/fust-portal/settings?tab=transporters", labelKey: "fust.transporters", icon: RiTruckLine, roles: ["admin"] },
 ];
 
 export function FustShell({ user, children }: FustShellProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const currentTab = searchParams.get("tab");
   const { t } = useLanguage();
   const userRole = user.role as Role;
 
@@ -132,7 +138,9 @@ export function FustShell({ user, children }: FustShellProps) {
             <Separator className="bg-sidebar-border" />
             <nav className="space-y-0.5 px-3 py-3">
               {filteredAdmin.map((item) => {
-                const isActive = pathname.startsWith(item.href);
+                const [itemPath, itemQuery] = item.href.split("?");
+                const itemTab = new URLSearchParams(itemQuery).get("tab");
+                const isActive = pathname.startsWith(itemPath) && currentTab === itemTab;
                 const Icon = item.icon;
                 return (
                   <Link
