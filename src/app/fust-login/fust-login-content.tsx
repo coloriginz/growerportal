@@ -4,6 +4,7 @@ import { useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { RiBox3Line } from "@remixicon/react";
+import { isFustDomainClient } from "@/lib/fust-hostname";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -34,7 +35,7 @@ export function FustLoginContent() {
       setError(t("auth.invalidCredentials"));
       setLoading(false);
     } else {
-      router.push("/fust-portal");
+      router.push(isFustDomainClient() ? "/" : "/fust-portal");
       router.refresh();
     }
   }

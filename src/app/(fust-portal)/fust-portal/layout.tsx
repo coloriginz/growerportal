@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { FustShell } from "@/features/fust/components/fust-shell";
@@ -12,7 +13,9 @@ export default async function FustPortalLayout({
   const session = await auth();
 
   if (!session?.user) {
-    redirect("/fust-login");
+    const h = await headers();
+    const isStandalone = h.get("x-fust-domain") === "1";
+    redirect(isStandalone ? "/login" : "/fust-login");
   }
 
   // Check fustEnabled for grower users

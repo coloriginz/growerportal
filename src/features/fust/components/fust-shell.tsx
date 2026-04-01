@@ -24,6 +24,7 @@ import { ThemeSwitcher } from "@/components/theme-switcher";
 import { ChangePasswordDialog } from "@/components/layout/change-password-dialog";
 import { TestBanner } from "@/components/layout/test-banner";
 import { isTest } from "@/lib/env";
+import { isFustDomainClient, fustHref } from "@/lib/fust-hostname";
 import type { Role } from "@/types";
 
 interface FustShellProps {
@@ -66,6 +67,8 @@ export function FustShell({ user, children }: FustShellProps) {
   const currentTab = searchParams.get("tab");
   const { t } = useLanguage();
   const userRole = user.role as Role;
+  const isStandalone = isFustDomainClient();
+  const href = (path: string) => fustHref(path, isStandalone);
 
   const filteredNav = navItems.filter((item) => {
     if (!item.roles?.includes(userRole)) return false;
@@ -89,7 +92,7 @@ export function FustShell({ user, children }: FustShellProps) {
       <div className="flex h-full flex-col">
         {/* Header */}
         <div className="flex h-16 items-center px-6">
-          <Link href="/fust-portal" onClick={() => setMobileOpen(false)} className="flex items-center gap-2">
+          <Link href={href("/fust-portal")} onClick={() => setMobileOpen(false)} className="flex items-center gap-2">
             <RiBox3Line className="h-6 w-6 text-primary" />
             <span className="text-lg font-bold tracking-tight">Fust Portal</span>
           </Link>
@@ -105,7 +108,7 @@ export function FustShell({ user, children }: FustShellProps) {
             return (
               <Link
                 key={item.href}
-                href={item.href}
+                href={href(item.href)}
                 onClick={() => setMobileOpen(false)}
                 className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150 ${
                   isActive
@@ -133,7 +136,7 @@ export function FustShell({ user, children }: FustShellProps) {
                 return (
                   <Link
                     key={item.href}
-                    href={item.href}
+                    href={href(item.href)}
                     onClick={() => setMobileOpen(false)}
                     className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150 ${
                       isActive
@@ -179,7 +182,7 @@ export function FustShell({ user, children }: FustShellProps) {
               size="icon"
               onClick={async () => {
                 await signOut({ redirect: false });
-                window.location.href = "/fust-login";
+                window.location.href = href("/fust-login");
               }}
               title={t("auth.logout")}
               className="text-sidebar-foreground/60 hover:text-sidebar-foreground"
@@ -221,7 +224,7 @@ export function FustShell({ user, children }: FustShellProps) {
             >
               <RiMenuLine className="h-5 w-5" />
             </Button>
-            <Link href="/fust-portal" className="flex items-center gap-2">
+            <Link href={href("/fust-portal")} className="flex items-center gap-2">
               <RiBox3Line className="h-5 w-5 text-primary" />
               <span className="font-bold">Fust Portal</span>
             </Link>
