@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { requireAuth, resolveGrowerId } from "@/lib/api-helpers";
+import { sendOrderApprovedNotification } from "@/lib/fust-notifications";
 
 const orderItemSchema = z.object({
   fustTypeId: z.string().uuid(),
@@ -101,10 +102,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "growerId is required" }, { status: 400 });
   }
 
-  // Verify grower has fust enabled
+  // Verify grower has fust enabled and check auto-approve
   const grower = await prisma.grower.findUnique({
     where: { id: growerId },
-    select: { fustEnabled: true },
+    select: { fustEnabled: true, autoApproveOrders: true },
   });
 
   if (!grower?.fustEnabled) {
@@ -120,6 +121,10 @@ export async function POST(request: NextRequest) {
       requestedDate: requestedDate ? new Date(requestedDate) : null,
       notes,
       createdById: session!.user.id,
+      // Auto-approve if grower setting is enabled
+      ...(grower.autoApproveOrders
+        ? { status: "approved", approvedAt: new Date() }
+        : {}),
       items: {
         create: items.map((item) => ({
           fustTypeId: item.fustTypeId,
@@ -132,6 +137,15 @@ export async function POST(request: NextRequest) {
       grower: { select: { id: true, code: true, name: true } },
     },
   });
+
+  // Send transporter notification if auto-approved
+  if (grower.autoApproveOrders) {
+    try {
+      await sendOrderApprovedNotification(order.id);
+    } catch (err) {
+      console.error("[FustOrders] Failed to send auto-approve notification:", err);
+    }
+  }
 
   return NextResponse.json(order, { status: 201 });
 }

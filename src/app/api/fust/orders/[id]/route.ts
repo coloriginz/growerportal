@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { requireAuth } from "@/lib/api-helpers";
+import { sendOrderApprovedNotification } from "@/lib/fust-notifications";
 
 const patchSchema = z.object({
   status: z.enum(["approved", "rejected", "scheduled", "in_transit", "delivered", "cancelled"]),
@@ -114,6 +115,15 @@ export async function PATCH(
       grower: { select: { id: true, code: true, name: true } },
     },
   });
+
+  // Send transporter notification on approval
+  if (status === "approved") {
+    try {
+      await sendOrderApprovedNotification(id);
+    } catch (err) {
+      console.error("[FustOrders] Failed to send approval notification:", err);
+    }
+  }
 
   return NextResponse.json(updated);
 }

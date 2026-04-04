@@ -27,5 +27,6 @@ declare module "next-auth/jwt" {
     growerId?: string | null;
     growerCode?: string | null;
     transporterId?: string | null;
+    originalRole?: string;
   }
 }

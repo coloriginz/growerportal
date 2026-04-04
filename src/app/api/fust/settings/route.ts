@@ -18,6 +18,7 @@ export async function GET() {
         name: true,
         company: true,
         fustEnabled: true,
+        autoApproveOrders: true,
         defaultTransporterId: true,
       },
       orderBy: { code: "asc" },
@@ -32,6 +33,7 @@ const updateGrowerSchema = z.object({
   type: z.literal("grower"),
   growerId: z.string().uuid(),
   fustEnabled: z.boolean(),
+  autoApproveOrders: z.boolean().optional(),
   defaultTransporterId: z.string().uuid().nullable(),
 });
 
@@ -65,7 +67,7 @@ export async function PATCH(request: NextRequest) {
     const parsed = updateGrowerSchema.safeParse(body);
     if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
 
-    const { growerId, fustEnabled, defaultTransporterId } = parsed.data;
+    const { growerId, fustEnabled, autoApproveOrders, defaultTransporterId } = parsed.data;
 
     // Cannot enable fust without a transporter
     if (fustEnabled && !defaultTransporterId) {
@@ -74,7 +76,12 @@ export async function PATCH(request: NextRequest) {
 
     await prisma.grower.update({
       where: { id: growerId },
-      data: { fustEnabled, defaultTransporterId },
+      data: {
+        fustEnabled,
+        defaultTransporterId,
+        // Auto-approve only makes sense when fust is enabled
+        autoApproveOrders: fustEnabled ? (autoApproveOrders ?? false) : false,
+      },
     });
     return NextResponse.json({ success: true });
   }

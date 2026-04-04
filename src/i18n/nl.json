@@ -462,6 +462,9 @@
     "company": "Bedrijf",
     "transporterRequired": "Een standaard transporteur is verplicht bij het inschakelen van fust",
     "deleted": "Succesvol verwijderd",
-    "created": "Succesvol aangemaakt"
+    "created": "Succesvol aangemaakt",
+    "autoApproveOrders": "Bestellingen automatisch goedkeuren",
+    "autoApproveDescription": "Bestellingen van deze kweker worden automatisch goedgekeurd zonder beoordeling door commercie",
+    "autoApproved": "Auto-goedkeuring"
   }
 }

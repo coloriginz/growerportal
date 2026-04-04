@@ -68,6 +68,7 @@ model Grower {
 
   // Fust
   fustEnabled          Boolean      @default(false)
+  autoApproveOrders    Boolean      @default(false)
   defaultTransporterId String?
   defaultTransporter   Transporter? @relation("DefaultTransporter", fields: [defaultTransporterId], references: [id])
   fustOrders           FustOrder[]

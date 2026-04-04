@@ -462,6 +462,9 @@
     "company": "Company",
     "transporterRequired": "A default transporter is required when enabling fust access",
     "deleted": "Deleted successfully",
-    "created": "Created successfully"
+    "created": "Created successfully",
+    "autoApproveOrders": "Auto-approve Orders",
+    "autoApproveDescription": "Orders from this grower are approved automatically without commercie review",
+    "autoApproved": "Auto-approve"
   }
 }

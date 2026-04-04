@@ -73,7 +73,25 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       // Test mode role override — only stored in JWT, not in DB.
       // On re-login the token is created fresh from DB (original role).
       if (trigger === "update" && updateData?.switchRole) {
+        // Preserve original role on first switch so we can show it in banner
+        if (!token.originalRole) {
+          token.originalRole = token.role;
+        }
         token.role = updateData.switchRole;
+      }
+      // Test mode: switch to a specific grower entity
+      if (trigger === "update" && updateData?.switchGrowerId !== undefined) {
+        token.growerId = updateData.switchGrowerId;
+        token.growerCode = updateData.switchGrowerCode || null;
+        // Clear transporter when switching to grower
+        token.transporterId = null;
+      }
+      // Test mode: switch to a specific transporter entity
+      if (trigger === "update" && updateData?.switchTransporterId !== undefined) {
+        token.transporterId = updateData.switchTransporterId;
+        // Clear grower when switching to transporter
+        token.growerId = null;
+        token.growerCode = null;
       }
       return token;
     },

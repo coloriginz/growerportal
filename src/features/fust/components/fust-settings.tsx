@@ -67,6 +67,7 @@ interface GrowerSetting {
   name: string;
   company: string | null;
   fustEnabled: boolean;
+  autoApproveOrders: boolean;
   defaultTransporterId: string | null;
 }
 
@@ -91,6 +92,7 @@ export function FustSettings() {
 
   // Grower edit form state
   const [growerEnabled, setGrowerEnabled] = useState(false);
+  const [growerAutoApprove, setGrowerAutoApprove] = useState(false);
   const [growerTransporterId, setGrowerTransporterId] = useState<string | null>(null);
 
   // Transporter form state
@@ -137,6 +139,7 @@ export function FustSettings() {
   // --- Grower dialog handlers ---
   const openGrowerDialog = (grower: GrowerSetting) => {
     setGrowerEnabled(grower.fustEnabled);
+    setGrowerAutoApprove(grower.autoApproveOrders);
     setGrowerTransporterId(grower.defaultTransporterId);
     setGrowerDialog(grower);
   };
@@ -151,6 +154,7 @@ export function FustSettings() {
       type: "grower",
       growerId: growerDialog.id,
       fustEnabled: growerEnabled,
+      autoApproveOrders: growerAutoApprove,
       defaultTransporterId: growerTransporterId,
     });
     if (ok) {
@@ -291,11 +295,16 @@ export function FustSettings() {
                       <TableCell className="font-medium">{grower.code}</TableCell>
                       <TableCell>{grower.company || grower.name}</TableCell>
                       <TableCell>
-                        {grower.fustEnabled ? (
-                          <Badge variant="default">{t("fust.enabled")}</Badge>
-                        ) : (
-                          <Badge variant="outline">{t("fust.disabled")}</Badge>
-                        )}
+                        <div className="flex items-center gap-1.5">
+                          {grower.fustEnabled ? (
+                            <Badge variant="default">{t("fust.enabled")}</Badge>
+                          ) : (
+                            <Badge variant="outline">{t("fust.disabled")}</Badge>
+                          )}
+                          {grower.fustEnabled && grower.autoApproveOrders && (
+                            <Badge variant="secondary">{t("fust.autoApproved")}</Badge>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell>{transporter?.name || "-"}</TableCell>
                       <TableCell>
@@ -527,6 +536,22 @@ export function FustSettings() {
                 <p className="text-xs text-destructive">{t("fust.transporterRequired")}</p>
               )}
             </div>
+            {growerEnabled && (
+              <div className="space-y-2">
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={growerAutoApprove}
+                    onChange={(e) => setGrowerAutoApprove(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 rounded border-gray-300 accent-primary"
+                  />
+                  <div>
+                    <p className="text-sm font-medium">{t("fust.autoApproveOrders")}</p>
+                    <p className="text-xs text-muted-foreground">{t("fust.autoApproveDescription")}</p>
+                  </div>
+                </label>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setGrowerDialog(null)}>
