@@ -53,7 +53,9 @@ function RoleSwitcher({ currentRole }: { currentRole: string }) {
   const router = useRouter();
   const { data: session, update } = useSession();
 
-  // Prefetch entity lists (fetched once while admin role is still active)
+  // Entity lists — cached in sessionStorage so they survive role-switch reloads.
+  // The APIs require admin/commercie, so after switching to grower/transporteur
+  // the fetch would fail. The cache ensures the lists remain available.
   const [growers, setGrowers] = useState<GrowerOption[]>([]);
   const [transporters, setTransporters] = useState<TransporterOption[]>([]);
   const [entityOpen, setEntityOpen] = useState(false);
@@ -72,14 +74,34 @@ function RoleSwitcher({ currentRole }: { currentRole: string }) {
     return null;
   })();
 
-  // Prefetch growers + transporters on mount
+  // Load entity lists: try sessionStorage first, then fetch from API
   useEffect(() => {
+    const GROWERS_KEY = "test_banner_growers";
+    const TRANSPORTERS_KEY = "test_banner_transporters";
+
+    // Restore from cache immediately
+    try {
+      const cachedG = sessionStorage.getItem(GROWERS_KEY);
+      const cachedT = sessionStorage.getItem(TRANSPORTERS_KEY);
+      if (cachedG) setGrowers(JSON.parse(cachedG));
+      if (cachedT) setTransporters(JSON.parse(cachedT));
+    } catch {}
+
+    // Attempt fresh fetch (succeeds when admin/commercie, 403 otherwise)
     Promise.all([
-      fetch("/api/growers").then((r) => r.ok ? r.json() : []),
-      fetch("/api/transporters").then((r) => r.ok ? r.json() : []),
+      fetch("/api/growers").then((r) => r.ok ? r.json() : null),
+      fetch("/api/transporters").then((r) => r.ok ? r.json() : null),
     ]).then(([g, t]) => {
-      setGrowers(Array.isArray(g) ? g : g.growers || []);
-      setTransporters(Array.isArray(t) ? t : []);
+      if (g) {
+        const growerList: GrowerOption[] = Array.isArray(g) ? g : g.growers || [];
+        setGrowers(growerList);
+        try { sessionStorage.setItem(GROWERS_KEY, JSON.stringify(growerList)); } catch {}
+      }
+      if (t) {
+        const transporterList: TransporterOption[] = Array.isArray(t) ? t : [];
+        setTransporters(transporterList);
+        try { sessionStorage.setItem(TRANSPORTERS_KEY, JSON.stringify(transporterList)); } catch {}
+      }
     }).catch(() => {});
   }, []);
 
