@@ -77,11 +77,9 @@ export async function PATCH(
 
   // For transporteur, verify they own this pickup
   if (session!.user.role === "transporteur") {
-    const user = await prisma.user.findUnique({
-      where: { id: session!.user.id },
-      select: { transporterId: true },
-    });
-    if (pickup.transporterId !== user?.transporterId) {
+    const transporterId = session!.user.transporterId
+      || (await prisma.user.findUnique({ where: { id: session!.user.id }, select: { transporterId: true } }))?.transporterId;
+    if (pickup.transporterId !== transporterId) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
   }
