@@ -78,7 +78,10 @@ export async function POST(request: NextRequest) {
 
   if (!parsed.transactionNumber) {
     return NextResponse.json(
-      { error: "Could not extract transaction number from PDF" },
+      {
+        error: "Could not extract transaction number from PDF",
+        debug: parsed,
+      },
       { status: 422 }
     );
   }

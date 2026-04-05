@@ -155,6 +155,9 @@ export function FustVouchers() {
               );
             } else {
               const err = await res.json();
+              if (err.debug) {
+                console.log("[VoucherUpload] Parse debug for", file.name, err.debug);
+              }
               setUploadStatuses((prev) =>
                 prev.map((s, i) =>
                   i === currentIdx

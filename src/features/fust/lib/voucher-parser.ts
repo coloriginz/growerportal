@@ -15,192 +15,181 @@ export interface ParsedVoucher {
   transporterName: string | null;
   cardNumber: string | null;
   items: ParsedVoucherItem[];
+  _debugLines?: string[];
 }
 
 /**
- * Extract text lines from a PDF buffer using pdfjs-dist.
- * Groups text items by Y-position into logical lines.
+ * Parse quantity string, removing thousand separators (dots/commas).
  */
-async function extractTextLines(buffer: Buffer): Promise<string[]> {
-  // Dynamic import for pdfjs-dist (ESM-only in v5)
-  const pdfjsLib = await import("pdfjs-dist/legacy/build/pdf.mjs");
-  const uint8 = new Uint8Array(buffer);
-  const doc = await pdfjsLib.getDocument({ data: uint8 }).promise;
+function parseStuks(value: string): number {
+  const cleaned = value.replace(/[.,]/g, "");
+  return parseInt(cleaned, 10);
+}
 
-  const allLines: string[] = [];
-  for (let i = 1; i <= doc.numPages; i++) {
-    const page = await doc.getPage(i);
-    const content = await page.getTextContent();
-    let lastY: number | null = null;
-    let currentLine = "";
-    for (const item of content.items) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const textItem = item as any;
-      if (!textItem.str && textItem.str !== "") continue;
-      const y = textItem.transform?.[5] ?? 0;
-      if (lastY !== null && Math.abs(y - lastY) > 2) {
-        allLines.push(currentLine);
-        currentLine = "";
-      }
-      currentLine += (currentLine ? " " : "") + textItem.str;
-      lastY = y;
-    }
-    if (currentLine) allLines.push(currentLine);
+/**
+ * Extract fust items from text.
+ * Format: "520 Bloemendoos 19cm726" (quantity concatenated) or "588 Medium container   400" (with spaces)
+ */
+function parseFustItems(text: string): ParsedVoucherItem[] {
+  const items: ParsedVoucherItem[] = [];
+  // Pattern: 3-4 digit code + description + quantity (possibly concatenated, possibly negative)
+  const fustRegex = /^(\d{3,4})\s+(.+?)(-?[\d][\d.,]*)$/gm;
+  let match;
+
+  while ((match = fustRegex.exec(text)) !== null) {
+    items.push({
+      fustCode: match[1],
+      description: match[2].trim(),
+      quantity: parseStuks(match[3]),
+    });
   }
 
-  return allLines;
+  return items;
 }
 
 /**
- * Parse an RFH (Royal FloraHolland) issuance voucher PDF.
+ * Parse an RFH (Royal FloraHolland) issuance voucher PDF using pdf-parse.
  *
- * Actual pdfjs-dist output structure (lines by Y-position):
- *   0: "21-May-25 02:22 uur"              ← transaction date
- *   1: "BON UITGIFTE"                     ← type (or "BON INNAME" / "FUSTBON")
- *   2: "4244436"                          ← transaction number
- *   3: "Aalsmeer"                         ← location (or customer name for FUSTBON)
- *   4: "61536 Klantnummer"                ← customer number
- *   ...labels (Locatie, Transporteur, etc.)...
- *  10: "Van Straalen De Vries"            ← transporter name
- *  11: "F210001600007116-HYI"             ← card number
- *  12: "Fustcode   Stuks"                 ← header
- *  13: "Klantnaam   My-Peony BV"          ← customer name
- *  15: "Creatiedatum   20-May-25 13:28 uur"
- *  17: "588 Medium container   400"       ← item (may have 1.000 format)
- *  18: "520 Bloemendoos 19cm   264"       ← item
+ * pdf-parse produces text where labels and values are often concatenated:
+ *   "BON UITGIFTE\n4244436\nAalsmeer\n61536\nKlantnummer\n..."
+ *   "KlantnaamMy-Peony BV"
+ *   "Creatiedatum20-May-25 13:28 uur"
+ *   "520 Bloemendoos 19cm726"
  */
 export async function parseIssuanceVoucherPdf(
   buffer: Buffer
 ): Promise<ParsedVoucher> {
-  let lines: string[] = [];
+  let text = "";
   try {
-    lines = await extractTextLines(buffer);
-  } catch {
+    const { PDFParse } = await import("pdf-parse");
+    const uint8 = new Uint8Array(buffer);
+    const parser = new PDFParse({ data: uint8 });
+    const result = await parser.getText();
+    text = result.text;
+    await parser.destroy();
+  } catch (err) {
+    console.error("[VoucherParser] pdf-parse failed:", err);
     return emptyResult();
   }
 
-  if (lines.length < 3) return emptyResult();
+  if (!text || text.length < 20) return emptyResult();
 
-  const fullText = lines.join("\n");
+  const lines = text.split("\n");
 
-  // Type: BON UITGIFTE, BON INNAME, or FUSTBON (overboeking)
-  const typeLine = lines[1] || "";
-  const type: "uitgifte" | "inname" = /INNAME/i.test(typeLine)
-    ? "inname"
-    : "uitgifte";
+  console.log("[VoucherParser] Lines (first 15):", JSON.stringify(lines.slice(0, 15)));
 
-  // Transaction number: line 2 (purely numeric)
-  const transactionNumber = /^\d{5,10}$/.test(lines[2]?.trim())
-    ? lines[2].trim()
-    : null;
+  // Detect document type
+  const isBonUitgifte = text.includes("BON UITGIFTE");
+  const isBonInname = text.includes("BON INNAME");
+  const isFustbon = text.includes("FUSTBON");
 
-  // Transaction date: first line matching dd-Mon-yy HH:mm pattern
-  let transactionDate: string | null = null;
-  const dateMatch = fullText.match(
-    /(\d{1,2}-[A-Za-z]{3}-\d{2,4})\s+\d{2}:\d{2}/
-  );
-  if (dateMatch) {
-    transactionDate = dateMatch[1];
+  const type: "uitgifte" | "inname" = isBonInname ? "inname" : "uitgifte";
+
+  // Transaction number: line after the document type line
+  let transactionNumber: string | null = null;
+  const typeKeyword = isBonUitgifte
+    ? "BON UITGIFTE"
+    : isBonInname
+      ? "BON INNAME"
+      : isFustbon
+        ? "FUSTBON"
+        : null;
+
+  if (typeKeyword) {
+    const typeLineIdx = lines.findIndex((l) => l.trim() === typeKeyword);
+    if (typeLineIdx >= 0 && typeLineIdx + 1 < lines.length) {
+      const candidate = lines[typeLineIdx + 1]?.trim();
+      if (candidate && /^\d{5,10}$/.test(candidate)) {
+        transactionNumber = candidate;
+      }
+    }
   }
 
-  // Location: line after transaction number, only if alphabetic (city name)
+  // Fallback: search for standalone 7-digit number in first 10 lines
+  if (!transactionNumber) {
+    for (let i = 0; i < Math.min(lines.length, 10); i++) {
+      const m = lines[i].trim().match(/^(\d{7})$/);
+      if (m) {
+        transactionNumber = m[1];
+        break;
+      }
+    }
+  }
+
+  console.log("[VoucherParser] Transaction number:", transactionNumber);
+
+  // Location: line after transaction number (for BON types)
   let location: string | null = null;
-  if (transactionNumber && lines[3]) {
-    const candidate = lines[3].trim();
-    if (/^[A-Za-z\s-]+$/.test(candidate) && candidate.length < 30) {
-      location = candidate;
+  if (transactionNumber && !isFustbon) {
+    const txLineIdx = lines.findIndex((l) => l.trim() === transactionNumber);
+    if (txLineIdx >= 0 && txLineIdx + 1 < lines.length) {
+      const candidate = lines[txLineIdx + 1].trim();
+      if (/^[A-Za-z\s-]+$/.test(candidate) && candidate.length < 30) {
+        location = candidate;
+      }
     }
   }
 
-  // Customer number: digits before "Klantnummer"
+  // Customer number: line before "Klantnummer" label
   let customerNumber: string | null = null;
-  const custMatch = fullText.match(/(\d{4,10})\s+Klantnummer/i);
-  if (custMatch) {
-    customerNumber = custMatch[1];
-  }
-
-  // Customer name: after "Klantnaam" (use the one near Fustcode section, not the label)
-  let customerName: string | null = null;
-  const nameMatch = fullText.match(/Klantnaam\s{2,}(.+)/i);
-  if (nameMatch) {
-    customerName = nameMatch[1].trim();
-  }
-
-  // Transporter name: line that contains a name (not a label, not a card number)
-  // It appears after the labels and before the card number
-  let transporterName: string | null = null;
-  let cardNumber: string | null = null;
-
-  for (const line of lines) {
-    // Card number: starts with F followed by many digits
-    if (/^F\d{6,}/.test(line.trim())) {
-      cardNumber = line.trim();
+  const klantnummerIdx = lines.findIndex((l) => l.trim() === "Klantnummer");
+  if (klantnummerIdx > 0) {
+    const candidate = lines[klantnummerIdx - 1]?.trim();
+    if (candidate && /^\d{4,10}$/.test(candidate)) {
+      customerNumber = candidate;
     }
   }
 
-  // Transporter is typically the line right before the card number
-  const cardIdx = lines.findIndex((l) => /^F\d{6,}/.test(l.trim()));
-  if (cardIdx > 0) {
-    const candidate = lines[cardIdx - 1].trim();
-    // Must not be a known label
+  // Customer name: "KlantnaamXXX" (concatenated, no space)
+  let customerName: string | null = null;
+  const klantnaamMatch = text.match(/Klantnaam(.+)/);
+  if (klantnaamMatch) {
+    customerName = klantnaamMatch[1].trim();
+  }
+
+  // Transporter: line after "Transactienummer" label
+  let transporterName: string | null = null;
+  const txLabelIdx = lines.findIndex((l) => l.trim() === "Transactienummer");
+  if (txLabelIdx >= 0 && txLabelIdx + 1 < lines.length) {
+    const candidate = lines[txLabelIdx + 1]?.trim();
     if (
       candidate &&
-      !/^(Locatie|Transporteur|Pasnummer|Transactie|Klantnummer|Fustcode)/i.test(candidate) &&
+      candidate !== "FustcodeStuks" &&
+      !candidate.startsWith("Klantnaam") &&
       !/^\d+$/.test(candidate)
     ) {
       transporterName = candidate;
     }
   }
 
-  // If no card number found, look for transporter after "Transactienummer" label
-  if (!transporterName) {
-    const txLabelIdx = lines.findIndex((l) => /^Transactienummer$/i.test(l.trim()));
-    if (txLabelIdx >= 0 && txLabelIdx + 1 < lines.length) {
-      const candidate = lines[txLabelIdx + 1].trim();
-      if (candidate && !/^(F\d|Fustcode|\d+$)/i.test(candidate)) {
-        transporterName = candidate;
-      }
-    }
+  // Card number: F + digits pattern
+  let cardNumber: string | null = null;
+  const cardMatch = text.match(/(F\d{10,}-\S+)/);
+  if (cardMatch) {
+    cardNumber = cardMatch[1];
   }
 
-  // Creation date: after "Creatiedatum"
+  // Transaction date: first date pattern in text
+  let transactionDate: string | null = null;
+  const dateMatch = text.match(
+    /(\d{1,2}-[A-Za-z]{3}-\d{2,4})\s+\d{2}:\d{2}/
+  );
+  if (dateMatch) {
+    transactionDate = dateMatch[1];
+  }
+
+  // Creation date: "CreatiedatumDD-Mon-YY HH:MM uur" (concatenated)
   let creationDate: string | null = null;
-  const createMatch = fullText.match(
-    /Creatiedatum\s+(\d{1,2}-[A-Za-z]{3}-\d{2,4})/i
+  const createMatch = text.match(
+    /Creatiedatum\s*(\d{1,2}-[A-Za-z]{3}-\d{2,4})/i
   );
   if (createMatch) {
     creationDate = createMatch[1];
   }
 
-  // Items: lines matching fust code pattern after "Fustcode" header
-  // Format: "588 Medium container   400" or "520 Bloemendoos 19cm   -396"
-  // Quantity may have thousand separators: "1.000"
-  const items: ParsedVoucherItem[] = [];
-  const fustHeaderIdx = lines.findIndex((l) => /Fustcode/i.test(l));
-
-  if (fustHeaderIdx >= 0) {
-    for (let i = fustHeaderIdx + 1; i < lines.length; i++) {
-      const line = lines[i].trim();
-      // Match: code (3-4 digits) + description + quantity (possibly negative, with dots as thousand sep)
-      const itemMatch = line.match(
-        /^(\d{3,4})\s+(.+?)\s{2,}(-?[\d.]+)$/
-      );
-      if (itemMatch) {
-        // Remove thousand separators (dots) from quantity
-        const qtyStr = itemMatch[3].replace(/\./g, "");
-        items.push({
-          fustCode: itemMatch[1],
-          description: itemMatch[2].trim(),
-          quantity: parseInt(qtyStr, 10),
-        });
-      } else if (
-        /^(Deze|Door|Paeon|Voor vragen)/i.test(line)
-      ) {
-        // Footer text — stop parsing
-        break;
-      }
-    }
-  }
+  // Fust items: from data section (before disclaimer text)
+  const dataSection = text.split("Deze bon is het bewijs")[0] || text;
+  const items = parseFustItems(dataSection);
 
   return {
     transactionNumber,
@@ -213,6 +202,8 @@ export async function parseIssuanceVoucherPdf(
     transporterName,
     cardNumber,
     items,
+    // Include debug lines when parsing fails so we can diagnose
+    ...(!transactionNumber && { _debugLines: lines.slice(0, 30) }),
   };
 }
 
