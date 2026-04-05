@@ -18,148 +18,185 @@ export interface ParsedVoucher {
 }
 
 /**
+ * Extract text lines from a PDF buffer using pdfjs-dist.
+ * Groups text items by Y-position into logical lines.
+ */
+async function extractTextLines(buffer: Buffer): Promise<string[]> {
+  // Dynamic import for pdfjs-dist (ESM-only in v5)
+  const pdfjsLib = await import("pdfjs-dist/legacy/build/pdf.mjs");
+  const uint8 = new Uint8Array(buffer);
+  const doc = await pdfjsLib.getDocument({ data: uint8 }).promise;
+
+  const allLines: string[] = [];
+  for (let i = 1; i <= doc.numPages; i++) {
+    const page = await doc.getPage(i);
+    const content = await page.getTextContent();
+    let lastY: number | null = null;
+    let currentLine = "";
+    for (const item of content.items) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const textItem = item as any;
+      if (!textItem.str && textItem.str !== "") continue;
+      const y = textItem.transform?.[5] ?? 0;
+      if (lastY !== null && Math.abs(y - lastY) > 2) {
+        allLines.push(currentLine);
+        currentLine = "";
+      }
+      currentLine += (currentLine ? " " : "") + textItem.str;
+      lastY = y;
+    }
+    if (currentLine) allLines.push(currentLine);
+  }
+
+  return allLines;
+}
+
+/**
  * Parse an RFH (Royal FloraHolland) issuance voucher PDF.
  *
- * Expected text structure:
- *   21-May-25 02:22 uur
- *   BON UITGIFTE
- *   4244436
- *   Aalsmeer
- *   61536        Klantnummer
- *   Van Straalen De Vries
- *   F210001600007116-HYI
- *   Klantnaam My-Peony BV
- *   Creatiedatum 20-May-25 13:28
- *   Fustcode Stuks:
- *     588 Medium container 400
- *     520 Bloemendoos 19cm 264
+ * Actual pdfjs-dist output structure (lines by Y-position):
+ *   0: "21-May-25 02:22 uur"              ← transaction date
+ *   1: "BON UITGIFTE"                     ← type (or "BON INNAME" / "FUSTBON")
+ *   2: "4244436"                          ← transaction number
+ *   3: "Aalsmeer"                         ← location (or customer name for FUSTBON)
+ *   4: "61536 Klantnummer"                ← customer number
+ *   ...labels (Locatie, Transporteur, etc.)...
+ *  10: "Van Straalen De Vries"            ← transporter name
+ *  11: "F210001600007116-HYI"             ← card number
+ *  12: "Fustcode   Stuks"                 ← header
+ *  13: "Klantnaam   My-Peony BV"          ← customer name
+ *  15: "Creatiedatum   20-May-25 13:28 uur"
+ *  17: "588 Medium container   400"       ← item (may have 1.000 format)
+ *  18: "520 Bloemendoos 19cm   264"       ← item
  */
 export async function parseIssuanceVoucherPdf(
   buffer: Buffer
 ): Promise<ParsedVoucher> {
-  let text = "";
+  let lines: string[] = [];
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const pdfParse = require("pdf-parse") as (buf: Buffer) => Promise<{ text: string }>;
-    const data = await pdfParse(buffer);
-    text = data.text;
+    lines = await extractTextLines(buffer);
   } catch {
-    return {
-      transactionNumber: null,
-      type: "uitgifte",
-      transactionDate: null,
-      creationDate: null,
-      location: null,
-      customerNumber: null,
-      customerName: null,
-      transporterName: null,
-      cardNumber: null,
-      items: [],
-    };
+    return emptyResult();
   }
 
-  const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
+  if (lines.length < 3) return emptyResult();
 
-  // Type: BON UITGIFTE or BON INNAME
-  const type: "uitgifte" | "inname" = /BON\s+INNAME/i.test(text)
+  const fullText = lines.join("\n");
+
+  // Type: BON UITGIFTE, BON INNAME, or FUSTBON (overboeking)
+  const typeLine = lines[1] || "";
+  const type: "uitgifte" | "inname" = /INNAME/i.test(typeLine)
     ? "inname"
     : "uitgifte";
 
-  // Transaction number: line after BON UITGIFTE/INNAME that is purely numeric
-  let transactionNumber: string | null = null;
-  const bonIdx = lines.findIndex((l) => /^BON\s+(UITGIFTE|INNAME)$/i.test(l));
-  if (bonIdx >= 0) {
-    for (let i = bonIdx + 1; i < Math.min(bonIdx + 3, lines.length); i++) {
-      if (/^\d{5,10}$/.test(lines[i])) {
-        transactionNumber = lines[i];
-        break;
-      }
-    }
-  }
+  // Transaction number: line 2 (purely numeric)
+  const transactionNumber = /^\d{5,10}$/.test(lines[2]?.trim())
+    ? lines[2].trim()
+    : null;
 
   // Transaction date: first line matching dd-Mon-yy HH:mm pattern
   let transactionDate: string | null = null;
-  const dateMatch = text.match(
+  const dateMatch = fullText.match(
     /(\d{1,2}-[A-Za-z]{3}-\d{2,4})\s+\d{2}:\d{2}/
   );
   if (dateMatch) {
     transactionDate = dateMatch[1];
   }
 
-  // Location: line after transaction number (e.g., "Aalsmeer", "Naaldwijk")
+  // Location: line after transaction number, only if alphabetic (city name)
   let location: string | null = null;
-  if (transactionNumber) {
-    const txIdx = lines.indexOf(transactionNumber);
-    if (txIdx >= 0 && txIdx + 1 < lines.length) {
-      const nextLine = lines[txIdx + 1];
-      if (/^[A-Za-z\s]+$/.test(nextLine) && nextLine.length < 30) {
-        location = nextLine;
-      }
+  if (transactionNumber && lines[3]) {
+    const candidate = lines[3].trim();
+    if (/^[A-Za-z\s-]+$/.test(candidate) && candidate.length < 30) {
+      location = candidate;
     }
   }
 
   // Customer number: digits before "Klantnummer"
   let customerNumber: string | null = null;
-  const custMatch = text.match(/(\d{4,10})\s+Klantnummer/i);
+  const custMatch = fullText.match(/(\d{4,10})\s+Klantnummer/i);
   if (custMatch) {
     customerNumber = custMatch[1];
   }
 
-  // Customer name: after "Klantnaam"
+  // Customer name: after "Klantnaam" (use the one near Fustcode section, not the label)
   let customerName: string | null = null;
-  const nameMatch = text.match(/Klantnaam\s+(.+)/i);
+  const nameMatch = fullText.match(/Klantnaam\s{2,}(.+)/i);
   if (nameMatch) {
     customerName = nameMatch[1].trim();
   }
 
-  // Transporter name: line between customer number line and card number line
-  // Card number pattern: F followed by digits and dash
+  // Transporter name: line that contains a name (not a label, not a card number)
+  // It appears after the labels and before the card number
   let transporterName: string | null = null;
   let cardNumber: string | null = null;
 
-  const custLineIdx = lines.findIndex((l) => /Klantnummer/i.test(l));
-  const cardLineIdx = lines.findIndex((l) => /^F\d{6,}/.test(l));
+  for (const line of lines) {
+    // Card number: starts with F followed by many digits
+    if (/^F\d{6,}/.test(line.trim())) {
+      cardNumber = line.trim();
+    }
+  }
 
-  if (cardLineIdx >= 0) {
-    cardNumber = lines[cardLineIdx];
-    // Transporter is between customer number and card number
-    if (custLineIdx >= 0 && cardLineIdx > custLineIdx + 1) {
-      transporterName = lines[custLineIdx + 1];
-    } else if (custLineIdx >= 0 && cardLineIdx === custLineIdx + 1) {
-      // Card right after customer — look for transporter elsewhere
+  // Transporter is typically the line right before the card number
+  const cardIdx = lines.findIndex((l) => /^F\d{6,}/.test(l.trim()));
+  if (cardIdx > 0) {
+    const candidate = lines[cardIdx - 1].trim();
+    // Must not be a known label
+    if (
+      candidate &&
+      !/^(Locatie|Transporteur|Pasnummer|Transactie|Klantnummer|Fustcode)/i.test(candidate) &&
+      !/^\d+$/.test(candidate)
+    ) {
+      transporterName = candidate;
+    }
+  }
+
+  // If no card number found, look for transporter after "Transactienummer" label
+  if (!transporterName) {
+    const txLabelIdx = lines.findIndex((l) => /^Transactienummer$/i.test(l.trim()));
+    if (txLabelIdx >= 0 && txLabelIdx + 1 < lines.length) {
+      const candidate = lines[txLabelIdx + 1].trim();
+      if (candidate && !/^(F\d|Fustcode|\d+$)/i.test(candidate)) {
+        transporterName = candidate;
+      }
     }
   }
 
   // Creation date: after "Creatiedatum"
   let creationDate: string | null = null;
-  const createMatch = text.match(
-    /Creatiedatum\s+(\d{1,2}-[A-Za-z]{3}-\d{2,4})\s+\d{2}:\d{2}/i
+  const createMatch = fullText.match(
+    /Creatiedatum\s+(\d{1,2}-[A-Za-z]{3}-\d{2,4})/i
   );
   if (createMatch) {
     creationDate = createMatch[1];
   }
 
-  // Items: after "Fustcode Stuks:" or "Fustcode" header
-  // Format: 588 Medium container 400
-  // or: 520 Bloemendoos 19cm 264
+  // Items: lines matching fust code pattern after "Fustcode" header
+  // Format: "588 Medium container   400" or "520 Bloemendoos 19cm   -396"
+  // Quantity may have thousand separators: "1.000"
   const items: ParsedVoucherItem[] = [];
-  const fustHeaderIdx = lines.findIndex((l) =>
-    /Fustcode/i.test(l)
-  );
+  const fustHeaderIdx = lines.findIndex((l) => /Fustcode/i.test(l));
 
   if (fustHeaderIdx >= 0) {
     for (let i = fustHeaderIdx + 1; i < lines.length; i++) {
-      const line = lines[i];
-      // Match: code (3-4 digits) + description + quantity (possibly negative)
-      const itemMatch = line.match(/^(\d{3,4})\s+(.+?)\s+(-?\d+)$/);
+      const line = lines[i].trim();
+      // Match: code (3-4 digits) + description + quantity (possibly negative, with dots as thousand sep)
+      const itemMatch = line.match(
+        /^(\d{3,4})\s+(.+?)\s{2,}(-?[\d.]+)$/
+      );
       if (itemMatch) {
+        // Remove thousand separators (dots) from quantity
+        const qtyStr = itemMatch[3].replace(/\./g, "");
         items.push({
           fustCode: itemMatch[1],
           description: itemMatch[2].trim(),
-          quantity: parseInt(itemMatch[3], 10),
+          quantity: parseInt(qtyStr, 10),
         });
-      } else if (items.length > 0 && !/^\d/.test(line)) {
-        // No more items — stop parsing
+      } else if (
+        /^(Deze|Door|Paeon|Voor vragen)/i.test(line)
+      ) {
+        // Footer text — stop parsing
         break;
       }
     }
@@ -179,13 +216,28 @@ export async function parseIssuanceVoucherPdf(
   };
 }
 
+function emptyResult(): ParsedVoucher {
+  return {
+    transactionNumber: null,
+    type: "uitgifte",
+    transactionDate: null,
+    creationDate: null,
+    location: null,
+    customerNumber: null,
+    customerName: null,
+    transporterName: null,
+    cardNumber: null,
+    items: [],
+  };
+}
+
 /**
- * Parse a date string like "21-May-25" or "20-May-25" to a JS Date.
+ * Parse a date string like "21-May-25" or "20-mei-25" to a JS Date.
  */
 export function parseRfhDate(dateStr: string): Date | null {
   const months: Record<string, number> = {
-    jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
-    jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11,
+    jan: 0, feb: 1, mar: 2, mrt: 2, apr: 3, may: 4, mei: 4, jun: 5,
+    jul: 6, aug: 7, sep: 8, oct: 9, okt: 9, nov: 10, dec: 11,
   };
 
   const match = dateStr.match(/(\d{1,2})-([A-Za-z]{3})-(\d{2,4})/);
