@@ -6,6 +6,7 @@ import { useSession } from "next-auth/react";
 import { RiMailLine, RiArrowDownSLine, RiUserLine, RiBuilding2Line } from "@remixicon/react";
 import { ROLES } from "@/types";
 import type { Role } from "@/types";
+import { isFustDomainClient } from "@/lib/fust-hostname";
 
 const ROLE_LABELS: Record<Role, string> = {
   grower: "Grower",
@@ -29,6 +30,29 @@ export function TestBanner({ userRole }: TestBannerProps) {
       </div>
     </div>
   );
+}
+
+// ─── Role home pages ──────────────────────────────────────
+
+function getRoleHomeUrl(role: string, isFustPortal: boolean): string {
+  if (isFustPortal) {
+    // Standalone fust domain uses clean paths (middleware rewrites to /fust-portal/*)
+    const isStandalone = isFustDomainClient();
+    const prefix = isStandalone ? "" : "/fust-portal";
+    switch (role) {
+      case "transporteur": return `${prefix}/pickups`;
+      case "finance": return `${prefix}/invoices`;
+      case "commercie":
+      case "admin": return `${prefix}/orders`;
+      default: return prefix || "/";
+    }
+  }
+  // Main portal
+  switch (role) {
+    case "transporteur": return "/fust/pickups";
+    case "finance": return "/fust/invoices";
+    default: return "/dashboard";
+  }
 }
 
 // ─── Role Switcher with Entity Selection ──────────────────
@@ -122,13 +146,17 @@ function RoleSwitcher({ currentRole }: { currentRole: string }) {
     setSwitching(true);
     try {
       await update({ switchRole: role });
-      router.refresh();
-      window.location.reload();
+
+      // Navigate to the home page for the new role instead of staying on
+      // the current (potentially inaccessible) page
+      const isFust = window.location.pathname.startsWith("/fust-portal") || isFustDomainClient();
+      const homeUrl = getRoleHomeUrl(role, isFust);
+      window.location.href = homeUrl;
     } finally {
       setSwitching(false);
       setOpen(false);
     }
-  }, [currentRole, switching, update, router]);
+  }, [currentRole, switching, update]);
 
   const handleEntitySwitch = useCallback(async (entityId: string, entityType: "grower" | "transporter") => {
     if (switching) return;

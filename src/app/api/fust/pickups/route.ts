@@ -20,14 +20,12 @@ export async function GET(request: NextRequest) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const where: any = {};
 
-  // For transporteur role, get their transporterId
+  // For transporteur role, get their transporterId (from JWT session or DB)
   if (session!.user.role === "transporteur") {
-    const user = await prisma.user.findUnique({
-      where: { id: session!.user.id },
-      select: { transporterId: true },
-    });
-    if (user?.transporterId) {
-      where.transporterId = user.transporterId;
+    const transporterId = session!.user.transporterId
+      || (await prisma.user.findUnique({ where: { id: session!.user.id }, select: { transporterId: true } }))?.transporterId;
+    if (transporterId) {
+      where.transporterId = transporterId;
     } else {
       return NextResponse.json([]);
     }
@@ -78,14 +76,12 @@ export async function POST(request: NextRequest) {
 
   const { pickupDate, notes, orderIds } = parsed.data;
 
-  // Determine transporterId
+  // Determine transporterId (from JWT session first, then DB fallback)
   let transporterId: string | undefined;
   if (session!.user.role === "transporteur") {
-    const user = await prisma.user.findUnique({
-      where: { id: session!.user.id },
-      select: { transporterId: true },
-    });
-    transporterId = user?.transporterId ?? undefined;
+    transporterId = session!.user.transporterId
+      || (await prisma.user.findUnique({ where: { id: session!.user.id }, select: { transporterId: true } }))?.transporterId
+      || undefined;
   } else {
     // Admin - use the first active transporter (or require it in body in future)
     const transporter = await prisma.transporter.findFirst({
