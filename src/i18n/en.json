@@ -75,10 +75,13 @@
     "title": "Dashboard",
     "stemsToday": "Stems Today",
     "stemsYesterday": "Stems Yesterday",
+    "stemsSTD": "Stems STD",
+    "turnoverSTD": "Turnover STD",
     "stemsYTD": "Stems YTD",
     "turnoverYTD": "Turnover YTD",
     "avgPrice": "Avg. Price/Stem",
     "vsLastYear": "vs. last year",
+    "vsLastSeason": "vs. last season",
     "salesOverview": "Sales Overview",
     "topProducts": "Top Products",
     "recentLots": "Recent Lots",
@@ -103,6 +106,7 @@
     "thisWeek": "This Week",
     "thisMonth": "This Month",
     "ytd": "Year to Date",
+    "std": "Season to Date",
     "custom": "Custom",
     "weekNr": "Week",
     "salesType": "Sales Channel",
@@ -206,7 +210,9 @@
     "passwordChanged": "Password changed successfully",
     "passwordMismatch": "New passwords do not match",
     "passwordTooShort": "Password must be at least 8 characters",
-    "currentPasswordWrong": "Current password is incorrect"
+    "currentPasswordWrong": "Current password is incorrect",
+    "seasonSettings": "Season Settings",
+    "seasonStartMonth": "Season start month"
   },
   "admin": {
     "title": "User Management",
@@ -259,7 +265,10 @@
     "deactivate": "Deactivate",
     "selectCommercie": "Select account manager...",
     "noCommercieAssigned": "No account manager assigned",
-    "email": "Email"
+    "email": "Email",
+    "seasonSettings": "Season Settings",
+    "seasonStartMonth": "Season start month",
+    "seasonStartMonthDescription": "The month when the growing season starts. Used for Season to Date calculations."
   },
   "forecasts": {
     "title": "Shipment Forecasts",
@@ -472,6 +481,32 @@
     "deliveredQuantity": "Delivered",
     "orderedQuantity": "Ordered",
     "noDeliveriesPending": "No pending deliveries",
-    "confirmAndDeliver": "Confirm Delivery"
+    "confirmAndDeliver": "Confirm Delivery",
+    "vouchers": "Issuance Vouchers",
+    "voucher": "Issuance Voucher",
+    "uploadVouchers": "Upload PDFs",
+    "unmatchedVouchers": "Unmatched Vouchers",
+    "matchedVouchers": "Matched Vouchers",
+    "matchToOrder": "Match to Order",
+    "unmatch": "Unmatch",
+    "transactionNumber": "Transaction Number",
+    "transactionDate": "Transaction Date",
+    "location": "Location",
+    "uitgifte": "Issuance",
+    "inname": "Return",
+    "voucherUploaded": "Voucher uploaded successfully",
+    "voucherDuplicate": "Voucher already exists",
+    "voucherMatched": "Voucher matched to order",
+    "voucherUnmatched": "Voucher unmatched",
+    "noUnmatchedVouchers": "No unmatched vouchers",
+    "noMatchedVouchers": "No matched vouchers yet",
+    "selectOrderToMatch": "Select orders to match",
+    "customerName": "Customer Name",
+    "cardNumber": "Card Number",
+    "uploading": "Uploading",
+    "uploadComplete": "Upload complete",
+    "uploadFailed": "Upload failed",
+    "tabVouchers": "Vouchers",
+    "tabInvoices": "Invoices"
   }
 }

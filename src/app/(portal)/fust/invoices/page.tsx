@@ -1,11 +1,11 @@
 import { Suspense } from "react";
-import { FustInvoices } from "@/features/fust/components";
+import { FustFinance } from "@/features/fust/components";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export default function FustInvoicesPage() {
   return (
     <Suspense fallback={<Skeleton className="h-96" />}>
-      <FustInvoices />
+      <FustFinance />
     </Suspense>
   );
 }

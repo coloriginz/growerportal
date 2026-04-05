@@ -57,6 +57,7 @@ model Grower {
   user           User?
   commercie      User?    @relation("CommercieGrowers", fields: [commercieId], references: [id])
   commercieId    String?
+  seasonStartMonth Int @default(1) // 1=Jan, 10=Oct, etc.
 
   certificates   Certificate[]
   lots           Lot[]
@@ -307,9 +308,10 @@ model FustType {
   isActive     Boolean @default(true)
   sortOrder    Int     @default(0)
 
-  orderItems    FustOrderItem[]
-  deliveryItems FustDeliveryItem[]
-  invoiceItems  FustInvoiceItem[]
+  orderItems           FustOrderItem[]
+  deliveryItems        FustDeliveryItem[]
+  invoiceItems         FustInvoiceItem[]
+  issuanceVoucherItems FustIssuanceVoucherItem[]
 }
 
 model FustOrder {
@@ -329,8 +331,9 @@ model FustOrder {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
-  items    FustOrderItem[]
-  delivery FustDelivery?
+  items        FustOrderItem[]
+  delivery     FustDelivery?
+  voucherLinks FustVoucherOrderLink[]
 
   @@index([growerId])
   @@index([status])
@@ -435,4 +438,52 @@ model FustGrowerCharge {
 
   @@index([growerId])
   @@index([invoiceId])
+}
+
+// ─── FUST ISSUANCE VOUCHERS (RFH Uitgiftebonnen) ──────
+
+model FustIssuanceVoucher {
+  id                String    @id @default(uuid())
+  transactionNumber String    @unique
+  type              String    // "uitgifte" | "inname"
+  transactionDate   DateTime
+  creationDate      DateTime?
+  location          String?
+  customerNumber    String?
+  customerName      String?
+  transporterName   String?
+  cardNumber        String?
+  pdfUrl            String?
+  notes             String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  items      FustIssuanceVoucherItem[]
+  orderLinks FustVoucherOrderLink[]
+
+  @@index([transactionNumber])
+}
+
+model FustIssuanceVoucherItem {
+  id          String              @id @default(uuid())
+  voucherId   String
+  voucher     FustIssuanceVoucher @relation(fields: [voucherId], references: [id], onDelete: Cascade)
+  fustCode    String
+  description String
+  quantity    Int
+  fustTypeId  String?
+  fustType    FustType?           @relation(fields: [fustTypeId], references: [id])
+}
+
+model FustVoucherOrderLink {
+  id        String              @id @default(uuid())
+  voucherId String
+  voucher   FustIssuanceVoucher @relation(fields: [voucherId], references: [id], onDelete: Cascade)
+  orderId   String
+  order     FustOrder           @relation(fields: [orderId], references: [id])
+  createdAt DateTime            @default(now())
+
+  @@unique([voucherId, orderId])
+  @@index([voucherId])
+  @@index([orderId])
 }

@@ -75,10 +75,13 @@
     "title": "Dashboard",
     "stemsToday": "Stelen Vandaag",
     "stemsYesterday": "Stelen Gisteren",
+    "stemsSTD": "Stelen STD",
+    "turnoverSTD": "Omzet STD",
     "stemsYTD": "Stelen JTD",
     "turnoverYTD": "Omzet JTD",
     "avgPrice": "Gem. Prijs/Steel",
     "vsLastYear": "t.o.v. vorig jaar",
+    "vsLastSeason": "t.o.v. vorig seizoen",
     "salesOverview": "Verkoopoverzicht",
     "topProducts": "Top Producten",
     "recentLots": "Recente Partijen",
@@ -103,6 +106,7 @@
     "thisWeek": "Deze Week",
     "thisMonth": "Deze Maand",
     "ytd": "Jaar tot Datum",
+    "std": "Seizoen tot Datum",
     "custom": "Aangepast",
     "weekNr": "Week",
     "salesType": "Verkoopkanaal",
@@ -206,7 +210,9 @@
     "passwordChanged": "Wachtwoord succesvol gewijzigd",
     "passwordMismatch": "Nieuwe wachtwoorden komen niet overeen",
     "passwordTooShort": "Wachtwoord moet minimaal 8 tekens bevatten",
-    "currentPasswordWrong": "Huidig wachtwoord is onjuist"
+    "currentPasswordWrong": "Huidig wachtwoord is onjuist",
+    "seasonSettings": "Seizoensinstellingen",
+    "seasonStartMonth": "Startmaand seizoen"
   },
   "admin": {
     "title": "Gebruikersbeheer",
@@ -259,7 +265,10 @@
     "deactivate": "Deactiveren",
     "selectCommercie": "Selecteer accountmanager...",
     "noCommercieAssigned": "Geen accountmanager toegewezen",
-    "email": "E-mail"
+    "email": "E-mail",
+    "seasonSettings": "Seizoensinstellingen",
+    "seasonStartMonth": "Startmaand seizoen",
+    "seasonStartMonthDescription": "De maand waarin het groeiseizoen begint. Gebruikt voor Seizoen tot Datum berekeningen."
   },
   "forecasts": {
     "title": "Aanvoerplanning",
@@ -472,6 +481,32 @@
     "deliveredQuantity": "Geleverd",
     "orderedQuantity": "Besteld",
     "noDeliveriesPending": "Geen openstaande leveringen",
-    "confirmAndDeliver": "Levering Bevestigen"
+    "confirmAndDeliver": "Levering Bevestigen",
+    "vouchers": "Uitgiftebonnen",
+    "voucher": "Uitgiftebon",
+    "uploadVouchers": "PDF's Uploaden",
+    "unmatchedVouchers": "Niet-gekoppelde Bonnen",
+    "matchedVouchers": "Gekoppelde Bonnen",
+    "matchToOrder": "Koppelen aan Order",
+    "unmatch": "Ontkoppelen",
+    "transactionNumber": "Transactienummer",
+    "transactionDate": "Transactiedatum",
+    "location": "Locatie",
+    "uitgifte": "Uitgifte",
+    "inname": "Inname",
+    "voucherUploaded": "Bon succesvol geupload",
+    "voucherDuplicate": "Bon bestaat al",
+    "voucherMatched": "Bon gekoppeld aan order",
+    "voucherUnmatched": "Bon ontkoppeld",
+    "noUnmatchedVouchers": "Geen niet-gekoppelde bonnen",
+    "noMatchedVouchers": "Nog geen gekoppelde bonnen",
+    "selectOrderToMatch": "Selecteer orders om te koppelen",
+    "customerName": "Klantnaam",
+    "cardNumber": "Pasnummer",
+    "uploading": "Uploaden",
+    "uploadComplete": "Upload voltooid",
+    "uploadFailed": "Upload mislukt",
+    "tabVouchers": "Bonnen",
+    "tabInvoices": "Facturen"
   }
 }

@@ -56,8 +56,14 @@ export async function GET(request: NextRequest) {
       where.grower = { defaultTransporterId: transporterId };
     }
     where.status = { in: ["approved", "delivered"] };
+  } else if (role === "finance") {
+    // Finance sees only delivered orders
+    where.status = "delivered";
+    if (requestedGrowerId) {
+      where.growerId = requestedGrowerId;
+    }
   } else {
-    // commercie/admin/finance - can filter by grower
+    // commercie/admin - can filter by grower
     if (requestedGrowerId) {
       where.growerId = requestedGrowerId;
     }
@@ -80,6 +86,13 @@ export async function GET(request: NextRequest) {
           status: true,
           deliveredAt: true,
           items: { include: { fustType: true } },
+        },
+      },
+      voucherLinks: {
+        include: {
+          voucher: {
+            select: { id: true, transactionNumber: true, type: true, transactionDate: true },
+          },
         },
       },
     },
