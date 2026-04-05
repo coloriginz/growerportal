@@ -268,7 +268,12 @@
     "email": "E-mail",
     "seasonSettings": "Seizoensinstellingen",
     "seasonStartMonth": "Startmaand seizoen",
-    "seasonStartMonthDescription": "De maand waarin het groeiseizoen begint. Gebruikt voor Seizoen tot Datum berekeningen."
+    "seasonStartMonthDescription": "De maand waarin het groeiseizoen begint. Gebruikt voor Seizoen tot Datum berekeningen.",
+    "users": "Gebruikers",
+    "addUser": "Gebruiker Toevoegen",
+    "noUsers": "Nog geen gebruikers met portaaltoegang.",
+    "userAdded": "Gebruiker toegevoegd. Activatielink verstuurd.",
+    "userName": "Naam"
   },
   "forecasts": {
     "title": "Aanvoerplanning",

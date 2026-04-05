@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
   const growers = await prisma.grower.findMany({
     include: {
       commercie: { select: { id: true, name: true } },
-      user: { select: { id: true, email: true, isActive: true } },
+      users: { select: { id: true, isActive: true } },
     },
     orderBy: { code: "asc" },
   });
@@ -35,11 +35,12 @@ export async function GET(request: NextRequest) {
     company: g.company,
     country: g.country,
     commercie: g.commercie ? { id: g.commercie.id, name: g.commercie.name } : null,
-    loginStatus: g.user
-      ? g.user.isActive
+    loginStatus: g.users.length === 0
+      ? "none"
+      : g.users.some((u) => u.isActive)
         ? "active"
-        : "pending"
-      : "none",
+        : "pending",
+    userCount: g.users.length,
   }));
 
   return NextResponse.json(result);

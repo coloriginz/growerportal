@@ -53,11 +53,12 @@ interface GrowerData {
     validFrom: string | null;
     validUntil: string | null;
   }[];
-  user: {
+  users: {
     id: string;
+    name: string;
     email: string;
     isActive: boolean;
-  } | null;
+  }[];
 }
 
 interface CommercieUser {
@@ -71,8 +72,10 @@ export function GrowerDetail({ growerId }: { growerId: string }) {
   const [commercieUsers, setCommercieUsers] = useState<CommercieUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [activationEmail, setActivationEmail] = useState("");
+  const [newUserName, setNewUserName] = useState("");
+  const [newUserEmail, setNewUserEmail] = useState("");
   const [sendingActivation, setSendingActivation] = useState(false);
+  const [resendingUserId, setResendingUserId] = useState<string | null>(null);
   const { t } = useLanguage();
   const router = useRouter();
 
@@ -166,14 +169,50 @@ export function GrowerDetail({ growerId }: { growerId: string }) {
     }
   }
 
-  async function handleSendActivation() {
-    if (!activationEmail) return;
+  async function handleAddUser() {
+    if (!newUserName || !newUserEmail) return;
     setSendingActivation(true);
     try {
       const res = await fetch(`/api/growers/${growerId}/activate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: activationEmail }),
+        body: JSON.stringify({ name: newUserName, email: newUserEmail }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.previewUrl) {
+          toast.success(t("growers.userAdded"), {
+            description: "Ethereal preview available",
+            action: {
+              label: "Open",
+              onClick: () => window.open(data.previewUrl, "_blank"),
+            },
+            duration: 15000,
+          });
+        } else {
+          toast.success(t("growers.userAdded"));
+        }
+        setNewUserName("");
+        setNewUserEmail("");
+        fetchGrower();
+      } else {
+        const data = await res.json();
+        toast.error(data.error || "Error adding user");
+      }
+    } catch {
+      toast.error("Error adding user");
+    } finally {
+      setSendingActivation(false);
+    }
+  }
+
+  async function handleResendActivation(user: GrowerData["users"][number]) {
+    setResendingUserId(user.id);
+    try {
+      const res = await fetch(`/api/growers/${growerId}/activate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: user.name, email: user.email, userId: user.id }),
       });
       if (res.ok) {
         const data = await res.json();
@@ -189,22 +228,20 @@ export function GrowerDetail({ growerId }: { growerId: string }) {
         } else {
           toast.success(t("growers.activationSent"));
         }
-        setActivationEmail("");
         fetchGrower();
       } else {
         const data = await res.json();
-        toast.error(data.error || "Error sending activation");
+        toast.error(data.error || "Error resending activation");
       }
     } catch {
-      toast.error("Error sending activation");
+      toast.error("Error resending activation");
     } finally {
-      setSendingActivation(false);
+      setResendingUserId(null);
     }
   }
 
-  async function handleDeactivateUser() {
-    if (!grower?.user) return;
-    const res = await fetch(`/api/admin/users/${grower.user.id}`, {
+  async function handleDeactivateUser(userId: string) {
+    const res = await fetch(`/api/admin/users/${userId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ isActive: false }),
@@ -456,72 +493,98 @@ export function GrowerDetail({ growerId }: { growerId: string }) {
         </CardContent>
       </Card>
 
-      {/* Portal Access Section */}
+      {/* Users Section */}
       <Card>
         <CardHeader>
-          <CardTitle>{t("growers.portalAccess")}</CardTitle>
+          <CardTitle>{t("growers.users")}</CardTitle>
         </CardHeader>
-        <CardContent>
-          {!grower.user && (
-            <div className="space-y-4">
-              <p className="text-muted-foreground text-sm">
-                {t("growers.noLogin")}
-              </p>
-              <div className="flex max-w-md items-end gap-3">
-                <div className="flex-1 space-y-2">
-                  <Label>{t("growers.email")}</Label>
-                  <Input
-                    type="email"
-                    value={activationEmail}
-                    onChange={(e) => setActivationEmail(e.target.value)}
-                    placeholder="grower@example.com"
-                  />
-                </div>
-                <Button
-                  onClick={handleSendActivation}
-                  disabled={!activationEmail || sendingActivation}
-                >
-                  <RiMailSendLine className="mr-2 h-4 w-4" />
-                  {t("growers.sendActivation")}
-                </Button>
-              </div>
+        <CardContent className="space-y-4">
+          {grower.users.length > 0 ? (
+            <div className="p-0">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>{t("growers.userName")}</TableHead>
+                    <TableHead>{t("growers.email")}</TableHead>
+                    <TableHead>{t("common.status")}</TableHead>
+                    <TableHead>{t("common.actions")}</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {grower.users.map((user) => (
+                    <TableRow key={user.id}>
+                      <TableCell className="font-medium">{user.name}</TableCell>
+                      <TableCell className="text-muted-foreground">{user.email}</TableCell>
+                      <TableCell>
+                        {user.isActive ? (
+                          <Badge variant="default">{t("growers.active")}</Badge>
+                        ) : (
+                          <Badge variant="secondary">{t("growers.activationPending")}</Badge>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {user.isActive ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleDeactivateUser(user.id)}
+                          >
+                            {t("growers.deactivate")}
+                          </Button>
+                        ) : (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleResendActivation(user)}
+                            disabled={resendingUserId === user.id}
+                          >
+                            <RiMailSendLine className="mr-2 h-4 w-4" />
+                            {t("growers.resendActivation")}
+                          </Button>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             </div>
+          ) : (
+            <p className="text-muted-foreground text-sm">
+              {t("growers.noUsers")}
+            </p>
           )}
 
-          {grower.user && !grower.user.isActive && (
-            <div className="space-y-4">
-              <div className="flex items-center gap-3">
-                <Badge variant="secondary">
-                  {t("growers.activationPending")}
-                </Badge>
-                <span className="text-muted-foreground text-sm">
-                  {grower.user.email}
-                </span>
+          <Separator />
+
+          <div className="space-y-2">
+            <Label className="text-sm font-medium">{t("growers.addUser")}</Label>
+            <div className="flex max-w-2xl items-end gap-3">
+              <div className="flex-1 space-y-2">
+                <Label className="text-xs text-muted-foreground">{t("growers.userName")}</Label>
+                <Input
+                  value={newUserName}
+                  onChange={(e) => setNewUserName(e.target.value)}
+                  placeholder="Jan Jansen"
+                />
+              </div>
+              <div className="flex-1 space-y-2">
+                <Label className="text-xs text-muted-foreground">{t("growers.email")}</Label>
+                <Input
+                  type="email"
+                  value={newUserEmail}
+                  onChange={(e) => setNewUserEmail(e.target.value)}
+                  placeholder="jan@example.com"
+                />
               </div>
               <Button
-                variant="outline"
-                onClick={handleSendActivation}
-                disabled={sendingActivation}
+                onClick={handleAddUser}
+                disabled={!newUserName || !newUserEmail || sendingActivation}
               >
                 <RiMailSendLine className="mr-2 h-4 w-4" />
-                {t("growers.resendActivation")}
+                {t("growers.addUser")}
               </Button>
             </div>
-          )}
-
-          {grower.user && grower.user.isActive && (
-            <div className="space-y-4">
-              <div className="flex items-center gap-3">
-                <Badge variant="default">{t("growers.active")}</Badge>
-                <span className="text-muted-foreground text-sm">
-                  {grower.user.email}
-                </span>
-              </div>
-              <Button variant="outline" onClick={handleDeactivateUser}>
-                {t("growers.deactivate")}
-              </Button>
-            </div>
-          )}
+          </div>
         </CardContent>
       </Card>
     </div>

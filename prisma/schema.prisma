@@ -25,8 +25,10 @@ model User {
   updatedAt          DateTime  @updatedAt
 
   // Grower-specific: link to grower profile
-  growerId       String?  @unique
+  growerId       String?
   grower         Grower?  @relation(fields: [growerId], references: [id])
+
+  @@index([growerId])
 
   // Commercie: growers assigned to this user
   assignedGrowers Grower[] @relation("CommercieGrowers")
@@ -54,7 +56,7 @@ model Grower {
   updatedAt      DateTime @updatedAt
 
   // Relations
-  user           User?
+  users          User[]
   commercie      User?    @relation("CommercieGrowers", fields: [commercieId], references: [id])
   commercieId    String?
   seasonStartMonth Int @default(1) // 1=Jan, 10=Oct, etc.

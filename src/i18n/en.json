@@ -268,7 +268,12 @@
     "email": "Email",
     "seasonSettings": "Season Settings",
     "seasonStartMonth": "Season start month",
-    "seasonStartMonthDescription": "The month when the growing season starts. Used for Season to Date calculations."
+    "seasonStartMonthDescription": "The month when the growing season starts. Used for Season to Date calculations.",
+    "users": "Users",
+    "addUser": "Add User",
+    "noUsers": "No users have portal access yet.",
+    "userAdded": "User added. Activation link sent.",
+    "userName": "Name"
   },
   "forecasts": {
     "title": "Shipment Forecasts",

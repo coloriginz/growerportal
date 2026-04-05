@@ -9,6 +9,8 @@ import { logoBase64 } from "@/lib/logo-base64";
 
 const schema = z.object({
   email: z.string().email(),
+  name: z.string().min(1),
+  userId: z.string().uuid().optional(),
 });
 
 async function sendActivationEmail(
@@ -54,41 +56,43 @@ export async function POST(
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  const { email } = parsed.data;
+  const { email, name, userId } = parsed.data;
 
   // Check grower exists
   const grower = await prisma.grower.findUnique({
     where: { id },
-    include: { user: true },
   });
 
   if (!grower) {
     return NextResponse.json({ error: "Grower not found" }, { status: 404 });
   }
 
-  // If grower already has a user, update activation token (resend)
-  if (grower.user) {
+  // Resend activation for existing user
+  if (userId) {
+    const existingUser = await prisma.user.findUnique({ where: { id: userId } });
+    if (!existingUser || existingUser.growerId !== id) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
+
     const activationToken = uuidv4();
     await prisma.user.update({
-      where: { id: grower.user.id },
+      where: { id: userId },
       data: {
-        email,
         activationToken,
         isActive: false,
       },
     });
 
-    // Send activation email
-    const previewUrl = await sendActivationEmail(email, grower.name, activationToken);
+    const previewUrl = await sendActivationEmail(email, existingUser.name, activationToken);
 
     return NextResponse.json({
-      userId: grower.user.id,
+      userId,
       activationToken,
       ...(previewUrl && { previewUrl }),
     });
   }
 
-  // Check email uniqueness
+  // New user: check email uniqueness
   const existingUser = await prisma.user.findUnique({ where: { email } });
   if (existingUser) {
     return NextResponse.json({ error: "Email already exists" }, { status: 409 });
@@ -99,7 +103,7 @@ export async function POST(
   const user = await prisma.user.create({
     data: {
       email,
-      name: grower.name,
+      name,
       role: "grower",
       growerId: grower.id,
       activationToken,
@@ -108,7 +112,7 @@ export async function POST(
   });
 
   // Send activation email
-  const previewUrl = await sendActivationEmail(email, grower.name, activationToken);
+  const previewUrl = await sendActivationEmail(email, name, activationToken);
 
   return NextResponse.json({
     userId: user.id,

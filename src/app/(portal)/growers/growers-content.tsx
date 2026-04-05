@@ -34,6 +34,7 @@ interface GrowerRow {
   country: string | null;
   commercie: { id: string; name: string } | null;
   loginStatus: "active" | "pending" | "none";
+  userCount: number;
 }
 
 export function GrowersContent() {
@@ -98,12 +99,13 @@ export function GrowersContent() {
     );
   });
 
-  function statusBadge(status: GrowerRow["loginStatus"]) {
-    switch (status) {
+  function statusBadge(grower: GrowerRow) {
+    const countSuffix = grower.userCount > 1 ? ` (${grower.userCount})` : "";
+    switch (grower.loginStatus) {
       case "active":
-        return <Badge variant="default">{t("growers.active")}</Badge>;
+        return <Badge variant="default">{t("growers.active")}{countSuffix}</Badge>;
       case "pending":
-        return <Badge variant="secondary">{t("growers.activationPending")}</Badge>;
+        return <Badge variant="secondary">{t("growers.activationPending")}{countSuffix}</Badge>;
       case "none":
         return <Badge variant="outline">{t("growers.noLogin")}</Badge>;
     }
@@ -207,7 +209,7 @@ export function GrowersContent() {
                   <TableCell className="text-muted-foreground">
                     {grower.commercie ? grower.commercie.name : "-"}
                   </TableCell>
-                  <TableCell>{statusBadge(grower.loginStatus)}</TableCell>
+                  <TableCell>{statusBadge(grower)}</TableCell>
                 </TableRow>
               ))}
               {filtered.length === 0 && !loading && (

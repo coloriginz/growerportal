@@ -18,13 +18,14 @@ export async function GET(
       certificates: {
         orderBy: { createdAt: "desc" },
       },
-      user: {
+      users: {
         select: {
           id: true,
+          name: true,
           email: true,
           isActive: true,
-          activationToken: true,
         },
+        orderBy: { createdAt: "asc" },
       },
       commercie: {
         select: { id: true, name: true, email: true },
@@ -58,13 +59,12 @@ export async function GET(
       validFrom: c.validFrom,
       validUntil: c.validUntil,
     })),
-    user: grower.user
-      ? {
-          id: grower.user.id,
-          email: grower.user.email,
-          isActive: grower.user.isActive,
-        }
-      : null,
+    users: grower.users.map((u) => ({
+      id: u.id,
+      name: u.name,
+      email: u.email,
+      isActive: u.isActive,
+    })),
   });
 }
 
