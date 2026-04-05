@@ -194,7 +194,19 @@ export function FustWebshop({ growerId, userRole }: FustWebshopProps) {
       });
 
       if (res.ok) {
-        toast.success(t("fust.orderPlaced"));
+        const data = await res.json();
+        if (data.previewUrl) {
+          toast.success(t("fust.orderPlaced"), {
+            description: "Ethereal preview available",
+            action: {
+              label: "Open",
+              onClick: () => window.open(data.previewUrl, "_blank"),
+            },
+            duration: 15000,
+          });
+        } else {
+          toast.success(t("fust.orderPlaced"));
+        }
         setCart(new Map());
         setRequestedDate("");
         setNotes("");

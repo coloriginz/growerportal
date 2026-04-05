@@ -156,13 +156,17 @@ export async function POST(request: NextRequest) {
   });
 
   // Send transporter notification if auto-approved
+  let previewUrl: string | false = false;
   if (grower.autoApproveOrders) {
     try {
-      await sendOrderApprovedNotification(order.id);
+      previewUrl = await sendOrderApprovedNotification(order.id);
     } catch (err) {
       console.error("[FustOrders] Failed to send auto-approve notification:", err);
     }
   }
 
-  return NextResponse.json(order, { status: 201 });
+  return NextResponse.json({
+    ...order,
+    ...(previewUrl && { previewUrl }),
+  }, { status: 201 });
 }

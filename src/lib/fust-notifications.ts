@@ -3,7 +3,7 @@ import { sendEmail } from "@/lib/email";
 import { fustOrderApprovedEmailHtml } from "@/lib/email-templates";
 import { logoBase64 } from "@/lib/logo-base64";
 
-export async function sendOrderApprovedNotification(orderId: string): Promise<void> {
+export async function sendOrderApprovedNotification(orderId: string): Promise<string | false> {
   const order = await prisma.fustOrder.findUnique({
     where: { id: orderId },
     include: {
@@ -21,7 +21,7 @@ export async function sendOrderApprovedNotification(orderId: string): Promise<vo
 
   if (!order) {
     console.warn(`[FustNotification] Order ${orderId} not found, skipping email`);
-    return;
+    return false;
   }
 
   const transporterEmail = order.grower.defaultTransporter?.email;
@@ -29,7 +29,7 @@ export async function sendOrderApprovedNotification(orderId: string): Promise<vo
     console.warn(
       `[FustNotification] No transporter email for order ${order.orderNumber}, skipping email`
     );
-    return;
+    return false;
   }
 
   const portalUrl = process.env.APP_URL || process.env.NEXTAUTH_URL || "http://localhost:3000";
@@ -66,4 +66,6 @@ export async function sendOrderApprovedNotification(orderId: string): Promise<vo
     `[FustNotification] Email sent for order ${order.orderNumber} to ${transporterEmail}`,
     result.previewUrl ? `Preview: ${result.previewUrl}` : ""
   );
+
+  return result.previewUrl;
 }

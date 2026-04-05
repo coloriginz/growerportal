@@ -133,15 +133,19 @@ export async function PATCH(
   });
 
   // Send transporter notification on approval
+  let previewUrl: string | false = false;
   if (status === "approved") {
     try {
-      await sendOrderApprovedNotification(id);
+      previewUrl = await sendOrderApprovedNotification(id);
     } catch (err) {
       console.error("[FustOrders] Failed to send approval notification:", err);
     }
   }
 
-  return NextResponse.json(updated);
+  return NextResponse.json({
+    ...updated,
+    ...(previewUrl && { previewUrl }),
+  });
 }
 
 export async function DELETE(

@@ -43,16 +43,29 @@ function getResendTransport(): Transporter {
 async function getEtherealTransport(): Promise<Transporter> {
   if (cachedEtherealTransport) return cachedEtherealTransport;
 
-  const testAccount = await nodemailer.createTestAccount();
-  cachedEtherealTransport = nodemailer.createTransport({
-    host: testAccount.smtp.host,
-    port: testAccount.smtp.port,
-    secure: testAccount.smtp.secure,
-    auth: {
-      user: testAccount.user,
-      pass: testAccount.pass,
-    },
-  });
+  // Use fixed Ethereal credentials if configured, otherwise create a random account
+  const user = process.env.ETHEREAL_USER;
+  const pass = process.env.ETHEREAL_PASS;
+
+  if (user && pass) {
+    cachedEtherealTransport = nodemailer.createTransport({
+      host: "smtp.ethereal.email",
+      port: 587,
+      secure: false,
+      auth: { user, pass },
+    });
+  } else {
+    const testAccount = await nodemailer.createTestAccount();
+    cachedEtherealTransport = nodemailer.createTransport({
+      host: testAccount.smtp.host,
+      port: testAccount.smtp.port,
+      secure: testAccount.smtp.secure,
+      auth: {
+        user: testAccount.user,
+        pass: testAccount.pass,
+      },
+    });
+  }
 
   return cachedEtherealTransport;
 }
