@@ -17,16 +17,15 @@ const ROLE_LABELS: Record<Role, string> = {
 
 interface TestBannerProps {
   userRole: string;
-  isAdmin: boolean;
 }
 
-export function TestBanner({ userRole, isAdmin }: TestBannerProps) {
+export function TestBanner({ userRole }: TestBannerProps) {
   return (
     <div className="flex items-center justify-center gap-3 bg-red-600 px-4 py-1.5 text-xs font-semibold tracking-wide text-white">
       <span className="flex-1 text-center uppercase">Test Environment</span>
       <div className="flex items-center gap-2">
         <RoleSwitcher currentRole={userRole} />
-        {isAdmin && <EmailSwitcher />}
+        <EmailSwitcher />
       </div>
     </div>
   );
