@@ -1,6 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  serverExternalPackages: ["pdfjs-dist"],
+  outputFileTracingIncludes: {
+    "/api/fust/vouchers": ["./node_modules/pdfjs-dist/**/*"],
+  },
   experimental: {
     optimizePackageImports: ["@remixicon/react", "recharts", "date-fns"],
   },

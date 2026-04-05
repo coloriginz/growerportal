@@ -48,27 +48,44 @@ function parseFustItems(text: string): ParsedVoucherItem[] {
 }
 
 /**
- * Parse an RFH (Royal FloraHolland) issuance voucher PDF using pdf-parse.
+ * Parse an RFH (Royal FloraHolland) issuance voucher PDF using pdfjs-dist.
  *
- * pdf-parse produces text where labels and values are often concatenated:
- *   "BON UITGIFTE\n4244436\nAalsmeer\n61536\nKlantnummer\n..."
- *   "KlantnaamMy-Peony BV"
- *   "Creatiedatum20-May-25 13:28 uur"
- *   "520 Bloemendoos 19cm726"
+ * Uses pdfjs-dist/legacy/build for Vercel serverless compatibility.
+ * Text extraction uses hasEOL flags for line break detection.
  */
 export async function parseIssuanceVoucherPdf(
   buffer: Buffer
 ): Promise<ParsedVoucher> {
   let text = "";
   try {
-    const { PDFParse } = await import("pdf-parse");
-    const uint8 = new Uint8Array(buffer);
-    const parser = new PDFParse({ data: uint8 });
-    const result = await parser.getText();
-    text = result.text;
-    await parser.destroy();
+    const { getDocument } = await import("pdfjs-dist/legacy/build/pdf.mjs");
+    const doc = await getDocument({
+      data: new Uint8Array(buffer),
+      useSystemFonts: true,
+      verbosity: 0,
+    }).promise;
+    const pages: string[] = [];
+    for (let i = 1; i <= doc.numPages; i++) {
+      const page = await doc.getPage(i);
+      const content = await page.getTextContent();
+      let currentLine = "";
+      const lines: string[] = [];
+      for (const item of content.items) {
+        if (!("str" in item)) continue;
+        const textItem = item as { str: string; hasEOL?: boolean };
+        currentLine += textItem.str;
+        if (textItem.hasEOL) {
+          lines.push(currentLine.trim());
+          currentLine = "";
+        }
+      }
+      if (currentLine.trim()) lines.push(currentLine.trim());
+      pages.push(lines.join("\n"));
+    }
+    text = pages.join("\n");
+    await doc.destroy();
   } catch (err) {
-    console.error("[VoucherParser] pdf-parse failed:", err);
+    console.error("[VoucherParser] pdfjs-dist text extraction failed:", err);
     return emptyResult();
   }
 
@@ -130,19 +147,24 @@ export async function parseIssuanceVoucherPdf(
     }
   }
 
-  // Customer number: line before "Klantnummer" label
+  // Customer number: concatenated "61536Klantnummer" or separate lines
   let customerNumber: string | null = null;
-  const klantnummerIdx = lines.findIndex((l) => l.trim() === "Klantnummer");
-  if (klantnummerIdx > 0) {
-    const candidate = lines[klantnummerIdx - 1]?.trim();
-    if (candidate && /^\d{4,10}$/.test(candidate)) {
-      customerNumber = candidate;
+  const concatKlantnr = text.match(/(\d{4,10})Klantnummer/);
+  if (concatKlantnr) {
+    customerNumber = concatKlantnr[1];
+  } else {
+    const klantnummerIdx = lines.findIndex((l) => l.trim() === "Klantnummer");
+    if (klantnummerIdx > 0) {
+      const candidate = lines[klantnummerIdx - 1]?.trim();
+      if (candidate && /^\d{4,10}$/.test(candidate)) {
+        customerNumber = candidate;
+      }
     }
   }
 
-  // Customer name: "KlantnaamXXX" (concatenated, no space)
+  // Customer name: "Klantnaam My-Peony BV" (with or without space)
   let customerName: string | null = null;
-  const klantnaamMatch = text.match(/Klantnaam(.+)/);
+  const klantnaamMatch = text.match(/Klantnaam\s*(.+)/);
   if (klantnaamMatch) {
     customerName = klantnaamMatch[1].trim();
   }
