@@ -45,5 +45,6 @@ export async function GET(request: NextRequest) {
     ggn: grower.ggn,
     commercie: grower.commercie,
     certificates: grower.certificates,
+    seasonStartMonth: grower.seasonStartMonth,
   });
 }

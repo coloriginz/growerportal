@@ -30,6 +30,7 @@ import { useLanguage } from "@/components/providers/language-provider";
 import { SalesChart } from "@/components/charts/sales-chart";
 import { TopProductsChart } from "@/components/charts/top-products-chart";
 import { formatCurrency, formatNumber, formatPrice, formatDate, formatTime } from "@/lib/format";
+import { getSeasonLabel } from "@/lib/season";
 import { useFetch } from "@/hooks/use-fetch";
 import { ErrorState } from "@/components/ui/error-state";
 
@@ -47,6 +48,7 @@ interface DashboardData {
   qualityRate?: number;
   monthlySales: { month: string; stems: number; turnover: number; lastYearStems: number; lastYearTurnover: number }[];
   topProducts: { name: string; stems: number; turnover: number }[];
+  seasonStartMonth?: number;
   recentLots?: { id: string; lotNumber: string; productName: string; totalStems: number; avgPrice: number; deliveryDate: string; status: string }[];
   topGrowers?: { id: string; code: string; name: string; stems: number; turnover: number }[];
   upcomingForecasts?: { week: string; year: number; stems: number; growers: number }[];
@@ -128,7 +130,6 @@ function DashboardSkeleton() {
 }
 
 export function DashboardContent({ growerId }: { growerId: string | null }) {
-  const { t } = useLanguage();
   const url = useMemo(() => {
     const params = growerId ? `?growerId=${growerId}` : "";
     return `/api/dashboard${params}`;
@@ -158,6 +159,9 @@ export function DashboardContent({ growerId }: { growerId: string | null }) {
 
 function GrowerDashboard({ data, lastUpdated, refetch }: { data: DashboardData; lastUpdated: Date | null; refetch: () => void }) {
   const { t } = useLanguage();
+  const seasonMonth = data.seasonStartMonth ?? 1;
+  const seasonLabel = getSeasonLabel(seasonMonth);
+  const isCustomSeason = seasonMonth !== 1;
 
   const stemsChange =
     data.stemsYTDLastYear > 0
@@ -171,7 +175,15 @@ function GrowerDashboard({ data, lastUpdated, refetch }: { data: DashboardData; 
     data.avgPriceYTDLastYear > 0
       ? ((data.avgPriceYTD - data.avgPriceYTDLastYear) / data.avgPriceYTDLastYear) * 100
       : 0;
-  const vsLastYear = t("dashboard.vsLastYear");
+  const vsLabel = isCustomSeason ? t("dashboard.vsLastSeason") : t("dashboard.vsLastYear");
+
+  // STD labels with season range for custom seasons
+  const stemsSTDLabel = isCustomSeason
+    ? `${t("dashboard.stemsSTD")} (${seasonLabel})`
+    : t("dashboard.stemsYTD");
+  const turnoverSTDLabel = isCustomSeason
+    ? `${t("dashboard.turnoverSTD")} (${seasonLabel})`
+    : t("dashboard.turnoverYTD");
 
   return (
     <div className="page-content">
@@ -193,13 +205,13 @@ function GrowerDashboard({ data, lastUpdated, refetch }: { data: DashboardData; 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <KpiCard title={t("dashboard.stemsToday")} value={formatNumber(data.stemsToday)} icon={RiPlantLine} />
         <KpiCard title={t("dashboard.stemsYesterday")} value={formatNumber(data.stemsYesterday)} icon={RiCalendarLine} />
-        <KpiCard title={t("dashboard.stemsYTD")} value={formatNumber(data.stemsYTD)} icon={RiLineChartLine} change={stemsChange} changeLabel={vsLastYear} />
-        <KpiCard title={t("dashboard.turnoverYTD")} value={formatCurrency(data.turnoverYTD)} icon={RiMoneyEuroCircleLine} change={turnoverChange} changeLabel={vsLastYear} />
+        <KpiCard title={stemsSTDLabel} value={formatNumber(data.stemsYTD)} icon={RiLineChartLine} change={stemsChange} changeLabel={vsLabel} />
+        <KpiCard title={turnoverSTDLabel} value={formatCurrency(data.turnoverYTD)} icon={RiMoneyEuroCircleLine} change={turnoverChange} changeLabel={vsLabel} />
       </div>
 
       {/* Secondary KPI Cards */}
       <div className="grid gap-4 sm:grid-cols-3">
-        <KpiCard title={t("dashboard.avgPrice")} value={formatPrice(data.avgPriceYTD)} icon={RiLineChartLine} change={priceChange} changeLabel={vsLastYear} />
+        <KpiCard title={t("dashboard.avgPrice")} value={formatPrice(data.avgPriceYTD)} icon={RiLineChartLine} change={priceChange} changeLabel={vsLabel} />
         <KpiCard title={t("dashboard.netYieldPerStem")} value={formatPrice(data.netYieldPerStem || 0)} icon={RiMoneyEuroCircleLine} />
         <KpiCard title={t("dashboard.qualityRate")} value={`${(data.qualityRate || 100).toFixed(1)}%`} icon={RiShieldCheckLine} />
       </div>

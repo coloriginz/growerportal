@@ -44,6 +44,7 @@ interface GrowerData {
   vatNumber: string | null;
   ggn: string | null;
   commercieId: string | null;
+  seasonStartMonth: number;
   commercie: { id: string; name: string; email: string } | null;
   certificates: {
     id: string;
@@ -87,6 +88,7 @@ export function GrowerDetail({ growerId }: { growerId: string }) {
     vatNumber: "",
     ggn: "",
     commercieId: "",
+    seasonStartMonth: "1",
   });
 
   useEffect(() => {
@@ -112,6 +114,7 @@ export function GrowerDetail({ growerId }: { growerId: string }) {
           vatNumber: data.vatNumber || "",
           ggn: data.ggn || "",
           commercieId: data.commercieId || "",
+          seasonStartMonth: String(data.seasonStartMonth ?? 1),
         });
       } else {
         router.push("/growers");
@@ -146,6 +149,7 @@ export function GrowerDetail({ growerId }: { growerId: string }) {
           vatNumber: form.vatNumber || null,
           ggn: form.ggn || null,
           commercieId: form.commercieId || null,
+          seasonStartMonth: parseInt(form.seasonStartMonth),
         }),
       });
       if (res.ok) {
@@ -357,6 +361,39 @@ export function GrowerDetail({ growerId }: { growerId: string }) {
               ) : (
                 <div className="bg-muted h-10 animate-pulse rounded-md" />
               )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Season Settings */}
+        <Card>
+          <CardHeader>
+            <CardTitle>{t("growers.seasonSettings")}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="max-w-sm space-y-2">
+              <Label>{t("growers.seasonStartMonth")}</Label>
+              <Select
+                value={form.seasonStartMonth}
+                onValueChange={(v) => { if (v) setForm({ ...form, seasonStartMonth: v }); }}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {[
+                    "January", "February", "March", "April", "May", "June",
+                    "July", "August", "September", "October", "November", "December",
+                  ].map((name, idx) => (
+                    <SelectItem key={idx + 1} value={String(idx + 1)}>
+                      {name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                {t("growers.seasonStartMonthDescription")}
+              </p>
             </div>
           </CardContent>
         </Card>

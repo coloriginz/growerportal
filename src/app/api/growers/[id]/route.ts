@@ -50,6 +50,7 @@ export async function GET(
     ggn: grower.ggn,
     commercie: grower.commercie,
     commercieId: grower.commercieId,
+    seasonStartMonth: grower.seasonStartMonth,
     certificates: grower.certificates.map((c) => ({
       id: c.id,
       type: c.type,
@@ -78,6 +79,7 @@ const updateGrowerSchema = z.object({
   vatNumber: z.string().nullable().optional(),
   ggn: z.string().nullable().optional(),
   commercieId: z.string().nullable().optional(),
+  seasonStartMonth: z.number().int().min(1).max(12).optional(),
 });
 
 export async function PUT(

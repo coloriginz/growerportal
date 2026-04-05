@@ -31,6 +31,7 @@ interface GrowerProfile {
   vatNumber: string | null;
   ggn: string | null;
   commercie: { name: string; email: string } | null;
+  seasonStartMonth?: number;
   certificates: {
     id: string;
     type: string;
@@ -164,6 +165,28 @@ export function ProfileContent({ growerId }: { growerId: string | null }) {
           )}
         </CardContent>
       </Card>
+
+      {/* Season Settings */}
+      {profile.seasonStartMonth && (
+        <Card>
+          <CardHeader>
+            <CardTitle>{t("profile.seasonSettings")}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <dl>
+              <dt className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                {t("profile.seasonStartMonth")}
+              </dt>
+              <dd className="mt-1 font-medium">
+                {[
+                  "January", "February", "March", "April", "May", "June",
+                  "July", "August", "September", "October", "November", "December",
+                ][profile.seasonStartMonth - 1]}
+              </dd>
+            </dl>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Certificates */}
       <Card>

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireAuth, resolveGrowerId } from "@/lib/api-helpers";
-import { startOfYear } from "date-fns";
+import { getSeasonStart } from "@/lib/season";
 
 export async function GET(request: NextRequest) {
   const { error, session } = await requireAuth();
@@ -25,8 +25,12 @@ export async function GET(request: NextRequest) {
     orderBy: { date: "desc" },
   });
 
-  // Summary stats (YTD)
-  const ytdStart = startOfYear(new Date());
+  // Summary stats (Season to Date)
+  const growerRecord = await prisma.grower.findUnique({
+    where: { id: growerId },
+    select: { seasonStartMonth: true },
+  });
+  const ytdStart = getSeasonStart(new Date(), growerRecord?.seasonStartMonth ?? 1);
   const ytdIssues = issues.filter((i) => i.date >= ytdStart);
   const totalAffectedStems = ytdIssues.reduce((sum, i) => sum + i.stems, 0);
 
