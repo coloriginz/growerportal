@@ -67,7 +67,7 @@
     "selectGrower": "Selecteer Kweker",
     "forecasts": "Aanvoerplanning",
     "fustOrders": "Fustbestellingen",
-    "fustPickups": "Ophaalrondes",
+    "fustPickups": "Leveringen",
     "fustInvoices": "Fust Facturen",
     "fustSettings": "Fust Instellingen"
   },
@@ -465,6 +465,13 @@
     "created": "Succesvol aangemaakt",
     "autoApproveOrders": "Bestellingen automatisch goedkeuren",
     "autoApproveDescription": "Bestellingen van deze kweker worden automatisch goedgekeurd zonder beoordeling door commercie",
-    "autoApproved": "Auto-goedkeuring"
+    "autoApproved": "Auto-goedkeuring",
+    "pendingDeliveries": "Openstaande Leveringen",
+    "completedDeliveries": "Afgeronde Leveringen",
+    "confirmDeliveryTitle": "Levering Bevestigen",
+    "deliveredQuantity": "Geleverd",
+    "orderedQuantity": "Besteld",
+    "noDeliveriesPending": "Geen openstaande leveringen",
+    "confirmAndDeliver": "Levering Bevestigen"
   }
 }

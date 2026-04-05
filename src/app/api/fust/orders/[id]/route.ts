@@ -4,9 +4,15 @@ import { prisma } from "@/lib/db";
 import { requireAuth } from "@/lib/api-helpers";
 import { sendOrderApprovedNotification } from "@/lib/fust-notifications";
 
+const deliveryItemSchema = z.object({
+  fustTypeId: z.string().uuid(),
+  deliveredQuantity: z.number().int().min(0),
+});
+
 const patchSchema = z.object({
   status: z.enum(["approved", "rejected", "scheduled", "in_transit", "delivered", "cancelled"]),
   rejectionReason: z.string().optional().nullable(),
+  items: z.array(deliveryItemSchema).optional(),
 });
 
 export async function GET(
@@ -64,7 +70,7 @@ export async function PATCH(
     return NextResponse.json({ error: "Order not found" }, { status: 404 });
   }
 
-  const { status, rejectionReason } = parsed.data;
+  const { status, rejectionReason, items } = parsed.data;
   const role = session!.user.role;
 
   // Validate status transitions per role
@@ -92,19 +98,29 @@ export async function PATCH(
     updateData.rejectionReason = rejectionReason;
   }
   if (status === "delivered") {
-    // Create or update delivery record
-    await prisma.fustDelivery.upsert({
-      where: { orderId: id },
-      create: {
-        orderId: id,
-        status: "delivered",
-        deliveredAt: new Date(),
-      },
-      update: {
-        status: "delivered",
-        deliveredAt: new Date(),
-      },
-    });
+    updateData.deliveredAt = new Date();
+    updateData.deliveredById = session!.user.id;
+
+    // Update deliveredQuantity on order items
+    if (items && items.length > 0) {
+      for (const item of items) {
+        await prisma.fustOrderItem.updateMany({
+          where: { orderId: id, fustTypeId: item.fustTypeId },
+          data: { deliveredQuantity: item.deliveredQuantity },
+        });
+      }
+    } else {
+      // No items provided: set deliveredQuantity = quantity for each item
+      const orderItems = await prisma.fustOrderItem.findMany({
+        where: { orderId: id },
+      });
+      for (const oi of orderItems) {
+        await prisma.fustOrderItem.update({
+          where: { id: oi.id },
+          data: { deliveredQuantity: oi.quantity },
+        });
+      }
+    }
   }
 
   const updated = await prisma.fustOrder.update({

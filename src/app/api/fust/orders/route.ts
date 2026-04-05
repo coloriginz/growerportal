@@ -50,8 +50,12 @@ export async function GET(request: NextRequest) {
   if (role === "grower") {
     where.growerId = session!.user.growerId;
   } else if (role === "transporteur") {
-    // Transporteur sees approved+ orders
-    where.status = { in: ["approved", "scheduled", "in_transit", "delivered"] };
+    // Transporteur sees only orders for growers assigned to them
+    const transporterId = session!.user.transporterId;
+    if (transporterId) {
+      where.grower = { defaultTransporterId: transporterId };
+    }
+    where.status = { in: ["approved", "delivered"] };
   } else {
     // commercie/admin/finance - can filter by grower
     if (requestedGrowerId) {

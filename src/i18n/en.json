@@ -67,7 +67,7 @@
     "selectGrower": "Select Grower",
     "forecasts": "Forecasts",
     "fustOrders": "Fust Orders",
-    "fustPickups": "Pickups",
+    "fustPickups": "Deliveries",
     "fustInvoices": "Fust Invoices",
     "fustSettings": "Fust Settings"
   },
@@ -465,6 +465,13 @@
     "created": "Created successfully",
     "autoApproveOrders": "Auto-approve Orders",
     "autoApproveDescription": "Orders from this grower are approved automatically without commercie review",
-    "autoApproved": "Auto-approve"
+    "autoApproved": "Auto-approve",
+    "pendingDeliveries": "Pending Deliveries",
+    "completedDeliveries": "Completed Deliveries",
+    "confirmDeliveryTitle": "Confirm Delivery",
+    "deliveredQuantity": "Delivered",
+    "orderedQuantity": "Ordered",
+    "noDeliveriesPending": "No pending deliveries",
+    "confirmAndDeliver": "Confirm Delivery"
   }
 }
