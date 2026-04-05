@@ -16,12 +16,33 @@ export async function parseFustInvoicePdf(
 ): Promise<ParsedInvoiceData> {
   let text = "";
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const pdfParse = require("pdf-parse") as (buf: Buffer) => Promise<{ text: string }>;
-    const data = await pdfParse(buffer);
-    text = data.text;
+    const { getDocument } = await import("pdfjs-dist/legacy/build/pdf.mjs");
+    const doc = await getDocument({
+      data: new Uint8Array(buffer),
+      useSystemFonts: true,
+      verbosity: 0,
+    }).promise;
+    const pages: string[] = [];
+    for (let i = 1; i <= doc.numPages; i++) {
+      const page = await doc.getPage(i);
+      const content = await page.getTextContent();
+      let currentLine = "";
+      const lines: string[] = [];
+      for (const item of content.items) {
+        if (!("str" in item)) continue;
+        const textItem = item as { str: string; hasEOL?: boolean };
+        currentLine += textItem.str;
+        if (textItem.hasEOL) {
+          lines.push(currentLine.trim());
+          currentLine = "";
+        }
+      }
+      if (currentLine.trim()) lines.push(currentLine.trim());
+      pages.push(lines.join("\n"));
+    }
+    text = pages.join("\n");
+    await doc.destroy();
   } catch {
-    // pdf-parse not installed or parsing failed - return empty result
     return { invoiceNumber: null, invoiceDate: null, items: [], totalAmount: 0 };
   }
 
