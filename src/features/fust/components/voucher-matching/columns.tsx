@@ -13,7 +13,7 @@ export type { UseRangeSelectionReturn } from "./use-range-selection";
 
 type TranslationFn = (key: string) => string;
 
-// ─── Voucher Columns ──────────────────────────────────
+// ─── Voucher Columns (no transporter — grouped by it) ──
 
 const voucherHelper = createColumnHelper<Voucher>();
 
@@ -24,7 +24,7 @@ export function createVoucherColumns(
   return [
     voucherHelper.display({
       id: "select",
-      size: 40,
+      size: 32,
       header: () => (
         <Checkbox
           checked={selection.allSelected}
@@ -44,11 +44,11 @@ export function createVoucherColumns(
       ),
     }),
     voucherHelper.accessor("transactionNumber", {
-      header: () => t("fust.transactionNumber"),
-      size: 120,
+      header: () => "#",
+      size: 90,
       cell: ({ row }) => (
-        <div className="flex items-center gap-1.5">
-          <span className="font-mono text-sm">#{row.original.transactionNumber}</span>
+        <div className="flex items-center gap-1">
+          <span className="font-mono">{row.original.transactionNumber}</span>
           {row.original.pdfUrl && (
             <a
               href={row.original.pdfUrl}
@@ -56,7 +56,7 @@ export function createVoucherColumns(
               rel="noopener noreferrer"
               onClick={(e) => e.stopPropagation()}
             >
-              <RiExternalLinkLine className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />
+              <RiExternalLinkLine className="h-3 w-3 text-muted-foreground hover:text-foreground" />
             </a>
           )}
         </div>
@@ -64,25 +64,20 @@ export function createVoucherColumns(
     }),
     voucherHelper.accessor("type", {
       header: () => t("common.type"),
-      size: 80,
+      size: 60,
       cell: ({ getValue }) => (
-        <Badge variant={getValue() === "uitgifte" ? "default" : "secondary"}>
+        <Badge
+          variant={getValue() === "uitgifte" ? "default" : "secondary"}
+          className="text-[10px] px-1.5 h-4"
+        >
           {t(`fust.${getValue()}`)}
         </Badge>
       ),
     }),
     voucherHelper.accessor("transactionDate", {
-      header: () => t("fust.transactionDate"),
-      size: 100,
-      cell: ({ getValue }) => (
-        <span className="text-sm">{formatDate(getValue())}</span>
-      ),
-    }),
-    voucherHelper.accessor("transporterName", {
-      header: () => t("fust.transporter"),
-      cell: ({ getValue }) => (
-        <span className="truncate text-sm">{getValue() || "—"}</span>
-      ),
+      header: () => t("common.date"),
+      size: 80,
+      cell: ({ getValue }) => formatDate(getValue()),
     }),
     voucherHelper.display({
       id: "items",
@@ -92,7 +87,7 @@ export function createVoucherColumns(
           .map((item) => `${Math.abs(item.quantity)}x ${item.description}`)
           .join(", ");
         return (
-          <span className="truncate text-sm text-muted-foreground" title={summary}>
+          <span className="truncate text-muted-foreground" title={summary}>
             {summary || "—"}
           </span>
         );
@@ -100,14 +95,14 @@ export function createVoucherColumns(
     }),
     voucherHelper.display({
       id: "status",
-      header: () => t("fust.status"),
-      size: 90,
+      size: 50,
+      header: () => "",
       cell: ({ row }) => {
         const count = row.original.orderLinks.length;
         if (count === 0) return null;
         return (
-          <Badge variant="outline" className="gap-1">
-            <RiLink className="h-3 w-3" />
+          <Badge variant="outline" className="gap-0.5 text-[10px] px-1.5 h-4">
+            <RiLink className="h-2.5 w-2.5" />
             {count}
           </Badge>
         );
@@ -116,7 +111,7 @@ export function createVoucherColumns(
   ];
 }
 
-// ─── Order Columns ────────────────────────────────────
+// ─── Order Columns (no grower — grouped by it) ────────
 
 const orderHelper = createColumnHelper<OrderRef>();
 
@@ -127,7 +122,7 @@ export function createOrderColumns(
   return [
     orderHelper.display({
       id: "select",
-      size: 40,
+      size: 32,
       header: () => (
         <Checkbox
           checked={selection.allSelected}
@@ -148,34 +143,16 @@ export function createOrderColumns(
     }),
     orderHelper.accessor("orderNumber", {
       header: () => t("fust.orderNumber"),
-      size: 120,
+      size: 110,
       cell: ({ getValue }) => (
-        <span className="font-mono text-sm">{getValue()}</span>
+        <span className="font-mono">{getValue()}</span>
       ),
-    }),
-    orderHelper.display({
-      id: "grower",
-      header: () => t("fust.grower"),
-      cell: ({ row }) => {
-        const g = row.original.grower;
-        return (
-          <span className="truncate text-sm">
-            <span className="font-medium">{g.code}</span>
-            <span className="ml-1.5 text-muted-foreground">
-              {g.company || g.name}
-            </span>
-          </span>
-        );
-      },
     }),
     orderHelper.accessor("deliveredAt", {
       header: () => t("fust.delivered"),
-      size: 100,
-      cell: ({ getValue }) => (
-        <span className="text-sm">
-          {getValue() ? formatDate(getValue()!) : "—"}
-        </span>
-      ),
+      size: 80,
+      cell: ({ getValue }) =>
+        getValue() ? formatDate(getValue()!) : "—",
     }),
     orderHelper.display({
       id: "items",
@@ -185,7 +162,7 @@ export function createOrderColumns(
           .map((item) => `${item.quantity}x ${item.fustType.name}`)
           .join(", ");
         return (
-          <span className="truncate text-sm text-muted-foreground" title={summary}>
+          <span className="truncate text-muted-foreground" title={summary}>
             {summary || "—"}
           </span>
         );
@@ -193,14 +170,14 @@ export function createOrderColumns(
     }),
     orderHelper.display({
       id: "linked",
+      size: 50,
       header: () => "",
-      size: 70,
       cell: ({ row }) => {
         const count = row.original.voucherLinks?.length ?? 0;
         if (count === 0) return null;
         return (
-          <Badge variant="outline" className="gap-1">
-            <RiLink className="h-3 w-3" />
+          <Badge variant="outline" className="gap-0.5 text-[10px] px-1.5 h-4">
+            <RiLink className="h-2.5 w-2.5" />
             {count}
           </Badge>
         );

@@ -9,7 +9,6 @@ import { RiLink, RiLinkUnlink } from "@remixicon/react";
 import { toast } from "sonner";
 import { VoucherTable } from "./voucher-table";
 import { OrderTable } from "./order-table";
-import { UploadButton } from "./upload-button";
 import { useRangeSelection } from "./use-range-selection";
 import type { Voucher, OrderRef, ViewMode } from "./types";
 
@@ -59,19 +58,16 @@ export function VoucherMatching() {
     if (!allVouchers) return [];
     let result = allVouchers;
 
-    // View mode filter
     if (viewMode === "unmatched") {
       result = result.filter((v) => v.orderLinks.length === 0);
     }
 
-    // Transporter filter
     if (transporterFilter.length > 0) {
       result = result.filter(
         (v) => v.transporterName && transporterFilter.includes(v.transporterName)
       );
     }
 
-    // Grower filter (match on customerName containing grower code)
     if (growerFilter.length > 0) {
       result = result.filter(
         (v) =>
@@ -109,7 +105,6 @@ export function VoucherMatching() {
   const hasSelection =
     voucherSelection.selectedCount > 0 && orderSelection.selectedCount > 0;
 
-  // Check if any selected vouchers have links (for unlink)
   const selectedVouchersHaveLinks = useMemo(() => {
     if (!allVouchers) return false;
     return Array.from(voucherSelection.selectedIds).some((id) => {
@@ -158,13 +153,7 @@ export function VoucherMatching() {
     } finally {
       setLinking(false);
     }
-  }, [
-    hasSelection,
-    voucherSelection,
-    orderSelection,
-    tAny,
-    refetchBoth,
-  ]);
+  }, [hasSelection, voucherSelection, orderSelection, tAny, refetchBoth]);
 
   const handleUnlink = useCallback(async () => {
     if (voucherSelection.selectedCount === 0) return;
@@ -205,14 +194,14 @@ export function VoucherMatching() {
   }, [voucherSelection, allVouchers, tAny, refetchBoth]);
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-3">
       {/* ─── Toolbar ────────────────────────────────────── */}
-      <div className="relative flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         {/* View mode toggle */}
         <div className="inline-flex rounded-md border">
           <button
             type="button"
-            className={`px-3 py-1.5 text-sm font-medium rounded-l-md transition-colors ${
+            className={`px-2.5 py-1 text-xs font-medium rounded-l-md transition-colors ${
               viewMode === "unmatched"
                 ? "bg-primary text-primary-foreground"
                 : "text-muted-foreground hover:bg-muted"
@@ -223,7 +212,7 @@ export function VoucherMatching() {
           </button>
           <button
             type="button"
-            className={`px-3 py-1.5 text-sm font-medium rounded-r-md border-l transition-colors ${
+            className={`px-2.5 py-1 text-xs font-medium rounded-r-md border-l transition-colors ${
               viewMode === "all"
                 ? "bg-primary text-primary-foreground"
                 : "text-muted-foreground hover:bg-muted"
@@ -234,7 +223,6 @@ export function VoucherMatching() {
           </button>
         </div>
 
-        {/* Filters */}
         {growerOptions.length > 0 && (
           <MultiSelectFilter
             label={tAny("fust.growerFilter")}
@@ -251,17 +239,12 @@ export function VoucherMatching() {
             onChange={setTransporterFilter}
           />
         )}
-
-        {/* Upload button - pushed right */}
-        <div className="ml-auto">
-          <UploadButton onUploaded={refetchBoth} />
-        </div>
       </div>
 
       {/* ─── Mobile Tab Toggle (< lg) ──────────────────── */}
       <div className="flex border-b lg:hidden">
         <button
-          className={`flex-1 px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+          className={`flex-1 px-3 py-1.5 text-xs font-medium border-b-2 transition-colors ${
             mobileTab === "vouchers"
               ? "border-primary text-primary"
               : "border-transparent text-muted-foreground"
@@ -271,7 +254,7 @@ export function VoucherMatching() {
           {tAny("fust.vouchersCount")} ({filteredVouchers.length})
         </button>
         <button
-          className={`flex-1 px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+          className={`flex-1 px-3 py-1.5 text-xs font-medium border-b-2 transition-colors ${
             mobileTab === "orders"
               ? "border-primary text-primary"
               : "border-transparent text-muted-foreground"
@@ -283,7 +266,7 @@ export function VoucherMatching() {
       </div>
 
       {/* ─── Dual Grid ──────────────────────────────────── */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
         <div className={mobileTab !== "vouchers" ? "hidden lg:block" : ""}>
           <VoucherTable
             data={filteredVouchers}
@@ -303,8 +286,8 @@ export function VoucherMatching() {
 
       {/* ─── Action Bar ─────────────────────────────────── */}
       {(voucherSelection.selectedCount > 0 || orderSelection.selectedCount > 0) && (
-        <div className="sticky bottom-0 flex items-center justify-between rounded-lg border bg-card px-4 py-3 shadow-lg">
-          <p className="text-sm text-muted-foreground">
+        <div className="sticky bottom-0 flex items-center justify-between rounded-lg border bg-card px-3 py-2 shadow-lg">
+          <p className="text-xs text-muted-foreground">
             {voucherSelection.selectedCount > 0 && (
               <span>
                 {voucherSelection.selectedCount} {tAny("fust.vouchersCount").toLowerCase()}
@@ -321,25 +304,25 @@ export function VoucherMatching() {
             <span className="ml-1">{tAny("common.selected").toLowerCase()}</span>
           </p>
           <div className="flex items-center gap-2">
-            {/* Unlink button: only when vouchers with links are selected */}
             {selectedVouchersHaveLinks && (
               <Button
                 variant="outline"
                 size="sm"
+                className="h-7 text-xs"
                 onClick={handleUnlink}
                 disabled={unlinking}
               >
-                <RiLinkUnlink className="mr-1.5 h-4 w-4" />
+                <RiLinkUnlink className="mr-1 h-3.5 w-3.5" />
                 {tAny("fust.unlinkSelected")}
               </Button>
             )}
-            {/* Link button: needs both sides selected */}
             <Button
               size="sm"
+              className="h-7 text-xs"
               onClick={handleLink}
               disabled={!hasSelection || linking}
             >
-              <RiLink className="mr-1.5 h-4 w-4" />
+              <RiLink className="mr-1 h-3.5 w-3.5" />
               {tAny("fust.linkSelected")}
             </Button>
           </div>

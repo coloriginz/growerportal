@@ -8,6 +8,7 @@ import {
   RiBox3Line,
   RiTruckLine,
   RiReceiptLine,
+  RiFileTextLine,
   RiLogoutBoxLine,
   RiMenuLine,
   RiGroupLine,
@@ -50,6 +51,7 @@ const navItems: NavItem[] = [
   { href: "/fust-portal", labelKey: "nav.fustOrders", icon: RiBox3Line, roles: ["grower"] },
   { href: "/fust-portal/orders", labelKey: "nav.fustOrders", icon: RiBox3Line, roles: ["commercie", "admin"] },
   { href: "/fust-portal/pickups", labelKey: "fust.deliveries", icon: RiTruckLine, roles: ["transporteur", "admin"] },
+  { href: "/fust-portal/vouchers", labelKey: "nav.fustVouchers", icon: RiFileTextLine, roles: ["finance", "admin"] },
   { href: "/fust-portal/invoices", labelKey: "nav.fustInvoices", icon: RiReceiptLine, roles: ["finance", "admin"] },
 ];
 

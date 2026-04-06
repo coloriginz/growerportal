@@ -13,7 +13,7 @@ export function FustFinance() {
     <div className="space-y-6">
       <h1 className="text-2xl font-bold tracking-tight">
         {activeTab === "vouchers"
-          ? t("fust.vouchers" as Parameters<typeof t>[0])
+          ? t("fust.matchingView" as Parameters<typeof t>[0])
           : t("fust.invoices" as Parameters<typeof t>[0])}
       </h1>
 

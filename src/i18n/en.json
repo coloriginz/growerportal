@@ -71,6 +71,7 @@
     "fustOrders": "Fust Orders",
     "fustPickups": "Deliveries",
     "fustInvoices": "Fust Invoices",
+    "fustVouchers": "Received Vouchers",
     "fustSettings": "Fust Settings"
   },
   "dashboard": {
@@ -525,6 +526,7 @@
     "noVouchersToMatch": "No vouchers to match",
     "noOrdersToMatch": "No orders available",
     "growerFilter": "Grower",
-    "transporterFilter": "Transporter"
+    "transporterFilter": "Transporter",
+    "receivedVouchers": "Received Vouchers"
   }
 }

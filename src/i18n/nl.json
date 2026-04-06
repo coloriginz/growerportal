@@ -71,6 +71,7 @@
     "fustOrders": "Fustbestellingen",
     "fustPickups": "Leveringen",
     "fustInvoices": "Fust Facturen",
+    "fustVouchers": "Ontvangen Bonnen",
     "fustSettings": "Fust Instellingen"
   },
   "dashboard": {
@@ -525,6 +526,7 @@
     "noVouchersToMatch": "Geen bonnen om te koppelen",
     "noOrdersToMatch": "Geen orders beschikbaar",
     "growerFilter": "Kweker",
-    "transporterFilter": "Transporteur"
+    "transporterFilter": "Transporteur",
+    "receivedVouchers": "Ontvangen Bonnen"
   }
 }

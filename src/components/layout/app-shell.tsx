@@ -73,6 +73,7 @@ const fustNavItems: NavItem[] = [
   { href: "/fust", labelKey: "nav.fustOrders", icon: RiBox3Line, roles: ["grower"] },
   { href: "/fust/orders", labelKey: "nav.fustOrders", icon: RiBox3Line, roles: ["commercie", "admin"] },
   { href: "/fust/pickups", labelKey: "nav.fustPickups", icon: RiTruckLine, roles: ["transporteur"] },
+  { href: "/fust/vouchers", labelKey: "nav.fustVouchers", icon: RiFileTextLine, roles: ["finance", "admin"] },
   { href: "/fust/invoices", labelKey: "nav.fustInvoices", icon: RiReceiptLine, roles: ["finance"] },
 ];
 
