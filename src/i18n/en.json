@@ -68,6 +68,7 @@
     "users": "Users",
     "selectGrower": "Select Grower",
     "forecasts": "Forecasts",
+    "fustCatalogue": "Catalogue",
     "fustOrder": "Order",
     "fustMyOrders": "My Orders",
     "fustDeliveries": "Deliveries",
@@ -335,6 +336,7 @@
   },
   "fust": {
     "title": "Fust Orders",
+    "catalogue": "Catalogue",
     "order": "Order",
     "orders": "Orders",
     "newOrder": "New Order",

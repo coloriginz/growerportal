@@ -183,7 +183,7 @@ export function FustWebshop({ growerId, userRole }: FustWebshopProps) {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">{t("fust.title")}</h1>
+        <h1 className="text-2xl font-bold tracking-tight">{canOrder ? t("fust.title") : t("fust.catalogue")}</h1>
       </div>
 
       <div className="space-y-6">

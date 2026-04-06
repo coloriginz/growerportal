@@ -71,6 +71,7 @@ const mainNavItems: NavItem[] = [
 ];
 
 const fustNavItems: NavItem[] = [
+  { href: "/fust", labelKey: "nav.fustCatalogue", icon: RiPriceTag3Line, roles: ["commercie", "admin"] },
   { href: "/fust", labelKey: "nav.fustOrder", icon: RiShoppingCartLine, roles: ["grower"] },
   { href: "/fust/my-orders", labelKey: "nav.fustMyOrders", icon: RiBox3Line, roles: ["grower"] },
   { href: "/fust/deliveries", labelKey: "nav.fustDeliveries", icon: RiTruckLine, roles: ["grower"] },
@@ -197,11 +198,11 @@ export function AppShell({ user, children }: AppShellProps) {
             <>
               <Separator className="bg-sidebar-border !my-3" />
               {filteredFustNav.map((item) => {
-                const isActive = pathname.startsWith(item.href);
+                const isActive = item.href === "/fust" ? pathname === "/fust" : pathname.startsWith(item.href);
                 const Icon = item.icon;
                 return (
                   <Link
-                    key={item.href}
+                    key={item.labelKey}
                     href={growerId ? `${item.href}?growerId=${growerId}` : item.href}
                     onClick={() => setMobileOpen(false)}
                     className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150 ${

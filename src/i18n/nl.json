@@ -68,6 +68,7 @@
     "users": "Gebruikers",
     "selectGrower": "Selecteer Kweker",
     "forecasts": "Aanvoerplanning",
+    "fustCatalogue": "Catalogus",
     "fustOrder": "Bestellen",
     "fustMyOrders": "Mijn Bestellingen",
     "fustDeliveries": "Leveringen",
@@ -335,6 +336,7 @@
   },
   "fust": {
     "title": "Fustbestellingen",
+    "catalogue": "Catalogus",
     "order": "Bestelling",
     "orders": "Bestellingen",
     "newOrder": "Nieuwe Bestelling",

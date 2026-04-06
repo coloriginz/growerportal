@@ -50,6 +50,7 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
+  { href: "/fust-portal", labelKey: "nav.fustCatalogue", icon: RiPriceTag3Line, roles: ["commercie", "admin"] },
   { href: "/fust-portal", labelKey: "nav.fustOrder", icon: RiShoppingCartLine, roles: ["grower"] },
   { href: "/fust-portal/my-orders", labelKey: "nav.fustMyOrders", icon: RiBox3Line, roles: ["grower"] },
   { href: "/fust-portal/deliveries", labelKey: "nav.fustDeliveries", icon: RiTruckLine, roles: ["grower"] },
@@ -114,7 +115,7 @@ export function FustShell({ user, children }: FustShellProps) {
             const Icon = item.icon;
             return (
               <Link
-                key={item.href}
+                key={item.labelKey}
                 href={href(item.href)}
                 onClick={() => setMobileOpen(false)}
                 className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150 ${
