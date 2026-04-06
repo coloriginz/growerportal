@@ -238,9 +238,11 @@ export function FustOrders() {
                     <TableCell>
                       <div className="flex flex-col gap-0.5">
                         {order.items.map((item) => (
-                          <span key={item.id} className="text-xs">
-                            {item.quantity}x {item.fustType.name}
-                          </span>
+                          <div key={item.id} className="flex items-center gap-2 text-xs">
+                            <span className="font-mono font-semibold text-primary">{item.fustType.code}</span>
+                            <span className="truncate">{item.fustType.name}</span>
+                            <span className="font-medium">{item.quantity}x</span>
+                          </div>
                         ))}
                       </div>
                     </TableCell>

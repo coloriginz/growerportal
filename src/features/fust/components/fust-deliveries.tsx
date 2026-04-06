@@ -19,7 +19,6 @@ import {
 import {
   RiTruckLine,
   RiCheckLine,
-  RiBox3Line,
 } from "@remixicon/react";
 import { toast } from "sonner";
 
@@ -216,7 +215,10 @@ export function FustDeliveries() {
                     className="flex items-center justify-between gap-4 rounded-md border p-3"
                   >
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium">{item.fustType.name}</p>
+                      <p className="text-sm font-medium">
+                        <span className="font-mono text-primary">{item.fustType.code}</span>{" "}
+                        {item.fustType.name}
+                      </p>
                       <p className="text-xs text-muted-foreground">
                         {t("fust.orderedQuantity" as Parameters<typeof t>[0])}: {formatNumber(item.quantity)}
                       </p>
@@ -285,20 +287,21 @@ function OrderCard({ order, onConfirm, t }: OrderCardProps) {
               {t("fust.requestedDate")}: {formatDate(order.requestedDate)}
             </p>
           )}
-          <div className="mt-2 flex flex-wrap gap-2">
+          <div className="mt-2 space-y-1">
             {order.items.map((item) => (
-              <span
+              <div
                 key={item.id}
-                className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-0.5 text-xs"
+                className="flex items-center gap-3 text-sm"
               >
-                <RiBox3Line className="h-3 w-3" />
-                {item.quantity}x {item.fustType.name}
+                <span className="font-mono text-xs font-semibold text-primary w-16 shrink-0">{item.fustType.code}</span>
+                <span className="flex-1 truncate">{item.fustType.name}</span>
+                <span className="font-medium tabular-nums">{item.quantity}x</span>
                 {item.deliveredQuantity != null && order.status === "delivered" && (
-                  <span className="text-muted-foreground">
+                  <span className="text-xs text-muted-foreground tabular-nums">
                     ({t("fust.deliveredQuantity" as Parameters<typeof t>[0])}: {formatNumber(item.deliveredQuantity)})
                   </span>
                 )}
-              </span>
+              </div>
             ))}
           </div>
           {order.notes && (

@@ -22,7 +22,6 @@ import {
   RiCheckLine,
   RiArrowDownSLine,
   RiArrowUpSLine,
-  RiBox3Line,
 } from "@remixicon/react";
 import { toast } from "sonner";
 
@@ -442,11 +441,15 @@ export function FustPickups() {
                         <p className="text-sm font-medium">
                           {order.orderNumber} - {order.grower.name}
                         </p>
-                        <p className="text-xs text-muted-foreground">
-                          {order.items
-                            .map((i) => `${i.quantity}x ${i.fustType.name}`)
-                            .join(", ")}
-                        </p>
+                        <div className="mt-0.5 space-y-0.5">
+                          {order.items.map((i) => (
+                            <p key={i.id} className="text-xs text-muted-foreground">
+                              <span className="font-mono font-semibold">{i.fustType.code}</span>{" "}
+                              {i.fustType.name}{" "}
+                              <span className="font-medium">{i.quantity}x</span>
+                            </p>
+                          ))}
+                        </div>
                       </div>
                     </label>
                   ))}
@@ -492,7 +495,10 @@ export function FustPickups() {
                     className="flex items-center justify-between gap-4 rounded-md border p-3"
                   >
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium">{item.fustType.name}</p>
+                      <p className="text-sm font-medium">
+                        <span className="font-mono text-primary">{item.fustType.code}</span>{" "}
+                        {item.fustType.name}
+                      </p>
                       <p className="text-xs text-muted-foreground">
                         {t("fust.ordered")}: {formatNumber(item.quantity)}
                       </p>
@@ -636,24 +642,25 @@ function PickupCard({
                       {delivery.order.grower.company &&
                         ` - ${delivery.order.grower.company}`}
                     </p>
-                    <div className="mt-1.5 flex flex-wrap gap-2">
+                    <div className="mt-2 space-y-1">
                       {delivery.order.items.map((item) => {
                         const deliveryItem = delivery.items.find(
                           (di) => di.fustTypeId === item.fustTypeId
                         );
                         return (
-                          <span
+                          <div
                             key={item.id}
-                            className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-0.5 text-xs"
+                            className="flex items-center gap-3 text-sm"
                           >
-                            <RiBox3Line className="h-3 w-3" />
-                            {item.quantity}x {item.fustType.name}
+                            <span className="font-mono text-xs font-semibold text-primary w-16 shrink-0">{item.fustType.code}</span>
+                            <span className="flex-1 truncate">{item.fustType.name}</span>
+                            <span className="font-medium tabular-nums">{item.quantity}x</span>
                             {deliveryItem && delivery.status === "delivered" && (
-                              <span className="text-muted-foreground">
+                              <span className="text-xs text-muted-foreground tabular-nums">
                                 ({t("fust.actualDelivered")}: {deliveryItem.quantity})
                               </span>
                             )}
-                          </span>
+                          </div>
                         );
                       })}
                     </div>
