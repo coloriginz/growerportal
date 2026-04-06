@@ -5,4 +5,5 @@ export { FustDeliveries } from "./fust-deliveries";
 export { FustInvoices } from "./fust-invoices";
 export { FustFinance } from "./fust-finance";
 export { FustVouchers } from "./fust-vouchers";
+export { VoucherMatching } from "./voucher-matching";
 export { FustSettings } from "./fust-settings";

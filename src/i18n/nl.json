@@ -27,7 +27,9 @@
     "offline": "U bent offline. Sommige functies zijn mogelijk niet beschikbaar.",
     "total": "Totaal",
     "description": "Omschrijving",
-    "clearFilters": "Filters wissen"
+    "clearFilters": "Filters wissen",
+    "selected": "Geselecteerd",
+    "type": "Type"
   },
   "auth": {
     "login": "Inloggen",
@@ -512,6 +514,17 @@
     "uploadComplete": "Upload voltooid",
     "uploadFailed": "Upload mislukt",
     "tabVouchers": "Bonnen",
-    "tabInvoices": "Facturen"
+    "tabInvoices": "Facturen",
+    "matchingView": "Bonnen Koppelen",
+    "linkSelected": "Koppelen",
+    "unlinkSelected": "Ontkoppelen",
+    "viewUnmatched": "Niet-gekoppeld",
+    "viewAll": "Alles",
+    "vouchersCount": "Bonnen",
+    "ordersCount": "Orders",
+    "noVouchersToMatch": "Geen bonnen om te koppelen",
+    "noOrdersToMatch": "Geen orders beschikbaar",
+    "growerFilter": "Kweker",
+    "transporterFilter": "Transporteur"
   }
 }

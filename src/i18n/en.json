@@ -27,7 +27,9 @@
     "offline": "You are offline. Some features may be unavailable.",
     "total": "Total",
     "description": "Description",
-    "clearFilters": "Clear filters"
+    "clearFilters": "Clear filters",
+    "selected": "Selected",
+    "type": "Type"
   },
   "auth": {
     "login": "Sign In",
@@ -512,6 +514,17 @@
     "uploadComplete": "Upload complete",
     "uploadFailed": "Upload failed",
     "tabVouchers": "Vouchers",
-    "tabInvoices": "Invoices"
+    "tabInvoices": "Invoices",
+    "matchingView": "Voucher Matching",
+    "linkSelected": "Link Selected",
+    "unlinkSelected": "Unlink",
+    "viewUnmatched": "Unmatched",
+    "viewAll": "All",
+    "vouchersCount": "Vouchers",
+    "ordersCount": "Orders",
+    "noVouchersToMatch": "No vouchers to match",
+    "noOrdersToMatch": "No orders available",
+    "growerFilter": "Grower",
+    "transporterFilter": "Transporter"
   }
 }

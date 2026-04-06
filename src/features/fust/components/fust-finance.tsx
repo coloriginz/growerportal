@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useLanguage } from "@/components/providers/language-provider";
-import { FustVouchers } from "./fust-vouchers";
+import { VoucherMatching } from "./voucher-matching";
 import { FustInvoices } from "./fust-invoices";
 
 export function FustFinance() {
@@ -42,7 +42,7 @@ export function FustFinance() {
       </div>
 
       {/* Tab content */}
-      {activeTab === "vouchers" ? <FustVouchers /> : <FustInvoices />}
+      {activeTab === "vouchers" ? <VoucherMatching /> : <FustInvoices />}
     </div>
   );
 }
