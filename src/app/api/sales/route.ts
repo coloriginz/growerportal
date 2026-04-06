@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireAuth, resolveGrowerId } from "@/lib/api-helpers";
 import { startOfDay, subDays, startOfWeek, startOfMonth, startOfYear, format, getISOWeek, setISOWeek, setYear, endOfISOWeek, startOfISOWeek } from "date-fns";
+import { getSeasonStart } from "@/lib/season";
 
 export async function GET(request: NextRequest) {
   const { error, session } = await requireAuth();
@@ -60,9 +61,19 @@ export async function GET(request: NextRequest) {
       break;
     }
     case "ytd":
-    default:
-      dateFrom = startOfYear(now);
+    default: {
+      // Use season start if a specific grower is selected
+      if (growerId) {
+        const growerRecord = await prisma.grower.findUnique({
+          where: { id: growerId },
+          select: { seasonStartMonth: true },
+        });
+        dateFrom = getSeasonStart(now, growerRecord?.seasonStartMonth ?? 1);
+      } else {
+        dateFrom = startOfYear(now);
+      }
       break;
+    }
   }
 
   const dateFilter = dateTo

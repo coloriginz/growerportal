@@ -5,7 +5,8 @@ import { isTest } from "@/lib/env";
 
 // GET /api/admin/settings?keys=test_email_mode,test_email_redirect
 export async function GET(request: NextRequest) {
-  const { error } = await requireAuth(["admin"]);
+  // Test email settings are accessible to all logged-in users in test env
+  const { error } = await requireAuth();
   if (error) return error;
 
   if (!isTest) {
@@ -28,7 +29,8 @@ export async function GET(request: NextRequest) {
 
 // PUT /api/admin/settings
 export async function PUT(request: NextRequest) {
-  const { error } = await requireAuth(["admin"]);
+  // Test email settings are accessible to all logged-in users in test env
+  const { error } = await requireAuth();
   if (error) return error;
 
   if (!isTest) {

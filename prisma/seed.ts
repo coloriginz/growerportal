@@ -97,6 +97,15 @@ function randomDate(start: Date, end: Date): Date {
 
 async function main() {
   console.log("Clearing database...");
+  await prisma.fustGrowerCharge.deleteMany();
+  await prisma.fustInvoiceItem.deleteMany();
+  await prisma.fustInvoice.deleteMany();
+  await prisma.fustDeliveryItem.deleteMany();
+  await prisma.fustDelivery.deleteMany();
+  await prisma.fustOrderItem.deleteMany();
+  await prisma.fustOrder.deleteMany();
+  await prisma.fustPickup.deleteMany();
+  await prisma.fustType.deleteMany();
   await prisma.changeRequest.deleteMany();
   await prisma.qualityIssue.deleteMany();
   await prisma.lotCost.deleteMany();
@@ -107,7 +116,33 @@ async function main() {
   await prisma.document.deleteMany();
   await prisma.certificate.deleteMany();
   await prisma.user.deleteMany();
+  await prisma.transporter.deleteMany();
   await prisma.grower.deleteMany();
+  await prisma.company.deleteMany();
+
+  // ─── SEED COMPANIES ─────────────────────────────────────
+  console.log("Creating companies...");
+  const coloriginzCompany = await prisma.company.create({
+    data: {
+      name: "Coloriginz",
+      slug: "coloriginz",
+      logoUrl: "/logos/coloriginz.png",
+      emailFrom: "noreply@coloriginz.com",
+      emailName: "Coloriginz Grower Portal",
+      footerText: "Coloriginz \u2014 OZ Import BV, Aalsmeer",
+    },
+  });
+
+  const mypeonyCompany = await prisma.company.create({
+    data: {
+      name: "MyPeony",
+      slug: "mypeony",
+      logoUrl: "/logos/mypeony.png",
+      emailFrom: "noreply@mypeonysociety.com",
+      emailName: "MyPeony Grower Portal",
+      footerText: "MyPeony Society",
+    },
+  });
 
   console.log("Creating admin and commercie users...");
   const adminPasswordHash = await hash("Colori2026!", 12);
@@ -148,9 +183,15 @@ async function main() {
   console.log("Creating 20 growers with data...");
   const growerPasswordHash = await hash("GreenField99", 12);
 
+  // Assign first 17 growers to Coloriginz, last 3 to MyPeony
+  const MYPEONY_CODES = ["ANDEAN", "CAPFLO", "EUROBQ"];
+
   for (let i = 0; i < GROWERS.length; i++) {
     const growerData = GROWERS[i];
     const commercie = pick(commercieUsers);
+    const companyId = MYPEONY_CODES.includes(growerData.code)
+      ? mypeonyCompany.id
+      : coloriginzCompany.id;
 
     // Create grower
     const grower = await prisma.grower.create({
@@ -165,6 +206,7 @@ async function main() {
         vatNumber: growerData.vatNumber || null,
         ggn: growerData.ggn || null,
         commercieId: commercie.id,
+        companyId,
       },
     });
 
@@ -470,6 +512,102 @@ async function main() {
     }
   }
 
+  // ─── SEED FUST DATA ──────────────────────────────────────
+  console.log("Creating fust types and transporter...");
+
+  // Create transporter
+  const transporter = await prisma.transporter.create({
+    data: {
+      name: "FlowerTrans BV",
+      email: "dispatch@flowertrans.nl",
+      phone: "+31 20 555 0100",
+      isActive: true,
+    },
+  });
+
+  // Create transporteur user
+  const transporteurPasswordHash = await hash("Transport#2026", 12);
+  await prisma.user.create({
+    data: {
+      email: "chauffeur@flowertrans.nl",
+      passwordHash: transporteurPasswordHash,
+      name: "Kees de Vries",
+      role: "transporteur",
+      isActive: true,
+      transporterId: transporter.id,
+    },
+  });
+
+  // Create finance user
+  const financePasswordHash = await hash("Finance#2026", 12);
+  await prisma.user.create({
+    data: {
+      email: "finance@coloriginz.com",
+      passwordHash: financePasswordHash,
+      name: "Lisa Boekhouder",
+      role: "finance",
+      isActive: true,
+    },
+  });
+
+  // Seed FustTypes
+  const FUST_TYPES = [
+    // Meermalig bloemenfust (emmers)
+    { code: "Fc555", name: "Bloemenemmer nieuw (2026)", category: "emmers", pricePerUnit: 3.50, sortOrder: 1 },
+    { code: "Fc566", name: "Bloemenemmer klein", category: "emmers", pricePerUnit: 3.00, sortOrder: 2 },
+    { code: "Fc577", name: "Bloemenemmer groot (oud)", category: "emmers", pricePerUnit: 3.50, sortOrder: 3 },
+    { code: "Fc588", name: "Bloemenemmer groot (nieuw)", category: "emmers", pricePerUnit: 3.50, sortOrder: 4 },
+    { code: "Fc965", name: "Container + draagplateau", category: "emmers", pricePerUnit: 5.00, sortOrder: 5 },
+    { code: "Fc996", name: "Bloemenemmer Fc566 + opzetrek", category: "emmers", pricePerUnit: 4.80, sortOrder: 6 },
+    { code: "Fc997", name: "Bloemenemmer Fc577 + opzetrek", category: "emmers", pricePerUnit: 5.50, sortOrder: 7 },
+    { code: "Fc998", name: "Bloemenemmer Fc588 + opzetrek", category: "emmers", pricePerUnit: 5.50, sortOrder: 8 },
+    // Opzetrekken
+    { code: "Fc595", name: "Laag opzetrek meermalig", category: "opzetrekken", pricePerUnit: 1.80, sortOrder: 1 },
+    { code: "Fc596", name: "Hoog opzetrek meermalig", category: "opzetrekken", pricePerUnit: 2.00, sortOrder: 2 },
+    { code: "Fc597", name: "Opzetrek / draagplateau", category: "opzetrekken", pricePerUnit: 2.00, sortOrder: 3 },
+    // Karren/containers
+    { code: "3170", name: "Deense kar", category: "karren", pricePerUnit: 10.50, sortOrder: 1 },
+    { code: "3171", name: "CC container", category: "karren", pricePerUnit: 12.00, sortOrder: 2 },
+    { code: "3175", name: "Deense kar half", category: "karren", pricePerUnit: 7.50, sortOrder: 3 },
+    { code: "3180", name: "Stapelwagen", category: "karren", pricePerUnit: 15.00, sortOrder: 4 },
+    { code: "3190", name: "Palletkar", category: "karren", pricePerUnit: 18.00, sortOrder: 5 },
+    // Kratten
+    { code: "4100", name: "Normkrat", category: "kratten", pricePerUnit: 1.30, sortOrder: 1 },
+    { code: "4200", name: "Veilingkrat groen", category: "kratten", pricePerUnit: 1.50, sortOrder: 2 },
+    { code: "4210", name: "Veilingkrat blauw", category: "kratten", pricePerUnit: 1.50, sortOrder: 3 },
+    { code: "4250", name: "Boekettenkrat", category: "kratten", pricePerUnit: 2.20, sortOrder: 4 },
+    { code: "4500", name: "Emmerkrat", category: "kratten", pricePerUnit: 1.80, sortOrder: 5 },
+    { code: "4910", name: "ELF-tray", category: "kratten", pricePerUnit: 0.85, sortOrder: 6 },
+    { code: "4920", name: "Procona 12/14", category: "kratten", pricePerUnit: 1.10, sortOrder: 7 },
+    { code: "4930", name: "Procona 16", category: "kratten", pricePerUnit: 1.25, sortOrder: 8 },
+    { code: "4940", name: "Procona 19", category: "kratten", pricePerUnit: 1.40, sortOrder: 9 },
+    // Dozen/overig
+    { code: "5100", name: "Inzet 1/1", category: "dozen", pricePerUnit: 0.35, sortOrder: 1 },
+    { code: "5200", name: "Inzet 1/2", category: "dozen", pricePerUnit: 0.25, sortOrder: 2 },
+    { code: "5310", name: "Hoezen lang", category: "overig", pricePerUnit: 0.15, sortOrder: 1 },
+    { code: "5320", name: "Hoezen kort", category: "overig", pricePerUnit: 0.12, sortOrder: 2 },
+    { code: "6100", name: "Beschermdop", category: "overig", pricePerUnit: 0.08, sortOrder: 3 },
+    { code: "7100", name: "Waterbuisje", category: "overig", pricePerUnit: 0.05, sortOrder: 4 },
+  ];
+
+  for (const ft of FUST_TYPES) {
+    await prisma.fustType.create({ data: ft });
+  }
+
+  // Enable fust for first 5 growers and set default transporter
+  const fustGrowers = await prisma.grower.findMany({ take: 5, select: { id: true } });
+  for (const g of fustGrowers) {
+    await prisma.grower.update({
+      where: { id: g.id },
+      data: { fustEnabled: true, defaultTransporterId: transporter.id },
+    });
+  }
+
+  const fustTypeCount = await prisma.fustType.count();
+  console.log(`  ${fustTypeCount} fust types created`);
+  console.log(`  1 transporter (FlowerTrans BV)`);
+  console.log(`  ${fustGrowers.length} growers with fust enabled`);
+
   // Summary
   const growerCount = await prisma.grower.count();
   const userCount = await prisma.user.count();
@@ -477,17 +615,23 @@ async function main() {
   const txCount = await prisma.transaction.count();
   const ssCount = await prisma.salesSheet.count();
 
+  const companyCount = await prisma.company.count();
+
   console.log(`\nSeed complete!`);
+  console.log(`  ${companyCount} companies`);
   console.log(`  ${growerCount} growers`);
   console.log(`  ${userCount} users`);
   console.log(`  ${ssCount} sales sheets`);
   console.log(`  ${lotCount} lots`);
   console.log(`  ${txCount} transactions`);
   console.log(`  ${forecastCount} forecasts`);
+  console.log(`  ${fustTypeCount} fust types`);
   console.log(`\nLogin credentials:`);
   console.log(`  Admin: admin@coloriginz.com / Colori2026!`);
   console.log(`  Commercie: iris.inkoper@coloriginz.com / FloraDesk#24`);
   console.log(`  Grower (example): pcfup@example.com / GreenField99`);
+  console.log(`  Transporteur: chauffeur@flowertrans.nl / Transport#2026`);
+  console.log(`  Finance: finance@coloriginz.com / Finance#2026`);
 }
 
 main()

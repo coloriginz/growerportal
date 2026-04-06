@@ -13,6 +13,7 @@ interface GrowerOption {
   code: string;
   name: string;
   company: string | null;
+  companyEntity?: { id: string; name: string; slug: string } | null;
 }
 
 function GrowerSelectorInner() {

@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import { Geist, JetBrains_Mono } from "next/font/google";
 import { Providers } from "@/components/providers";
+import { getCompanyBranding } from "@/lib/company-config";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -13,10 +15,16 @@ const jetbrainsMono = JetBrains_Mono({
   subsets: ["latin"],
 });
 
-export const metadata: Metadata = {
-  title: "Grower Portal | Coloriginz",
-  description: "Grower Portal for Coloriginz consignment growers",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const headersList = await headers();
+  const companySlug = headersList.get("x-company-slug") || "coloriginz";
+  const company = getCompanyBranding(companySlug);
+
+  return {
+    title: `Grower Portal | ${company.name}`,
+    description: `Grower Portal for ${company.name} consignment growers`,
+  };
+}
 
 export default function RootLayout({
   children,

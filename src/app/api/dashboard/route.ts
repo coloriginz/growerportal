@@ -10,6 +10,7 @@ import {
   getISOWeek,
   getISOWeekYear,
 } from "date-fns";
+import { getSeasonStart, getPreviousSeasonDates } from "@/lib/season";
 
 export async function GET(request: NextRequest) {
   const { error, session } = await requireAuth();
@@ -38,15 +39,23 @@ export async function GET(request: NextRequest) {
       monthlySales: [],
       topProducts: [],
       recentLots: [],
+      seasonStartMonth: 1,
     });
   }
+
+  // Fetch grower's season start month
+  const growerRecord = await prisma.grower.findUnique({
+    where: { id: growerId },
+    select: { seasonStartMonth: true },
+  });
+  const seasonStartMonth = growerRecord?.seasonStartMonth ?? 1;
 
   const now = new Date();
   const todayStart = startOfDay(now);
   const yesterdayStart = startOfDay(subDays(now, 1));
-  const ytdStart = startOfYear(now);
-  const lastYearYtdStart = startOfYear(subYears(now, 1));
-  const lastYearSameDate = subYears(now, 1);
+  const ytdStart = getSeasonStart(now, seasonStartMonth);
+  const { seasonStart: lastYearYtdStart, sameDate: lastYearSameDate } =
+    getPreviousSeasonDates(now, seasonStartMonth);
 
   const growerFilter = { lot: { growerId } };
   const notCorrection = { isCorrection: false };
@@ -96,13 +105,15 @@ export async function GET(request: NextRequest) {
   const stemsYTDLastYear = lastYearYtdAgg._sum.stems || 0;
   const turnoverYTDLastYear = Number(lastYearYtdAgg._sum.amount) || 0;
 
-  // Monthly sales (current year + last year)
+  // Monthly sales (current season + previous season)
   const monthlySales = [];
-  for (let month = 0; month < 12; month++) {
-    const monthStart = new Date(now.getFullYear(), month, 1);
-    const monthEnd = new Date(now.getFullYear(), month + 1, 1);
-    const lastYearMonthStart = new Date(now.getFullYear() - 1, month, 1);
-    const lastYearMonthEnd = new Date(now.getFullYear() - 1, month + 1, 1);
+  for (let i = 0; i < 12; i++) {
+    const monthIdx = (seasonStartMonth - 1 + i) % 12; // 0-based month index
+    const yearOffset = (seasonStartMonth - 1 + i) >= 12 ? 1 : 0;
+    const monthStart = new Date(ytdStart.getFullYear() + yearOffset, monthIdx, 1);
+    const monthEnd = new Date(ytdStart.getFullYear() + yearOffset, monthIdx + 1, 1);
+    const lastYearMonthStart = new Date(monthStart.getFullYear() - 1, monthIdx, 1);
+    const lastYearMonthEnd = new Date(monthStart.getFullYear() - 1, monthIdx + 1, 1);
 
     if (monthStart > now) break;
 
@@ -225,6 +236,7 @@ export async function GET(request: NextRequest) {
       avgPrice: Number(l.avgPrice),
       deliveryDate: l.deliveryDate.toISOString(),
     })),
+    seasonStartMonth,
   });
 }
 

@@ -18,16 +18,20 @@ export async function GET(
       certificates: {
         orderBy: { createdAt: "desc" },
       },
-      user: {
+      users: {
         select: {
           id: true,
+          name: true,
           email: true,
           isActive: true,
-          activationToken: true,
         },
+        orderBy: { createdAt: "asc" },
       },
       commercie: {
         select: { id: true, name: true, email: true },
+      },
+      companyEntity: {
+        select: { id: true, name: true, slug: true },
       },
     },
   });
@@ -50,6 +54,9 @@ export async function GET(
     ggn: grower.ggn,
     commercie: grower.commercie,
     commercieId: grower.commercieId,
+    companyId: grower.companyId,
+    companyEntity: grower.companyEntity,
+    seasonStartMonth: grower.seasonStartMonth,
     certificates: grower.certificates.map((c) => ({
       id: c.id,
       type: c.type,
@@ -57,13 +64,12 @@ export async function GET(
       validFrom: c.validFrom,
       validUntil: c.validUntil,
     })),
-    user: grower.user
-      ? {
-          id: grower.user.id,
-          email: grower.user.email,
-          isActive: grower.user.isActive,
-        }
-      : null,
+    users: grower.users.map((u) => ({
+      id: u.id,
+      name: u.name,
+      email: u.email,
+      isActive: u.isActive,
+    })),
   });
 }
 
@@ -78,6 +84,8 @@ const updateGrowerSchema = z.object({
   vatNumber: z.string().nullable().optional(),
   ggn: z.string().nullable().optional(),
   commercieId: z.string().nullable().optional(),
+  companyId: z.string().nullable().optional(),
+  seasonStartMonth: z.number().int().min(1).max(12).optional(),
 });
 
 export async function PUT(
