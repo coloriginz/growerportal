@@ -77,8 +77,8 @@ interface CommercieUser {
 
 export function GrowerDetail({ growerId }: { growerId: string }) {
   const [grower, setGrower] = useState<GrowerData | null>(null);
-  const [commercieUsers, setCommercieUsers] = useState<CommercieUser[]>([]);
-  const [companies, setCompanies] = useState<CompanyOption[]>([]);
+  const [commercieUsers, setCommercieUsers] = useState<CommercieUser[] | null>(null);
+  const [companies, setCompanies] = useState<CompanyOption[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [newUserName, setNewUserName] = useState("");
@@ -143,6 +143,8 @@ export function GrowerDetail({ growerId }: { growerId: string }) {
     const res = await fetch("/api/admin/commercie");
     if (res.ok) {
       setCommercieUsers(await res.json());
+    } else {
+      setCommercieUsers([]);
     }
   }
 
@@ -150,6 +152,8 @@ export function GrowerDetail({ growerId }: { growerId: string }) {
     const res = await fetch("/api/companies");
     if (res.ok) {
       setCompanies(await res.json());
+    } else {
+      setCompanies([]);
     }
   }
 
@@ -394,7 +398,7 @@ export function GrowerDetail({ growerId }: { growerId: string }) {
           <CardContent>
             <div className="max-w-sm space-y-2">
               <Label>{t("growers.accountManager")}</Label>
-              {commercieUsers.length > 0 ? (
+              {commercieUsers !== null ? (
                 <Select
                   value={form.commercieId || "none"}
                   onValueChange={(v) => {
@@ -430,7 +434,7 @@ export function GrowerDetail({ growerId }: { growerId: string }) {
           <CardContent>
             <div className="max-w-sm space-y-2">
               <Label>Company</Label>
-              {companies.length > 0 ? (
+              {companies !== null ? (
                 <Select
                   value={form.companyId || "none"}
                   onValueChange={(v) => {

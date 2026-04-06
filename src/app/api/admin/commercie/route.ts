@@ -7,7 +7,7 @@ export async function GET() {
   if (error) return error;
 
   const users = await prisma.user.findMany({
-    where: { role: "commercie", isActive: true },
+    where: { role: { in: ["commercie", "admin"] }, isActive: true },
     select: { id: true, name: true, email: true },
     orderBy: { name: "asc" },
   });
