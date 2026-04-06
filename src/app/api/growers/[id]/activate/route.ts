@@ -5,7 +5,7 @@ import { z } from "zod";
 import { v4 as uuidv4 } from "uuid";
 import { sendEmail } from "@/lib/email";
 import { activationEmailHtml } from "@/lib/email-templates";
-import { logoBase64 } from "@/lib/logo-base64";
+import { getGrowerEmailBranding } from "@/lib/company-helpers";
 
 const schema = z.object({
   email: z.string().email(),
@@ -16,23 +16,35 @@ const schema = z.object({
 async function sendActivationEmail(
   email: string,
   name: string,
-  activationToken: string
+  activationToken: string,
+  growerId: string,
 ): Promise<string | false> {
+  const branding = await getGrowerEmailBranding(growerId);
   const activationUrl = `${process.env.APP_URL}/activate?token=${activationToken}`;
 
   const html = activationEmailHtml({
     name,
     activationUrl,
+    branding: {
+      companyName: branding.companyName,
+      portalName: branding.portalName,
+      footerText: branding.footerText,
+    },
   });
+
+  const fromAddress = branding.emailFrom && branding.emailName
+    ? `"${branding.emailName}" <${branding.emailFrom}>`
+    : undefined;
 
   const { previewUrl } = await sendEmail({
     to: email,
-    subject: "Activate your Coloriginz Grower Portal account",
+    subject: `Activate your ${branding.portalName} account`,
     html,
+    from: fromAddress,
     attachments: [
       {
         filename: "logo.png",
-        content: Buffer.from(logoBase64, "base64"),
+        content: Buffer.from(branding.logoBase64, "base64"),
         cid: "logo",
       },
     ],
@@ -83,7 +95,7 @@ export async function POST(
       },
     });
 
-    const previewUrl = await sendActivationEmail(email, existingUser.name, activationToken);
+    const previewUrl = await sendActivationEmail(email, existingUser.name, activationToken, id);
 
     return NextResponse.json({
       userId,
@@ -112,7 +124,7 @@ export async function POST(
   });
 
   // Send activation email
-  const previewUrl = await sendActivationEmail(email, name, activationToken);
+  const previewUrl = await sendActivationEmail(email, name, activationToken, grower.id);
 
   return NextResponse.json({
     userId: user.id,

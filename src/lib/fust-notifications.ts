@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/db";
 import { sendEmail } from "@/lib/email";
 import { fustOrderApprovedEmailHtml } from "@/lib/email-templates";
-import { logoBase64 } from "@/lib/logo-base64";
+import { getGrowerEmailBranding } from "@/lib/company-helpers";
 
 export async function sendOrderApprovedNotification(orderId: string): Promise<string | false> {
   const order = await prisma.fustOrder.findUnique({
@@ -32,6 +32,7 @@ export async function sendOrderApprovedNotification(orderId: string): Promise<st
     return false;
   }
 
+  const branding = await getGrowerEmailBranding(order.growerId);
   const portalUrl = process.env.APP_URL || process.env.NEXTAUTH_URL || "http://localhost:3000";
 
   const html = fustOrderApprovedEmailHtml({
@@ -47,16 +48,26 @@ export async function sendOrderApprovedNotification(orderId: string): Promise<st
       : null,
     notes: order.notes,
     portalUrl,
+    branding: {
+      companyName: branding.companyName,
+      portalName: branding.portalName,
+      footerText: branding.footerText,
+    },
   });
+
+  const fromAddress = branding.emailFrom && branding.emailName
+    ? `"${branding.emailName}" <${branding.emailFrom}>`
+    : undefined;
 
   const result = await sendEmail({
     to: transporterEmail,
     subject: `Fust Order Approved: ${order.orderNumber} - ${order.grower.company || order.grower.name}`,
     html,
+    from: fromAddress,
     attachments: [
       {
         filename: "logo.png",
-        content: Buffer.from(logoBase64, "base64"),
+        content: Buffer.from(branding.logoBase64, "base64"),
         cid: "logo",
       },
     ],

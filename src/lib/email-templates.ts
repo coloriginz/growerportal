@@ -1,12 +1,27 @@
+export interface EmailBrandingOptions {
+  companyName: string;
+  portalName: string;
+  footerText: string;
+}
+
+const DEFAULT_BRANDING: EmailBrandingOptions = {
+  companyName: "Coloriginz",
+  portalName: "Coloriginz Grower Portal",
+  footerText: "Coloriginz \u2014 OZ Import BV, Aalsmeer",
+};
+
 interface ActivationEmailOptions {
   name: string;
   activationUrl: string;
+  branding?: EmailBrandingOptions;
 }
 
 export function activationEmailHtml({
   name,
   activationUrl,
+  branding = DEFAULT_BRANDING,
 }: ActivationEmailOptions): string {
+  const { companyName, portalName, footerText } = branding;
   return `<!DOCTYPE html>
 <html lang="en" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
 <head>
@@ -32,7 +47,7 @@ export function activationEmailHtml({
           <!-- Logo Header -->
           <tr>
             <td align="center" style="padding: 36px 40px 24px 40px; background-color: #ffffff;">
-              <img src="cid:logo" alt="Coloriginz" width="200" style="display: block; width: 200px; height: auto; border: 0;" />
+              <img src="cid:logo" alt="${escapeHtml(companyName)}" width="200" style="display: block; width: 200px; height: auto; border: 0;" />
             </td>
           </tr>
 
@@ -53,7 +68,7 @@ export function activationEmailHtml({
                 Dear ${escapeHtml(name)},
               </p>
               <p style="margin: 0 0 12px 0; font-size: 15px; line-height: 1.6; color: #444444;">
-                You've been invited to the <strong>Coloriginz Grower Portal</strong>. This portal gives you access to your sales data, lot tracking, documents, and more.
+                You've been invited to the <strong>${escapeHtml(portalName)}</strong>. This portal gives you access to your sales data, lot tracking, documents, and more.
               </p>
               <p style="margin: 0 0 28px 0; font-size: 15px; line-height: 1.6; color: #444444;">
                 To get started, please set your password by clicking the button below:
@@ -103,7 +118,7 @@ export function activationEmailHtml({
           <tr>
             <td align="center" style="padding: 24px 40px 32px 40px;">
               <p style="margin: 0; font-size: 12px; line-height: 1.5; color: #aaaaaa;">
-                Coloriginz &mdash; OZ Import BV, Aalsmeer
+                ${escapeHtml(footerText)}
               </p>
               <p style="margin: 4px 0 0 0; font-size: 12px; line-height: 1.5; color: #aaaaaa;">
                 This is an automated message. Please do not reply to this email.
@@ -122,12 +137,15 @@ export function activationEmailHtml({
 interface ResetPasswordEmailOptions {
   name: string;
   resetUrl: string;
+  branding?: EmailBrandingOptions;
 }
 
 export function resetPasswordEmailHtml({
   name,
   resetUrl,
+  branding = DEFAULT_BRANDING,
 }: ResetPasswordEmailOptions): string {
+  const { companyName, footerText } = branding;
   return `<!DOCTYPE html>
 <html lang="en" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
 <head>
@@ -153,7 +171,7 @@ export function resetPasswordEmailHtml({
           <!-- Logo Header -->
           <tr>
             <td align="center" style="padding: 36px 40px 24px 40px; background-color: #ffffff;">
-              <img src="cid:logo" alt="Coloriginz" width="200" style="display: block; width: 200px; height: auto; border: 0;" />
+              <img src="cid:logo" alt="${escapeHtml(companyName)}" width="200" style="display: block; width: 200px; height: auto; border: 0;" />
             </td>
           </tr>
 
@@ -224,7 +242,7 @@ export function resetPasswordEmailHtml({
           <tr>
             <td align="center" style="padding: 24px 40px 32px 40px;">
               <p style="margin: 0; font-size: 12px; line-height: 1.5; color: #aaaaaa;">
-                Coloriginz &mdash; OZ Import BV, Aalsmeer
+                ${escapeHtml(footerText)}
               </p>
               <p style="margin: 4px 0 0 0; font-size: 12px; line-height: 1.5; color: #aaaaaa;">
                 This is an automated message. Please do not reply to this email.
@@ -250,6 +268,7 @@ interface FustOrderApprovedEmailOptions {
   requestedDate: string | null;
   notes: string | null;
   portalUrl: string;
+  branding?: EmailBrandingOptions;
 }
 
 export function fustOrderApprovedEmailHtml({
@@ -260,7 +279,9 @@ export function fustOrderApprovedEmailHtml({
   requestedDate,
   notes,
   portalUrl,
+  branding = DEFAULT_BRANDING,
 }: FustOrderApprovedEmailOptions): string {
+  const { companyName, footerText } = branding;
   const itemRows = items
     .map(
       (item) => `
@@ -306,7 +327,7 @@ export function fustOrderApprovedEmailHtml({
           <!-- Logo Header -->
           <tr>
             <td align="center" style="padding: 36px 40px 24px 40px; background-color: #ffffff;">
-              <img src="cid:logo" alt="Coloriginz" width="200" style="display: block; width: 200px; height: auto; border: 0;" />
+              <img src="cid:logo" alt="${escapeHtml(companyName)}" width="200" style="display: block; width: 200px; height: auto; border: 0;" />
             </td>
           </tr>
 
@@ -392,7 +413,7 @@ export function fustOrderApprovedEmailHtml({
           <tr>
             <td align="center" style="padding: 24px 40px 32px 40px;">
               <p style="margin: 0; font-size: 12px; line-height: 1.5; color: #aaaaaa;">
-                Coloriginz &mdash; OZ Import BV, Aalsmeer
+                ${escapeHtml(footerText)}
               </p>
               <p style="margin: 4px 0 0 0; font-size: 12px; line-height: 1.5; color: #aaaaaa;">
                 This is an automated message. Please do not reply to this email.

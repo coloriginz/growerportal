@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useLanguage } from "@/components/providers/language-provider";
+import { useCompanyBranding } from "@/components/providers/company-provider";
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
@@ -14,6 +15,7 @@ export default function ForgotPasswordPage() {
   const [sent, setSent] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const { t } = useLanguage();
+  const company = useCompanyBranding();
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -46,8 +48,8 @@ export default function ForgotPasswordPage() {
       <div className="w-full max-w-md">
         <div className="mb-8 flex justify-center">
           <Image
-            src="/logo.png"
-            alt="Coloriginz"
+            src={company.logoPath}
+            alt={company.name}
             width={180}
             height={48}
             priority

@@ -13,16 +13,29 @@ export async function GET(request: NextRequest) {
   // Simple mode: return minimal data for dropdowns
   if (!full) {
     const growers = await prisma.grower.findMany({
-      select: { id: true, code: true, name: true, company: true },
+      select: {
+        id: true,
+        code: true,
+        name: true,
+        company: true,
+        companyEntity: { select: { id: true, name: true, slug: true } },
+      },
       orderBy: { code: "asc" },
     });
-    return NextResponse.json(growers);
+    return NextResponse.json(growers.map((g) => ({
+      id: g.id,
+      code: g.code,
+      name: g.name,
+      company: g.company,
+      companyEntity: g.companyEntity,
+    })));
   }
 
   // Full mode: return complete grower list with commercie and login status
   const growers = await prisma.grower.findMany({
     include: {
       commercie: { select: { id: true, name: true } },
+      companyEntity: { select: { id: true, name: true, slug: true } },
       users: { select: { id: true, isActive: true } },
     },
     orderBy: { code: "asc" },
@@ -34,6 +47,7 @@ export async function GET(request: NextRequest) {
     name: g.name,
     company: g.company,
     country: g.country,
+    companyEntity: g.companyEntity,
     commercie: g.commercie ? { id: g.commercie.id, name: g.commercie.name } : null,
     loginStatus: g.users.length === 0
       ? "none"
@@ -51,6 +65,7 @@ const createGrowerSchema = z.object({
   name: z.string().min(1),
   company: z.string().optional(),
   country: z.string().optional(),
+  companyId: z.string().uuid().optional(),
 });
 
 export async function POST(request: NextRequest) {
@@ -64,7 +79,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  const { code, name, company, country } = parsed.data;
+  const { code, name, company, country, companyId } = parsed.data;
 
   const existing = await prisma.grower.findUnique({ where: { code } });
   if (existing) {
@@ -77,6 +92,7 @@ export async function POST(request: NextRequest) {
       name,
       company: company || null,
       country: country || null,
+      companyId: companyId || null,
     },
   });
 

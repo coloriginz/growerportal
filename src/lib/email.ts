@@ -92,6 +92,7 @@ interface SendEmailOptions {
   subject: string;
   html: string;
   attachments?: nodemailer.SendMailOptions["attachments"];
+  from?: string; // Override default from address (e.g. for multi-company branding)
 }
 
 export interface SendEmailResult {
@@ -104,12 +105,14 @@ export async function sendEmail({
   subject,
   html,
   attachments,
+  from: fromOverride,
 }: SendEmailOptions): Promise<SendEmailResult> {
   const { transport, useEthereal, redirectTo } = await getTransport();
 
+  const defaultFrom = `"Coloriginz Grower Portal" <${process.env.EMAIL_FROM || "noreply@coloriginz.com"}>`;
   const from = useEthereal
     ? '"Coloriginz Grower Portal" <test@ethereal.email>'
-    : `"Coloriginz Grower Portal" <${process.env.EMAIL_FROM || "noreply@coloriginz.com"}>`;
+    : fromOverride || defaultFrom;
 
   // In redirect mode, override the recipient
   const actualTo = redirectTo || to;

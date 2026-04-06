@@ -9,6 +9,22 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
+// ─── COMPANIES ─────────────────────────────────────────
+
+model Company {
+  id         String   @id @default(uuid())
+  name       String   // Display name: "Coloriginz", "MyPeony"
+  slug       String   @unique // URL-safe: "coloriginz", "mypeony"
+  logoUrl    String?  // Path to logo in public/logos/
+  emailFrom  String?  // e.g. "noreply@coloriginz.com"
+  emailName  String?  // e.g. "Coloriginz Grower Portal"
+  footerText String?  // e.g. "Coloriginz — OZ Import BV, Aalsmeer"
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  growers Grower[]
+}
+
 // ─── USERS & AUTH ────────────────────────────────────────
 
 model User {
@@ -61,6 +77,10 @@ model Grower {
   commercieId    String?
   seasonStartMonth Int @default(1) // 1=Jan, 10=Oct, etc.
 
+  // Company branding
+  companyId      String?
+  companyEntity  Company? @relation(fields: [companyId], references: [id])
+
   certificates   Certificate[]
   lots           Lot[]
   salesSheets    SalesSheet[]
@@ -78,6 +98,7 @@ model Grower {
   fustCharges          FustGrowerCharge[]
 
   @@index([commercieId])
+  @@index([companyId])
 }
 
 model Certificate {

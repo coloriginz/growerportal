@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { getCompanySlugFromHostname } from "@/lib/company-config";
 
 /** Hostname prefixes that indicate the standalone fust domain */
 const FUST_HOST_PREFIXES = ["fust.", "fust-"];
@@ -8,11 +9,18 @@ function isFustHost(hostname: string): boolean {
   return FUST_HOST_PREFIXES.some((prefix) => hostname.startsWith(prefix));
 }
 
+function setCompanyHeader(response: NextResponse, hostname: string): void {
+  const slug = getCompanySlugFromHostname(hostname);
+  response.headers.set("x-company-slug", slug);
+}
+
 export function middleware(request: NextRequest) {
   const hostname = request.headers.get("host")?.split(":")[0] || "";
 
   if (!isFustHost(hostname)) {
-    return NextResponse.next();
+    const response = NextResponse.next();
+    setCompanyHeader(response, hostname);
+    return response;
   }
 
   const { pathname, search } = request.nextUrl;
@@ -21,6 +29,7 @@ export function middleware(request: NextRequest) {
   if (pathname.startsWith("/fust-portal") || pathname.startsWith("/api")) {
     const response = NextResponse.next();
     response.headers.set("x-fust-domain", "1");
+    setCompanyHeader(response, hostname);
     return response;
   }
 
@@ -30,6 +39,7 @@ export function middleware(request: NextRequest) {
     url.pathname = "/fust-login";
     const response = NextResponse.rewrite(url);
     response.headers.set("x-fust-domain", "1");
+    setCompanyHeader(response, hostname);
     return response;
   }
 
@@ -53,6 +63,7 @@ export function middleware(request: NextRequest) {
 
   const response = NextResponse.rewrite(url);
   response.headers.set("x-fust-domain", "1");
+  setCompanyHeader(response, hostname);
   return response;
 }
 

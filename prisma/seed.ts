@@ -118,6 +118,31 @@ async function main() {
   await prisma.user.deleteMany();
   await prisma.transporter.deleteMany();
   await prisma.grower.deleteMany();
+  await prisma.company.deleteMany();
+
+  // ─── SEED COMPANIES ─────────────────────────────────────
+  console.log("Creating companies...");
+  const coloriginzCompany = await prisma.company.create({
+    data: {
+      name: "Coloriginz",
+      slug: "coloriginz",
+      logoUrl: "/logos/coloriginz.png",
+      emailFrom: "noreply@coloriginz.com",
+      emailName: "Coloriginz Grower Portal",
+      footerText: "Coloriginz \u2014 OZ Import BV, Aalsmeer",
+    },
+  });
+
+  const mypeonyCompany = await prisma.company.create({
+    data: {
+      name: "MyPeony",
+      slug: "mypeony",
+      logoUrl: "/logos/mypeony.png",
+      emailFrom: "noreply@mypeonysociety.com",
+      emailName: "MyPeony Grower Portal",
+      footerText: "MyPeony Society",
+    },
+  });
 
   console.log("Creating admin and commercie users...");
   const adminPasswordHash = await hash("Colori2026!", 12);
@@ -158,9 +183,15 @@ async function main() {
   console.log("Creating 20 growers with data...");
   const growerPasswordHash = await hash("GreenField99", 12);
 
+  // Assign first 17 growers to Coloriginz, last 3 to MyPeony
+  const MYPEONY_CODES = ["ANDEAN", "CAPFLO", "EUROBQ"];
+
   for (let i = 0; i < GROWERS.length; i++) {
     const growerData = GROWERS[i];
     const commercie = pick(commercieUsers);
+    const companyId = MYPEONY_CODES.includes(growerData.code)
+      ? mypeonyCompany.id
+      : coloriginzCompany.id;
 
     // Create grower
     const grower = await prisma.grower.create({
@@ -175,6 +206,7 @@ async function main() {
         vatNumber: growerData.vatNumber || null,
         ggn: growerData.ggn || null,
         commercieId: commercie.id,
+        companyId,
       },
     });
 
@@ -583,7 +615,10 @@ async function main() {
   const txCount = await prisma.transaction.count();
   const ssCount = await prisma.salesSheet.count();
 
+  const companyCount = await prisma.company.count();
+
   console.log(`\nSeed complete!`);
+  console.log(`  ${companyCount} companies`);
   console.log(`  ${growerCount} growers`);
   console.log(`  ${userCount} users`);
   console.log(`  ${ssCount} sales sheets`);

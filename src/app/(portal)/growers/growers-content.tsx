@@ -22,9 +22,22 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { RiAddLine, RiSearchLine, RiPlantLine } from "@remixicon/react";
 import { useLanguage } from "@/components/providers/language-provider";
 import { toast } from "sonner";
+
+interface CompanyOption {
+  id: string;
+  name: string;
+  slug: string;
+}
 
 interface GrowerRow {
   id: string;
@@ -32,6 +45,7 @@ interface GrowerRow {
   name: string;
   company: string | null;
   country: string | null;
+  companyEntity: { id: string; name: string; slug: string } | null;
   commercie: { id: string; name: string } | null;
   loginStatus: "active" | "pending" | "none";
   userCount: number;
@@ -42,6 +56,7 @@ export function GrowersContent() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [companies, setCompanies] = useState<CompanyOption[]>([]);
   const { t } = useLanguage();
   const router = useRouter();
 
@@ -50,11 +65,20 @@ export function GrowersContent() {
     name: "",
     company: "",
     country: "",
+    companyId: "",
   });
 
   useEffect(() => {
     fetchGrowers();
+    fetchCompanies();
   }, []);
+
+  async function fetchCompanies() {
+    try {
+      const res = await fetch("/api/companies");
+      if (res.ok) setCompanies(await res.json());
+    } catch { /* ignore */ }
+  }
 
   async function fetchGrowers() {
     try {
@@ -73,12 +97,15 @@ export function GrowersContent() {
       const res = await fetch("/api/growers", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({
+          ...formData,
+          companyId: formData.companyId || undefined,
+        }),
       });
       if (res.ok) {
         toast.success(t("growers.created"));
         setDialogOpen(false);
-        setFormData({ code: "", name: "", company: "", country: "" });
+        setFormData({ code: "", name: "", company: "", country: "", companyId: "" });
         fetchGrowers();
       } else {
         const data = await res.json();
@@ -95,7 +122,8 @@ export function GrowersContent() {
     return (
       g.code.toLowerCase().includes(q) ||
       g.name.toLowerCase().includes(q) ||
-      (g.company && g.company.toLowerCase().includes(q))
+      (g.company && g.company.toLowerCase().includes(q)) ||
+      (g.companyEntity && g.companyEntity.name.toLowerCase().includes(q))
     );
   });
 
@@ -156,6 +184,25 @@ export function GrowersContent() {
                   onChange={(e) => setFormData({ ...formData, country: e.target.value })}
                 />
               </div>
+              {companies.length > 0 && (
+                <div className="space-y-2">
+                  <Label>Brand</Label>
+                  <Select
+                    value={formData.companyId || "none"}
+                    onValueChange={(v) => { if (v !== null) setFormData({ ...formData, companyId: v === "none" ? "" : v }); }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select company" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">No company</SelectItem>
+                      {companies.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
               <Button type="submit" className="w-full">
                 {t("growers.newGrower")}
               </Button>
@@ -186,6 +233,7 @@ export function GrowersContent() {
                 <TableHead>{t("growers.code")}</TableHead>
                 <TableHead>{t("growers.name")}</TableHead>
                 <TableHead>{t("growers.company")}</TableHead>
+                <TableHead>Brand</TableHead>
                 <TableHead>{t("growers.country")}</TableHead>
                 <TableHead>{t("growers.accountManager")}</TableHead>
                 <TableHead>{t("common.status")}</TableHead>
@@ -204,6 +252,9 @@ export function GrowersContent() {
                     {grower.company || "-"}
                   </TableCell>
                   <TableCell className="text-muted-foreground">
+                    {grower.companyEntity?.name || "-"}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
                     {grower.country || "-"}
                   </TableCell>
                   <TableCell className="text-muted-foreground">
@@ -214,7 +265,7 @@ export function GrowersContent() {
               ))}
               {filtered.length === 0 && !loading && (
                 <TableRow className="hover:bg-transparent">
-                  <TableCell colSpan={6} className="py-0">
+                  <TableCell colSpan={7} className="py-0">
                     <div className="empty-state">
                       <div className="empty-state-icon">
                         <RiPlantLine />

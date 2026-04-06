@@ -37,6 +37,7 @@ import { GrowerSelector } from "@/components/layout/grower-selector";
 import { TestBanner } from "@/components/layout/test-banner";
 import { OfflineIndicator } from "@/components/layout/offline-indicator";
 import { ChangePasswordDialog } from "@/components/layout/change-password-dialog";
+import { useCompanyBranding } from "@/components/providers/company-provider";
 import { isTest } from "@/lib/env";
 import type { Role } from "@/types";
 
@@ -116,6 +117,7 @@ export function AppShell({ user, children }: AppShellProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { t } = useLanguage();
+  const company = useCompanyBranding();
   const growerId = searchParams.get("growerId");
   const userRole = user.role as Role;
   const showGrowerSelector = userRole === "admin" || userRole === "commercie";
@@ -155,7 +157,7 @@ export function AppShell({ user, children }: AppShellProps) {
         {/* Logo */}
         <div className="flex h-16 items-center px-6">
           <Link href="/dashboard" onClick={() => setMobileOpen(false)}>
-            <Image src="/logo.png" alt="Coloriginz" width={140} height={38} className="dark:brightness-0 dark:invert" />
+            <Image src={company.logoPath} alt={company.name} width={140} height={38} className="dark:brightness-0 dark:invert" />
           </Link>
         </div>
 
@@ -372,7 +374,7 @@ export function AppShell({ user, children }: AppShellProps) {
             <RiMenuLine className="h-5 w-5" />
           </Button>
           <Link href="/dashboard">
-            <Image src="/logo.png" alt="Coloriginz" width={120} height={32} className="dark:brightness-0 dark:invert" />
+            <Image src={company.logoPath} alt={company.name} width={120} height={32} className="dark:brightness-0 dark:invert" />
           </Link>
         </header>
 

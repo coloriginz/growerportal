@@ -4,7 +4,7 @@ import { z } from "zod";
 import { v4 as uuidv4 } from "uuid";
 import { sendEmail } from "@/lib/email";
 import { resetPasswordEmailHtml } from "@/lib/email-templates";
-import { logoBase64 } from "@/lib/logo-base64";
+import { getGrowerEmailBranding, getDefaultEmailBranding } from "@/lib/company-helpers";
 
 const schema = z.object({
   email: z.string().email(),
@@ -45,22 +45,37 @@ export async function POST(request: NextRequest) {
     },
   });
 
+  // Get company branding based on user's grower link (or default for internal users)
+  const branding = user.growerId
+    ? await getGrowerEmailBranding(user.growerId)
+    : getDefaultEmailBranding();
+
   // Send reset email
   const resetUrl = `${process.env.APP_URL}/reset-password?token=${resetToken}`;
 
   const html = resetPasswordEmailHtml({
     name: user.name,
     resetUrl,
+    branding: {
+      companyName: branding.companyName,
+      portalName: branding.portalName,
+      footerText: branding.footerText,
+    },
   });
+
+  const fromAddress = branding.emailFrom && branding.emailName
+    ? `"${branding.emailName}" <${branding.emailFrom}>`
+    : undefined;
 
   const { previewUrl } = await sendEmail({
     to: email,
-    subject: "Reset your Coloriginz Grower Portal password",
+    subject: `Reset your ${branding.portalName} password`,
     html,
+    from: fromAddress,
     attachments: [
       {
         filename: "logo.png",
-        content: Buffer.from(logoBase64, "base64"),
+        content: Buffer.from(branding.logoBase64, "base64"),
         cid: "logo",
       },
     ],

@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useLanguage } from "@/components/providers/language-provider";
+import { useCompanyBranding } from "@/components/providers/company-provider";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import Link from "next/link";
 import { isTest } from "@/lib/env";
@@ -21,6 +22,7 @@ export function LoginContent() {
   const searchParams = useSearchParams();
   const callbackUrl = searchParams.get("callbackUrl") || "/dashboard";
   const { t } = useLanguage();
+  const company = useCompanyBranding();
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -56,8 +58,8 @@ export function LoginContent() {
         <div className="mx-auto w-full max-w-sm">
           <div className="mb-10 flex items-center justify-between">
             <Image
-              src="/logo.png"
-              alt="Coloriginz"
+              src={company.logoPath}
+              alt={company.name}
               width={180}
               height={48}
               priority

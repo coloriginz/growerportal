@@ -1,6 +1,8 @@
+import { headers } from "next/headers";
 import { prisma } from "@/lib/db";
 import { ActivateForm } from "./activate-form";
 import Image from "next/image";
+import { getCompanyBranding } from "@/lib/company-config";
 
 interface ActivatePageProps {
   searchParams: Promise<{ token?: string }>;
@@ -8,6 +10,9 @@ interface ActivatePageProps {
 
 export default async function ActivatePage({ searchParams }: ActivatePageProps) {
   const { token } = await searchParams;
+  const headersList = await headers();
+  const companySlug = headersList.get("x-company-slug") || "coloriginz";
+  const company = getCompanyBranding(companySlug);
 
   let valid = false;
   let userName = "";
@@ -28,8 +33,8 @@ export default async function ActivatePage({ searchParams }: ActivatePageProps) 
       <div className="w-full max-w-md">
         <div className="mb-8 flex justify-center">
           <Image
-            src="/logo.png"
-            alt="Coloriginz"
+            src={company.logoPath}
+            alt={company.name}
             width={180}
             height={48}
             priority

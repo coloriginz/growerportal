@@ -31,6 +31,12 @@ import {
 import { useLanguage } from "@/components/providers/language-provider";
 import { toast } from "sonner";
 
+interface CompanyOption {
+  id: string;
+  name: string;
+  slug: string;
+}
+
 interface GrowerData {
   id: string;
   code: string;
@@ -44,6 +50,8 @@ interface GrowerData {
   vatNumber: string | null;
   ggn: string | null;
   commercieId: string | null;
+  companyId: string | null;
+  companyEntity: CompanyOption | null;
   seasonStartMonth: number;
   commercie: { id: string; name: string; email: string } | null;
   certificates: {
@@ -70,6 +78,7 @@ interface CommercieUser {
 export function GrowerDetail({ growerId }: { growerId: string }) {
   const [grower, setGrower] = useState<GrowerData | null>(null);
   const [commercieUsers, setCommercieUsers] = useState<CommercieUser[]>([]);
+  const [companies, setCompanies] = useState<CompanyOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [newUserName, setNewUserName] = useState("");
@@ -91,12 +100,14 @@ export function GrowerDetail({ growerId }: { growerId: string }) {
     vatNumber: "",
     ggn: "",
     commercieId: "",
+    companyId: "",
     seasonStartMonth: "1",
   });
 
   useEffect(() => {
     fetchGrower();
     fetchCommercieUsers();
+    fetchCompanies();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [growerId]);
 
@@ -117,6 +128,7 @@ export function GrowerDetail({ growerId }: { growerId: string }) {
           vatNumber: data.vatNumber || "",
           ggn: data.ggn || "",
           commercieId: data.commercieId || "",
+          companyId: data.companyId || "",
           seasonStartMonth: String(data.seasonStartMonth ?? 1),
         });
       } else {
@@ -131,6 +143,13 @@ export function GrowerDetail({ growerId }: { growerId: string }) {
     const res = await fetch("/api/admin/commercie");
     if (res.ok) {
       setCommercieUsers(await res.json());
+    }
+  }
+
+  async function fetchCompanies() {
+    const res = await fetch("/api/companies");
+    if (res.ok) {
+      setCompanies(await res.json());
     }
   }
 
@@ -152,6 +171,7 @@ export function GrowerDetail({ growerId }: { growerId: string }) {
           vatNumber: form.vatNumber || null,
           ggn: form.ggn || null,
           commercieId: form.commercieId || null,
+          companyId: form.companyId || null,
           seasonStartMonth: parseInt(form.seasonStartMonth),
         }),
       });
@@ -398,6 +418,43 @@ export function GrowerDetail({ growerId }: { growerId: string }) {
               ) : (
                 <div className="bg-muted h-10 animate-pulse rounded-md" />
               )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Company / Brand */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Brand</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="max-w-sm space-y-2">
+              <Label>Company</Label>
+              {companies.length > 0 ? (
+                <Select
+                  value={form.companyId || "none"}
+                  onValueChange={(v) => {
+                    if (v !== null) setForm({ ...form, companyId: v === "none" ? "" : v });
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select company" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No company assigned</SelectItem>
+                    {companies.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <div className="bg-muted h-10 animate-pulse rounded-md" />
+              )}
+              <p className="text-xs text-muted-foreground">
+                Determines the branding (logo, emails) for this grower.
+              </p>
             </div>
           </CardContent>
         </Card>
