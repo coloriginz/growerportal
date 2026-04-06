@@ -99,6 +99,7 @@ model Grower {
 
   @@index([commercieId])
   @@index([companyId])
+  @@index([defaultTransporterId])
 }
 
 model Certificate {
@@ -178,6 +179,8 @@ model Lot {
 
   @@unique([lotNumber, growerId])
   @@index([growerId])
+  @@index([growerId, productName])
+  @@index([growerId, stemLength])
   @@index([salesSheetId])
   @@index([deliveryDate])
   @@index([refNumber])
@@ -206,6 +209,7 @@ model Transaction {
   @@index([lotId])
   @@index([date])
   @@index([salesType])
+  @@index([isCorrection, date])
 }
 
 // ─── LOT COSTS ───────────────────────────────────────────
@@ -257,6 +261,7 @@ model QualityIssue {
   createdAt   DateTime @default(now())
 
   @@index([growerId])
+  @@index([growerId, date])
   @@index([lotId])
 }
 
