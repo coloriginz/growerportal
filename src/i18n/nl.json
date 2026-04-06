@@ -68,10 +68,14 @@
     "users": "Gebruikers",
     "selectGrower": "Selecteer Kweker",
     "forecasts": "Aanvoerplanning",
+    "fustOrder": "Bestellen",
+    "fustMyOrders": "Mijn Bestellingen",
+    "fustDeliveries": "Leveringen",
     "fustOrders": "Fustbestellingen",
     "fustPickups": "Leveringen",
-    "fustInvoices": "Fust Facturen",
-    "fustVouchers": "Ontvangen Bonnen",
+    "fustVouchers": "Bonnen",
+    "fustMatching": "Koppelen",
+    "fustInvoices": "Facturen",
     "fustSettings": "Fust Instellingen"
   },
   "dashboard": {
@@ -527,6 +531,11 @@
     "noOrdersToMatch": "Geen orders beschikbaar",
     "growerFilter": "Kweker",
     "transporterFilter": "Transporteur",
-    "receivedVouchers": "Ontvangen Bonnen"
+    "receivedVouchers": "Bonnen",
+    "invoicesTitle": "Facturen",
+    "readyForInvoicing": "Klaar voor Facturatie",
+    "sentInvoices": "Verzonden Facturen",
+    "noReadyOrders": "Geen orders klaar voor facturatie",
+    "linkedVouchers": "Gekoppelde Bonnen"
   }
 }

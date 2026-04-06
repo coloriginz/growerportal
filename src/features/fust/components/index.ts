@@ -7,4 +7,7 @@ export { FustFinance } from "./fust-finance";
 export { FustVouchers } from "./fust-vouchers";
 export { VoucherMatching } from "./voucher-matching";
 export { FustReceivedVouchers } from "./fust-received-vouchers";
+export { FustMyOrders } from "./fust-my-orders";
+export { FustGrowerDeliveries } from "./fust-grower-deliveries";
+export { FustInvoicing } from "./fust-invoicing";
 export { FustSettings } from "./fust-settings";

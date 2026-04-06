@@ -9,6 +9,8 @@ import {
   RiTruckLine,
   RiReceiptLine,
   RiFileTextLine,
+  RiShoppingCartLine,
+  RiLink,
   RiLogoutBoxLine,
   RiMenuLine,
   RiGroupLine,
@@ -48,10 +50,13 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { href: "/fust-portal", labelKey: "nav.fustOrders", icon: RiBox3Line, roles: ["grower"] },
+  { href: "/fust-portal", labelKey: "nav.fustOrder", icon: RiShoppingCartLine, roles: ["grower"] },
+  { href: "/fust-portal/my-orders", labelKey: "nav.fustMyOrders", icon: RiBox3Line, roles: ["grower"] },
+  { href: "/fust-portal/deliveries", labelKey: "nav.fustDeliveries", icon: RiTruckLine, roles: ["grower"] },
   { href: "/fust-portal/orders", labelKey: "nav.fustOrders", icon: RiBox3Line, roles: ["commercie", "admin"] },
   { href: "/fust-portal/pickups", labelKey: "fust.deliveries", icon: RiTruckLine, roles: ["transporteur", "admin"] },
   { href: "/fust-portal/vouchers", labelKey: "nav.fustVouchers", icon: RiFileTextLine, roles: ["finance", "admin"] },
+  { href: "/fust-portal/matching", labelKey: "nav.fustMatching", icon: RiLink, roles: ["finance", "admin"] },
   { href: "/fust-portal/invoices", labelKey: "nav.fustInvoices", icon: RiReceiptLine, roles: ["finance", "admin"] },
 ];
 

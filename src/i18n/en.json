@@ -68,10 +68,14 @@
     "users": "Users",
     "selectGrower": "Select Grower",
     "forecasts": "Forecasts",
+    "fustOrder": "Order",
+    "fustMyOrders": "My Orders",
+    "fustDeliveries": "Deliveries",
     "fustOrders": "Fust Orders",
     "fustPickups": "Deliveries",
-    "fustInvoices": "Fust Invoices",
-    "fustVouchers": "Received Vouchers",
+    "fustVouchers": "Vouchers",
+    "fustMatching": "Matching",
+    "fustInvoices": "Invoices",
     "fustSettings": "Fust Settings"
   },
   "dashboard": {
@@ -527,6 +531,11 @@
     "noOrdersToMatch": "No orders available",
     "growerFilter": "Grower",
     "transporterFilter": "Transporter",
-    "receivedVouchers": "Received Vouchers"
+    "receivedVouchers": "Vouchers",
+    "invoicesTitle": "Invoices",
+    "readyForInvoicing": "Ready for Invoicing",
+    "sentInvoices": "Sent Invoices",
+    "noReadyOrders": "No orders ready for invoicing",
+    "linkedVouchers": "Linked Vouchers"
   }
 }

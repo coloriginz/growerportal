@@ -24,6 +24,7 @@ import {
   RiArrowDownSLine,
   RiGroupLine,
   RiPriceTag3Line,
+  RiLink,
 } from "@remixicon/react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -70,11 +71,14 @@ const mainNavItems: NavItem[] = [
 ];
 
 const fustNavItems: NavItem[] = [
-  { href: "/fust", labelKey: "nav.fustOrders", icon: RiBox3Line, roles: ["grower"] },
+  { href: "/fust", labelKey: "nav.fustOrder", icon: RiShoppingCartLine, roles: ["grower"] },
+  { href: "/fust/my-orders", labelKey: "nav.fustMyOrders", icon: RiBox3Line, roles: ["grower"] },
+  { href: "/fust/deliveries", labelKey: "nav.fustDeliveries", icon: RiTruckLine, roles: ["grower"] },
   { href: "/fust/orders", labelKey: "nav.fustOrders", icon: RiBox3Line, roles: ["commercie", "admin"] },
   { href: "/fust/pickups", labelKey: "nav.fustPickups", icon: RiTruckLine, roles: ["transporteur"] },
   { href: "/fust/vouchers", labelKey: "nav.fustVouchers", icon: RiFileTextLine, roles: ["finance", "admin"] },
-  { href: "/fust/invoices", labelKey: "nav.fustInvoices", icon: RiReceiptLine, roles: ["finance"] },
+  { href: "/fust/matching", labelKey: "nav.fustMatching", icon: RiLink, roles: ["finance", "admin"] },
+  { href: "/fust/invoices", labelKey: "nav.fustInvoices", icon: RiReceiptLine, roles: ["finance", "admin"] },
 ];
 
 const bottomNavItems: NavItem[] = [
