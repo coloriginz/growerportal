@@ -101,7 +101,9 @@
     "grower": "Kweker",
     "selectToView": "Selecteer om te bekijken",
     "fustOrders": "Fustbestellingen",
-    "pendingFustOrders": "Openstaande Fustbestellingen"
+    "pendingFustOrders": "Openstaande Fustbestellingen",
+    "selectGrowerTitle": "Selecteer een kweker om het dashboard te bekijken",
+    "selectGrowerDescription": "Gebruik de kwekerselectie in de zijbalk om een kweker te kiezen."
   },
   "sales": {
     "title": "Verkopen",
@@ -366,6 +368,7 @@
     "overig": "Overig",
     "pending": "In afwachting",
     "approved": "Goedgekeurd",
+    "toBeDelivered": "Wordt geleverd",
     "rejected": "Afgewezen",
     "scheduled": "Ingepland",
     "inTransit": "Onderweg",

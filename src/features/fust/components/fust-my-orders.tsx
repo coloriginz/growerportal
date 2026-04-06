@@ -48,7 +48,7 @@ function StatusBadge({ status }: { status: string }) {
   const { t } = useLanguage();
   const statusMap: Record<string, { variant: "default" | "secondary" | "destructive" | "outline"; key: string }> = {
     pending: { variant: "outline", key: "fust.pending" },
-    approved: { variant: "default", key: "fust.approved" },
+    approved: { variant: "default", key: "fust.toBeDelivered" },
     rejected: { variant: "destructive", key: "fust.rejected" },
     scheduled: { variant: "secondary", key: "fust.scheduled" },
     in_transit: { variant: "secondary", key: "fust.inTransit" },

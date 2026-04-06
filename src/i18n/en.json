@@ -101,7 +101,9 @@
     "grower": "Grower",
     "selectToView": "Select to view",
     "fustOrders": "Fust Orders",
-    "pendingFustOrders": "Pending Fust Orders"
+    "pendingFustOrders": "Pending Fust Orders",
+    "selectGrowerTitle": "Select a grower to view the dashboard",
+    "selectGrowerDescription": "Use the grower selector in the sidebar to pick a grower."
   },
   "sales": {
     "title": "Sales",
@@ -366,6 +368,7 @@
     "overig": "Other",
     "pending": "Pending",
     "approved": "Approved",
+    "toBeDelivered": "To be delivered",
     "rejected": "Rejected",
     "scheduled": "Scheduled",
     "inTransit": "In Transit",
