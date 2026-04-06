@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { requireAuth } from "@/lib/api-helpers";
+import { logFustEvent } from "@/lib/fust-audit";
 
 const deliveryItemSchema = z.object({
   fustTypeId: z.string().uuid(),
@@ -96,6 +97,17 @@ export async function PATCH(
       data: { status: "delivered" },
     });
 
+    // Audit: delivery delivered
+    await logFustEvent({
+      entityType: "delivery",
+      entityId: id,
+      orderId: delivery.orderId,
+      action: "delivery_delivered",
+      actorId: session!.user.id,
+      actorName: session!.user.name,
+      metadata: { pickupId: delivery.pickupId },
+    });
+
     // If all deliveries in the pickup are delivered, mark pickup as completed
     if (delivery.pickupId) {
       const siblingDeliveries = await prisma.fustDelivery.findMany({
@@ -108,6 +120,15 @@ export async function PATCH(
         await prisma.fustPickup.update({
           where: { id: delivery.pickupId },
           data: { status: "completed" },
+        });
+
+        // Audit: pickup completed
+        await logFustEvent({
+          entityType: "pickup",
+          entityId: delivery.pickupId,
+          action: "pickup_completed",
+          actorId: session!.user.id,
+          actorName: session!.user.name,
         });
       }
     }

@@ -77,7 +77,8 @@
     "fustVouchers": "Vouchers",
     "fustMatching": "Matching",
     "fustInvoices": "Invoices",
-    "fustSettings": "Fust Settings"
+    "fustSettings": "Fust Settings",
+    "fustActivity": "Activity"
   },
   "dashboard": {
     "title": "Dashboard",
@@ -541,6 +542,40 @@
     "readyForInvoicing": "Ready for Invoicing",
     "sentInvoices": "Sent Invoices",
     "noReadyOrders": "No orders ready for invoicing",
-    "linkedVouchers": "Linked Vouchers"
+    "linkedVouchers": "Linked Vouchers",
+    "activity": "Activity",
+    "auditLog": "Audit Log",
+    "history": "History",
+    "orderTimeline": "Order Timeline",
+    "noAuditEvents": "No activity recorded yet",
+    "auditTrailStarted": "Audit trail started",
+    "systemAction": "System",
+    "allActions": "All Actions",
+    "allEntityTypes": "All Types",
+    "dateFrom": "From",
+    "dateTo": "To",
+    "actor": "Actor",
+    "details": "Details",
+    "entity": "Entity",
+    "audit": {
+      "order_created": "Order created",
+      "order_auto_approved": "Order auto-approved",
+      "order_approved": "Order approved",
+      "order_rejected": "Order rejected",
+      "order_cancelled": "Order cancelled",
+      "order_deleted": "Order deleted",
+      "pickup_created": "Pickup created",
+      "pickup_orders_linked": "Orders linked to pickup",
+      "pickup_picked_up": "Pickup picked up",
+      "pickup_completed": "Pickup completed",
+      "delivery_in_transit": "Delivery in transit",
+      "delivery_delivered": "Delivery confirmed",
+      "invoice_uploaded": "Invoice uploaded",
+      "invoice_status_changed": "Invoice status changed",
+      "invoice_charges_created": "Charges created",
+      "voucher_uploaded": "Voucher uploaded",
+      "voucher_matched": "Voucher matched",
+      "voucher_unmatched": "Voucher unmatched"
+    }
   }
 }

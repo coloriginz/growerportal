@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { requireAuth } from "@/lib/api-helpers";
+import { logFustEvent } from "@/lib/fust-audit";
 
 const chargeSchema = z.object({
   growerId: z.string().uuid(),
@@ -40,7 +41,6 @@ export async function POST(
 ) {
   const { error, session } = await requireAuth(["finance", "admin"]);
   if (error) return error;
-  void session;
 
   const { id } = await params;
 
@@ -96,6 +96,20 @@ export async function POST(
     });
 
     return charges;
+  });
+
+  // Audit: charges created
+  await logFustEvent({
+    entityType: "invoice",
+    entityId: id,
+    action: "invoice_charges_created",
+    actorId: session!.user.id,
+    actorName: session!.user.name,
+    metadata: {
+      chargeCount: result.length,
+      totalAmount: parsed.data.charges.reduce((sum, c) => sum + c.amount, 0),
+      growerIds: growerIds,
+    },
   });
 
   return NextResponse.json(result, { status: 201 });

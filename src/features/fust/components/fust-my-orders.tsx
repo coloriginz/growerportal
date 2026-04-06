@@ -1,10 +1,11 @@
 "use client";
 
-import { useMemo } from "react";
+import { useState, useMemo } from "react";
 import { useLanguage } from "@/components/providers/language-provider";
 import { useFetch } from "@/hooks/use-fetch";
 import { formatCurrencyDetailed, formatDate } from "@/lib/format";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
@@ -14,7 +15,14 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { RiBox3Line } from "@remixicon/react";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import { RiBox3Line, RiHistoryLine } from "@remixicon/react";
+import { FustOrderTimeline } from "./fust-order-timeline";
 
 interface FustType {
   id: string;
@@ -65,6 +73,7 @@ interface FustMyOrdersProps {
 
 export function FustMyOrders({ growerId }: FustMyOrdersProps) {
   const { t } = useLanguage();
+  const [timelineOrder, setTimelineOrder] = useState<FustOrder | null>(null);
 
   const ordersUrl = useMemo(() => {
     if (growerId) return `/api/fust/orders?growerId=${growerId}`;
@@ -97,6 +106,7 @@ export function FustMyOrders({ growerId }: FustMyOrdersProps) {
                 <TableHead>{t("fust.status")}</TableHead>
                 <TableHead>{t("fust.items")}</TableHead>
                 <TableHead className="text-right">{t("fust.total")}</TableHead>
+                <TableHead />
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -127,6 +137,17 @@ export function FustMyOrders({ growerId }: FustMyOrdersProps) {
                     <TableCell className="text-right font-medium">
                       {formatCurrencyDetailed(total)}
                     </TableCell>
+                    <TableCell>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                        onClick={() => setTimelineOrder(order)}
+                        title={t("fust.history")}
+                      >
+                        <RiHistoryLine className="h-4 w-4" />
+                      </Button>
+                    </TableCell>
                   </TableRow>
                 );
               })}
@@ -134,6 +155,18 @@ export function FustMyOrders({ growerId }: FustMyOrdersProps) {
           </Table>
         </div>
       )}
+
+      {/* Order timeline sheet */}
+      <Sheet open={!!timelineOrder} onOpenChange={(open) => { if (!open) setTimelineOrder(null); }}>
+        <SheetContent className="w-full sm:max-w-md overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle>{t("fust.orderTimeline")} — {timelineOrder?.orderNumber}</SheetTitle>
+          </SheetHeader>
+          <div className="mt-6">
+            {timelineOrder && <FustOrderTimeline orderId={timelineOrder.id} />}
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

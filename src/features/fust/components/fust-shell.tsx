@@ -16,6 +16,7 @@ import {
   RiGroupLine,
   RiPriceTag3Line,
   RiUserSettingsLine,
+  RiHistoryLine,
 } from "@remixicon/react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -59,6 +60,7 @@ const navItems: NavItem[] = [
   { href: "/fust-portal/vouchers", labelKey: "nav.fustVouchers", icon: RiFileTextLine, roles: ["finance", "admin"] },
   { href: "/fust-portal/matching", labelKey: "nav.fustMatching", icon: RiLink, roles: ["finance", "admin"] },
   { href: "/fust-portal/invoices", labelKey: "nav.fustInvoices", icon: RiReceiptLine, roles: ["finance", "admin"] },
+  { href: "/fust-portal/activity", labelKey: "nav.fustActivity", icon: RiHistoryLine, roles: ["admin", "finance"] },
 ];
 
 const adminItems: NavItem[] = [

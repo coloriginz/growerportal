@@ -92,3 +92,13 @@ export type FustInvoiceStatus = (typeof FUST_INVOICE_STATUSES)[number];
 
 export const FUST_CHARGE_STATUSES = ["pending", "invoiced", "paid"] as const;
 export type FustChargeStatus = (typeof FUST_CHARGE_STATUSES)[number];
+
+export const FUST_AUDIT_ENTITY_TYPES = [
+  "order",
+  "pickup",
+  "delivery",
+  "invoice",
+  "charge",
+  "voucher",
+] as const;
+export type FustAuditEntityType = (typeof FUST_AUDIT_ENTITY_TYPES)[number];

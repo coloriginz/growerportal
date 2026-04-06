@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { requireAuth } from "@/lib/api-helpers";
 import { sendOrderApprovedNotification } from "@/lib/fust-notifications";
+import { logFustEvent } from "@/lib/fust-audit";
 
 const deliveryItemSchema = z.object({
   fustTypeId: z.string().uuid(),
@@ -24,8 +25,8 @@ export async function GET(
 
   const { id } = await params;
 
-  const order = await prisma.fustOrder.findUnique({
-    where: { id },
+  const order = await prisma.fustOrder.findFirst({
+    where: { id, deletedAt: null },
     include: {
       items: { include: { fustType: true } },
       grower: { select: { id: true, code: true, name: true, company: true } },
@@ -65,7 +66,7 @@ export async function PATCH(
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  const order = await prisma.fustOrder.findUnique({ where: { id } });
+  const order = await prisma.fustOrder.findFirst({ where: { id, deletedAt: null } });
   if (!order) {
     return NextResponse.json({ error: "Order not found" }, { status: 404 });
   }
@@ -132,6 +133,29 @@ export async function PATCH(
     },
   });
 
+  // Audit: status change
+  const actionMap: Record<string, string> = {
+    approved: "order_approved",
+    rejected: "order_rejected",
+    cancelled: "order_cancelled",
+  };
+  const auditAction = actionMap[status];
+  if (auditAction) {
+    await logFustEvent({
+      entityType: "order",
+      entityId: id,
+      orderId: id,
+      action: auditAction as "order_approved" | "order_rejected" | "order_cancelled",
+      actorId: session!.user.id,
+      actorName: session!.user.name,
+      metadata: {
+        orderNumber: order.orderNumber,
+        status,
+        ...(rejectionReason ? { rejectionReason } : {}),
+      },
+    });
+  }
+
   // Send transporter notification on approval
   let previewUrl: string | false = false;
   if (status === "approved") {
@@ -157,7 +181,7 @@ export async function DELETE(
 
   const { id } = await params;
 
-  const order = await prisma.fustOrder.findUnique({ where: { id } });
+  const order = await prisma.fustOrder.findFirst({ where: { id, deletedAt: null } });
   if (!order) {
     return NextResponse.json({ error: "Order not found" }, { status: 404 });
   }
@@ -171,6 +195,21 @@ export async function DELETE(
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  await prisma.fustOrder.delete({ where: { id } });
+  await prisma.fustOrder.update({
+    where: { id },
+    data: { deletedAt: new Date(), deletedById: session!.user.id },
+  });
+
+  // Audit: order deleted
+  await logFustEvent({
+    entityType: "order",
+    entityId: id,
+    orderId: id,
+    action: "order_deleted",
+    actorId: session!.user.id,
+    actorName: session!.user.name,
+    metadata: { orderNumber: order.orderNumber },
+  });
+
   return NextResponse.json({ success: true });
 }

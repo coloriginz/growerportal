@@ -6,6 +6,7 @@ import {
   parseIssuanceVoucherPdf,
   parseRfhDate,
 } from "@/features/fust/lib/voucher-parser";
+import { logFustEvent } from "@/lib/fust-audit";
 
 export async function GET(request: NextRequest) {
   const { error, session } = await requireAuth(["finance", "admin"]);
@@ -55,7 +56,6 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const { error, session } = await requireAuth(["finance", "admin"]);
   if (error) return error;
-  void session;
 
   const formData = await request.formData();
   const file = formData.get("file") as File;
@@ -151,6 +151,20 @@ export async function POST(request: NextRequest) {
         },
       },
       orderLinks: true,
+    },
+  });
+
+  // Audit: voucher uploaded
+  await logFustEvent({
+    entityType: "voucher",
+    entityId: voucher.id,
+    action: "voucher_uploaded",
+    actorId: session!.user.id,
+    actorName: session!.user.name,
+    metadata: {
+      transactionNumber: parsed.transactionNumber,
+      type: parsed.type,
+      itemCount: itemsToCreate.length,
     },
   });
 

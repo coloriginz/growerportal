@@ -13,9 +13,9 @@ export async function GET(request: NextRequest) {
   if (!growerId) {
     // Aggregate view for admin/commercie
     const [pendingCount, approvedCount, deliveredCount] = await Promise.all([
-      prisma.fustOrder.count({ where: { status: "pending" } }),
-      prisma.fustOrder.count({ where: { status: "approved" } }),
-      prisma.fustOrder.count({ where: { status: "delivered" } }),
+      prisma.fustOrder.count({ where: { status: "pending", deletedAt: null } }),
+      prisma.fustOrder.count({ where: { status: "approved", deletedAt: null } }),
+      prisma.fustOrder.count({ where: { status: "delivered", deletedAt: null } }),
     ]);
 
     return NextResponse.json({
@@ -27,10 +27,10 @@ export async function GET(request: NextRequest) {
 
   const [pendingOrders, recentOrders, recentDeliveries, openCharges] = await Promise.all([
     prisma.fustOrder.count({
-      where: { growerId, status: { in: ["pending", "approved", "scheduled"] } },
+      where: { growerId, status: { in: ["pending", "approved", "scheduled"] }, deletedAt: null },
     }),
     prisma.fustOrder.findMany({
-      where: { growerId },
+      where: { growerId, deletedAt: null },
       include: {
         items: { include: { fustType: true } },
       },

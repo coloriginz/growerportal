@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { requireAuth } from "@/lib/api-helpers";
+import { logFustEvent } from "@/lib/fust-audit";
 
 const updatePickupSchema = z.object({
   status: z.enum(["picked_up", "completed"]).optional(),
@@ -109,7 +110,25 @@ export async function PATCH(
         where: { id: delivery.orderId },
         data: { status: "in_transit" },
       });
+      // Audit: delivery in transit
+      await logFustEvent({
+        entityType: "delivery",
+        entityId: delivery.id,
+        orderId: delivery.orderId,
+        action: "delivery_in_transit",
+        actorId: session!.user.id,
+        actorName: session!.user.name,
+        metadata: { pickupId: id },
+      });
     }
+    // Audit: pickup picked up
+    await logFustEvent({
+      entityType: "pickup",
+      entityId: id,
+      action: "pickup_picked_up",
+      actorId: session!.user.id,
+      actorName: session!.user.name,
+    });
   } else if (status === "completed") {
     // Check if all deliveries are delivered; if so, mark orders as delivered
     const deliveries = await prisma.fustDelivery.findMany({
@@ -123,6 +142,14 @@ export async function PATCH(
           data: { status: "delivered" },
         });
       }
+      // Audit: pickup completed
+      await logFustEvent({
+        entityType: "pickup",
+        entityId: id,
+        action: "pickup_completed",
+        actorId: session!.user.id,
+        actorName: session!.user.name,
+      });
     }
   }
 
@@ -152,6 +179,17 @@ export async function PATCH(
       await prisma.fustOrder.update({
         where: { id: orderId },
         data: { status: "scheduled" },
+      });
+
+      // Audit: order linked to pickup
+      await logFustEvent({
+        entityType: "pickup",
+        entityId: id,
+        orderId,
+        action: "pickup_orders_linked",
+        actorId: session!.user.id,
+        actorName: session!.user.name,
+        metadata: { pickupId: id },
       });
     }
   }

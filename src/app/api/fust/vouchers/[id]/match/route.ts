@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { requireAuth } from "@/lib/api-helpers";
+import { logFustEvent } from "@/lib/fust-audit";
 
 const matchSchema = z.object({
   orderIds: z.array(z.string().uuid()).min(1),
@@ -17,7 +18,6 @@ export async function POST(
 ) {
   const { error, session } = await requireAuth(["finance", "admin"]);
   if (error) return error;
-  void session;
 
   const { id } = await params;
 
@@ -44,6 +44,19 @@ export async function POST(
       },
       create: { voucherId: id, orderId },
       update: {},
+    });
+  }
+
+  // Audit: voucher matched per order
+  for (const orderId of orderIds) {
+    await logFustEvent({
+      entityType: "voucher",
+      entityId: id,
+      orderId,
+      action: "voucher_matched",
+      actorId: session!.user.id,
+      actorName: session!.user.name,
+      metadata: { transactionNumber: voucher.transactionNumber },
     });
   }
 
@@ -82,7 +95,6 @@ export async function DELETE(
 ) {
   const { error, session } = await requireAuth(["finance", "admin"]);
   if (error) return error;
-  void session;
 
   const { id } = await params;
 
@@ -97,6 +109,16 @@ export async function DELETE(
   // Delete the link
   await prisma.fustVoucherOrderLink.deleteMany({
     where: { voucherId: id, orderId },
+  });
+
+  // Audit: voucher unmatched
+  await logFustEvent({
+    entityType: "voucher",
+    entityId: id,
+    orderId,
+    action: "voucher_unmatched",
+    actorId: session!.user.id,
+    actorName: session!.user.name,
   });
 
   return NextResponse.json({ success: true });

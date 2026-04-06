@@ -356,6 +356,8 @@ model FustOrder {
   approvedAt      DateTime?
   deliveredAt     DateTime?
   deliveredById   String?
+  deletedAt       DateTime?
+  deletedById     String?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
@@ -514,4 +516,24 @@ model FustVoucherOrderLink {
   @@unique([voucherId, orderId])
   @@index([voucherId])
   @@index([orderId])
+}
+
+// ─── FUST AUDIT LOG ─────────────────────────────────────
+
+model FustAuditLog {
+  id          String   @id @default(uuid())
+  entityType  String   // order, pickup, delivery, invoice, charge, voucher
+  entityId    String
+  orderId     String?  // Denormalized FK for fast timeline queries
+  action      String   // e.g. order_created, order_approved, pickup_created, etc.
+  actorId     String?  // User.id (null for system actions like auto-approve)
+  actorName   String?  // Snapshot of user.name to avoid joins
+  metadata    Json?    // Action-specific details
+  createdAt   DateTime @default(now())
+
+  @@index([orderId, createdAt])
+  @@index([entityType, entityId])
+  @@index([action])
+  @@index([actorId])
+  @@index([createdAt])
 }

@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { requireAuth, resolveGrowerId } from "@/lib/api-helpers";
 import { sendOrderApprovedNotification } from "@/lib/fust-notifications";
+import { logFustEvent } from "@/lib/fust-audit";
 
 const orderItemSchema = z.object({
   fustTypeId: z.string().uuid(),
@@ -45,7 +46,7 @@ export async function GET(request: NextRequest) {
 
   // Build where clause based on role
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const where: any = {};
+  const where: any = { deletedAt: null };
 
   if (role === "grower") {
     where.growerId = session!.user.growerId;
@@ -140,7 +141,7 @@ export async function POST(request: NextRequest) {
       createdById: session!.user.id,
       // Auto-approve if grower setting is enabled
       ...(grower.autoApproveOrders
-        ? { status: "approved", approvedAt: new Date() }
+        ? { status: "approved", approvedAt: new Date(), approvedById: session!.user.id }
         : {}),
       items: {
         create: items.map((item) => ({
@@ -154,6 +155,30 @@ export async function POST(request: NextRequest) {
       grower: { select: { id: true, code: true, name: true } },
     },
   });
+
+  // Audit: order created
+  await logFustEvent({
+    entityType: "order",
+    entityId: order.id,
+    orderId: order.id,
+    action: "order_created",
+    actorId: session!.user.id,
+    actorName: session!.user.name,
+    metadata: { orderNumber: order.orderNumber, growerId, itemCount: items.length },
+  });
+
+  // Audit: auto-approved
+  if (grower.autoApproveOrders) {
+    await logFustEvent({
+      entityType: "order",
+      entityId: order.id,
+      orderId: order.id,
+      action: "order_auto_approved",
+      actorId: null,
+      actorName: null,
+      metadata: { orderNumber: order.orderNumber },
+    });
+  }
 
   // Send transporter notification if auto-approved
   let previewUrl: string | false = false;

@@ -77,7 +77,8 @@
     "fustVouchers": "Bonnen",
     "fustMatching": "Koppelen",
     "fustInvoices": "Facturen",
-    "fustSettings": "Fust Instellingen"
+    "fustSettings": "Fust Instellingen",
+    "fustActivity": "Activiteit"
   },
   "dashboard": {
     "title": "Dashboard",
@@ -541,6 +542,40 @@
     "readyForInvoicing": "Klaar voor Facturatie",
     "sentInvoices": "Verzonden Facturen",
     "noReadyOrders": "Geen orders klaar voor facturatie",
-    "linkedVouchers": "Gekoppelde Bonnen"
+    "linkedVouchers": "Gekoppelde Bonnen",
+    "activity": "Activiteit",
+    "auditLog": "Audit Log",
+    "history": "Geschiedenis",
+    "orderTimeline": "Order Tijdlijn",
+    "noAuditEvents": "Nog geen activiteit vastgelegd",
+    "auditTrailStarted": "Audit trail gestart",
+    "systemAction": "Systeem",
+    "allActions": "Alle Acties",
+    "allEntityTypes": "Alle Types",
+    "dateFrom": "Vanaf",
+    "dateTo": "Tot",
+    "actor": "Gebruiker",
+    "details": "Details",
+    "entity": "Entiteit",
+    "audit": {
+      "order_created": "Bestelling aangemaakt",
+      "order_auto_approved": "Bestelling automatisch goedgekeurd",
+      "order_approved": "Bestelling goedgekeurd",
+      "order_rejected": "Bestelling afgewezen",
+      "order_cancelled": "Bestelling geannuleerd",
+      "order_deleted": "Bestelling verwijderd",
+      "pickup_created": "Ophaalronde aangemaakt",
+      "pickup_orders_linked": "Orders gekoppeld aan ophaalronde",
+      "pickup_picked_up": "Ophaalronde opgehaald",
+      "pickup_completed": "Ophaalronde voltooid",
+      "delivery_in_transit": "Levering onderweg",
+      "delivery_delivered": "Levering bevestigd",
+      "invoice_uploaded": "Factuur geupload",
+      "invoice_status_changed": "Factuurstatus gewijzigd",
+      "invoice_charges_created": "Kosten aangemaakt",
+      "voucher_uploaded": "Bon geupload",
+      "voucher_matched": "Bon gekoppeld",
+      "voucher_unmatched": "Bon ontkoppeld"
+    }
   }
 }

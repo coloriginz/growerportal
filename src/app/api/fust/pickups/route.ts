@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { requireAuth } from "@/lib/api-helpers";
+import { logFustEvent } from "@/lib/fust-audit";
 
 const createPickupSchema = z.object({
   pickupDate: z.string(),
@@ -135,6 +136,31 @@ export async function POST(request: NextRequest) {
       await prisma.fustOrder.update({
         where: { id: orderId },
         data: { status: "scheduled" },
+      });
+    }
+  }
+
+  // Audit: pickup created
+  await logFustEvent({
+    entityType: "pickup",
+    entityId: pickup.id,
+    action: "pickup_created",
+    actorId: session!.user.id,
+    actorName: session!.user.name,
+    metadata: { pickupDate, transporterId },
+  });
+
+  // Audit: orders linked to pickup
+  if (orderIds && orderIds.length > 0) {
+    for (const orderId of orderIds) {
+      await logFustEvent({
+        entityType: "pickup",
+        entityId: pickup.id,
+        orderId,
+        action: "pickup_orders_linked",
+        actorId: session!.user.id,
+        actorName: session!.user.name,
+        metadata: { pickupId: pickup.id },
       });
     }
   }

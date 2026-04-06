@@ -31,8 +31,15 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { RiCheckLine, RiCloseLine, RiBox3Line } from "@remixicon/react";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import { RiCheckLine, RiCloseLine, RiBox3Line, RiHistoryLine } from "@remixicon/react";
 import { toast } from "sonner";
+import { FustOrderTimeline } from "./fust-order-timeline";
 
 interface FustType {
   id: string;
@@ -97,6 +104,7 @@ export function FustOrders() {
   const [rejectDialogOrder, setRejectDialogOrder] = useState<FustOrder | null>(null);
   const [rejectionReason, setRejectionReason] = useState("");
   const [processing, setProcessing] = useState<string | null>(null);
+  const [timelineOrder, setTimelineOrder] = useState<FustOrder | null>(null);
 
   const url = useMemo(() => {
     const params = new URLSearchParams();
@@ -250,33 +258,44 @@ export function FustOrders() {
                       {formatCurrencyDetailed(total)}
                     </TableCell>
                     <TableCell>
-                      {order.status === "pending" && (
-                        <div className="flex items-center gap-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 text-green-600 hover:bg-green-50 hover:text-green-700 dark:hover:bg-green-950"
-                            onClick={() => handleApprove(order)}
-                            disabled={processing === order.id}
-                            title={t("fust.approve")}
-                          >
-                            <RiCheckLine className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 text-red-600 hover:bg-red-50 hover:text-red-700 dark:hover:bg-red-950"
-                            onClick={() => {
-                              setRejectDialogOrder(order);
-                              setRejectionReason("");
-                            }}
-                            disabled={processing === order.id}
-                            title={t("fust.reject")}
-                          >
-                            <RiCloseLine className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      )}
+                      <div className="flex items-center gap-1">
+                        {order.status === "pending" && (
+                          <>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-green-600 hover:bg-green-50 hover:text-green-700 dark:hover:bg-green-950"
+                              onClick={() => handleApprove(order)}
+                              disabled={processing === order.id}
+                              title={t("fust.approve")}
+                            >
+                              <RiCheckLine className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-red-600 hover:bg-red-50 hover:text-red-700 dark:hover:bg-red-950"
+                              onClick={() => {
+                                setRejectDialogOrder(order);
+                                setRejectionReason("");
+                              }}
+                              disabled={processing === order.id}
+                              title={t("fust.reject")}
+                            >
+                              <RiCloseLine className="h-4 w-4" />
+                            </Button>
+                          </>
+                        )}
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                          onClick={() => setTimelineOrder(order)}
+                          title={t("fust.history")}
+                        >
+                          <RiHistoryLine className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 );
@@ -324,6 +343,18 @@ export function FustOrders() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Order timeline sheet */}
+      <Sheet open={!!timelineOrder} onOpenChange={(open) => { if (!open) setTimelineOrder(null); }}>
+        <SheetContent className="w-full sm:max-w-md overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle>{t("fust.orderTimeline")} — {timelineOrder?.orderNumber}</SheetTitle>
+          </SheetHeader>
+          <div className="mt-6">
+            {timelineOrder && <FustOrderTimeline orderId={timelineOrder.id} />}
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { requireAuth } from "@/lib/api-helpers";
 import { put } from "@vercel/blob";
 import { parseFustInvoicePdf } from "@/features/fust/lib/invoice-parser";
+import { logFustEvent } from "@/lib/fust-audit";
 
 export async function GET(request: NextRequest) {
   const { error, session } = await requireAuth(["finance", "admin"]);
@@ -39,7 +40,6 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const { error, session } = await requireAuth(["finance", "admin"]);
   if (error) return error;
-  void session;
 
   const formData = await request.formData();
   const file = formData.get("file") as File;
@@ -125,6 +125,16 @@ export async function POST(request: NextRequest) {
       },
       charges: true,
     },
+  });
+
+  // Audit: invoice uploaded
+  await logFustEvent({
+    entityType: "invoice",
+    entityId: invoice.id,
+    action: "invoice_uploaded",
+    actorId: session!.user.id,
+    actorName: session!.user.name,
+    metadata: { invoiceNumber: parsed.invoiceNumber, itemCount: itemsToCreate.length },
   });
 
   return NextResponse.json(invoice, { status: 201 });

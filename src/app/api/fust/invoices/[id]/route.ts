@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { requireAuth } from "@/lib/api-helpers";
+import { logFustEvent } from "@/lib/fust-audit";
 
 const patchSchema = z.object({
   status: z.enum(["pending", "matched", "charged", "paid"]).optional(),
@@ -47,7 +48,6 @@ export async function PATCH(
 ) {
   const { error, session } = await requireAuth(["finance", "admin"]);
   if (error) return error;
-  void session;
 
   const { id } = await params;
   const body = await request.json();
@@ -94,6 +94,18 @@ export async function PATCH(
       },
     },
   });
+
+  // Audit: invoice status changed
+  if (parsed.data.status !== undefined) {
+    await logFustEvent({
+      entityType: "invoice",
+      entityId: id,
+      action: "invoice_status_changed",
+      actorId: session!.user.id,
+      actorName: session!.user.name,
+      metadata: { fromStatus: invoice.status, toStatus: parsed.data.status },
+    });
+  }
 
   return NextResponse.json(updated);
 }
