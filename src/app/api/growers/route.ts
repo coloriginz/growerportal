@@ -4,7 +4,7 @@ import { requireAuth } from "@/lib/api-helpers";
 import { z } from "zod";
 
 export async function GET(request: NextRequest) {
-  const { error } = await requireAuth(["admin", "commercie"]);
+  const { error } = await requireAuth(["admin", "commercie", "finance"]);
   if (error) return error;
 
   const url = new URL(request.url);

@@ -88,7 +88,7 @@ const bottomNavItems: NavItem[] = [
     href: "/growers",
     labelKey: "nav.growers",
     icon: RiPlantLine,
-    roles: ["admin", "commercie"],
+    roles: ["admin", "commercie", "finance"],
   },
   {
     href: "/admin",
@@ -120,16 +120,14 @@ export function AppShell({ user, children }: AppShellProps) {
   const company = useCompanyBranding();
   const growerId = searchParams.get("growerId");
   const userRole = user.role as Role;
-  const showGrowerSelector = userRole === "admin" || userRole === "commercie";
+  const showGrowerSelector = userRole === "admin" || userRole === "commercie" || userRole === "finance";
 
-  const growerMainRoles: Role[] = ["grower", "commercie", "admin"];
+  const portalRoles: Role[] = ["grower", "commercie", "admin", "finance"];
   const filteredMainNav = mainNavItems.filter(
     (item) => !item.roles || item.roles.includes(userRole)
   ).filter((item) => {
-    // Hide standard portal pages from transporteur/finance (they only see fust)
-    if (!growerMainRoles.includes(userRole) && !item.roles) {
-      return item.href === "/dashboard" || item.href === "/profile";
-    }
+    // Transporteur only sees fust items, no main portal pages
+    if (!portalRoles.includes(userRole)) return false;
     return true;
   });
 

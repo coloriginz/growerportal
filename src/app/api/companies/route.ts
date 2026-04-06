@@ -3,7 +3,7 @@ import { prisma } from "@/lib/db";
 import { requireAuth } from "@/lib/api-helpers";
 
 export async function GET() {
-  const { error } = await requireAuth(["admin", "commercie"]);
+  const { error } = await requireAuth(["admin", "commercie", "finance"]);
   if (error) return error;
 
   const companies = await prisma.company.findMany({

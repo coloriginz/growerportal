@@ -7,7 +7,7 @@ export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { error } = await requireAuth(["admin", "commercie"]);
+  const { error } = await requireAuth(["admin", "commercie", "finance"]);
   if (error) return error;
 
   const { id } = await params;
