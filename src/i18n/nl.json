@@ -78,7 +78,8 @@
     "fustMatching": "Koppelen",
     "fustInvoices": "Facturen",
     "fustSettings": "Fust Instellingen",
-    "fustActivity": "Activiteit"
+    "fustActivity": "Activiteit",
+    "fustEmails": "Email Log"
   },
   "dashboard": {
     "title": "Dashboard",
@@ -557,6 +558,30 @@
     "actor": "Gebruiker",
     "details": "Details",
     "entity": "Entiteit",
+    "emailLog": {
+      "title": "Email Verwerkingslog",
+      "search": "Zoek op onderwerp, afzender, transactie...",
+      "allStatuses": "Alle Statussen",
+      "processed": "Verwerkt",
+      "error": "Fout",
+      "processing": "Bezig...",
+      "noEmails": "Nog geen emails ontvangen",
+      "reprocess": "Opnieuw verwerken",
+      "reprocessing": "Opnieuw aan het verwerken...",
+      "reprocessed": "Email opnieuw verwerkt",
+      "reprocessFailed": "Opnieuw verwerken mislukt",
+      "details": "Email Details",
+      "linkedVoucher": "Gekoppelde Bon",
+      "viewPdf": "PDF Bekijken",
+      "emailBody": "Email Inhoud",
+      "reportId": "Rapport ID",
+      "from": "Van",
+      "subject": "Onderwerp",
+      "received": "Ontvangen",
+      "processedAt": "Verwerkt",
+      "transactionNumber": "Transactienummer",
+      "errors": "Fouten"
+    },
     "audit": {
       "order_created": "Bestelling aangemaakt",
       "order_auto_approved": "Bestelling automatisch goedgekeurd",

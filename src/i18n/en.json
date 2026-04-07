@@ -78,7 +78,8 @@
     "fustMatching": "Matching",
     "fustInvoices": "Invoices",
     "fustSettings": "Fust Settings",
-    "fustActivity": "Activity"
+    "fustActivity": "Activity",
+    "fustEmails": "Email Log"
   },
   "dashboard": {
     "title": "Dashboard",
@@ -557,6 +558,30 @@
     "actor": "Actor",
     "details": "Details",
     "entity": "Entity",
+    "emailLog": {
+      "title": "Email Ingestion Log",
+      "search": "Search subject, sender, transaction...",
+      "allStatuses": "All Statuses",
+      "processed": "Processed",
+      "error": "Error",
+      "processing": "Processing",
+      "noEmails": "No emails received yet",
+      "reprocess": "Reprocess",
+      "reprocessing": "Reprocessing...",
+      "reprocessed": "Email reprocessed successfully",
+      "reprocessFailed": "Reprocessing failed",
+      "details": "Email Details",
+      "linkedVoucher": "Linked Voucher",
+      "viewPdf": "View PDF",
+      "emailBody": "Email Body",
+      "reportId": "Report ID",
+      "from": "From",
+      "subject": "Subject",
+      "received": "Received",
+      "processedAt": "Processed",
+      "transactionNumber": "Transaction Number",
+      "errors": "Errors"
+    },
     "audit": {
       "order_created": "Order created",
       "order_auto_approved": "Order auto-approved",

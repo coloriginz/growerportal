@@ -488,10 +488,36 @@ model FustIssuanceVoucher {
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 
-  items      FustIssuanceVoucherItem[]
-  orderLinks FustVoucherOrderLink[]
+  items            FustIssuanceVoucherItem[]
+  orderLinks       FustVoucherOrderLink[]
+  emailIngestions  FustEmailIngestion[]
 
   @@index([transactionNumber])
+}
+
+// ─── FUST EMAIL INGESTION LOG ────────────────────────
+
+model FustEmailIngestion {
+  id                String               @id @default(uuid())
+  subject           String?
+  fromAddress       String?
+  receivedAt        DateTime?
+  processedAt       DateTime             @default(now())
+  status            String               @default("PROCESSING") // PROCESSING | PROCESSED | ERROR
+  errors            String?              // Error messages (multiple separated by ;)
+  emailBody         String?              // Plain text version
+  emailBodyHtml     String?              // HTML version (for debugging / display)
+  transactionNumber String?              // Extracted from subject
+  reportId          String?              // TrackOnline report UUID
+  pdfUrl            String?              // Vercel Blob URL of fetched PDF
+  voucherId         String?
+  voucher           FustIssuanceVoucher? @relation(fields: [voucherId], references: [id])
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+
+  @@index([status])
+  @@index([transactionNumber])
+  @@index([createdAt])
 }
 
 model FustIssuanceVoucherItem {
