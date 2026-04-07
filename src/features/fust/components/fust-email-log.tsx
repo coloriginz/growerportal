@@ -301,7 +301,7 @@ export function FustEmailLog() {
 
       {/* Detail Sheet */}
       <Sheet open={!!selectedId} onOpenChange={(open) => { if (!open) setSelectedId(null); }}>
-        <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
+        <SheetContent className="w-full sm:max-w-2xl overflow-y-auto">
           <SheetHeader>
             <SheetTitle>{t("fust.emailLog.details" as Parameters<typeof t>[0])}</SheetTitle>
           </SheetHeader>
@@ -422,11 +422,11 @@ export function FustEmailLog() {
                   <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
                     {t("fust.emailLog.emailBody" as Parameters<typeof t>[0])}
                   </h3>
-                  <div className="rounded-lg border bg-muted/30 max-h-[300px] overflow-y-auto">
+                  <div className="rounded-lg border bg-muted/30 max-h-[200px] overflow-y-auto">
                     {detail.emailBodyHtml ? (
                       <iframe
                         srcDoc={detail.emailBodyHtml}
-                        className="w-full h-[280px] border-0"
+                        className="w-full h-[180px] border-0"
                         sandbox=""
                         title="Email body"
                       />
