@@ -130,7 +130,6 @@ export function VoucherTable({
                         viewMode === "all" && isLinked ? "opacity-50" : ""
                       }
                       onClick={(e) => {
-                        if ((e.target as HTMLElement).closest("[data-slot=checkbox]")) return;
                         selection.toggleRow(row.original.id, e.shiftKey);
                       }}
                     >

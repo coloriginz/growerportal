@@ -123,7 +123,6 @@ export function OrderTable({ data, loading, selection }: OrderTableProps) {
                     <TableRow
                       data-state={isSelected ? "selected" : undefined}
                       onClick={(e) => {
-                        if ((e.target as HTMLElement).closest("[data-slot=checkbox]")) return;
                         selection.toggleRow(row.original.id, e.shiftKey);
                       }}
                     >

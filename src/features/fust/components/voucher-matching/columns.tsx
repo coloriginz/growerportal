@@ -26,17 +26,27 @@ export function createVoucherColumns(
       id: "select",
       size: 32,
       header: () => (
-        <Checkbox
-          checked={selection.allSelected}
-          indeterminate={selection.selectedCount > 0 && !selection.allSelected}
-          onCheckedChange={() => selection.toggleAll()}
-        />
+        <div
+          className="flex items-center justify-center cursor-pointer px-1 py-1 -mx-1 -my-1"
+          onClick={(e) => { e.stopPropagation(); selection.toggleAll(); }}
+        >
+          <Checkbox
+            checked={selection.allSelected}
+            indeterminate={selection.selectedCount > 0 && !selection.allSelected}
+            tabIndex={-1}
+          />
+        </div>
       ),
       cell: ({ row }) => (
-        <Checkbox
-          checked={selection.isSelected(row.original.id)}
-          onCheckedChange={() => selection.toggleRow(row.original.id, false)}
-        />
+        <div
+          className="flex items-center justify-center cursor-pointer px-1 py-1 -mx-1 -my-1"
+          onClick={(e) => { e.stopPropagation(); selection.toggleRow(row.original.id, e.shiftKey); }}
+        >
+          <Checkbox
+            checked={selection.isSelected(row.original.id)}
+            tabIndex={-1}
+          />
+        </div>
       ),
     }),
     voucherHelper.accessor("transactionNumber", {
@@ -120,17 +130,27 @@ export function createOrderColumns(
       id: "select",
       size: 32,
       header: () => (
-        <Checkbox
-          checked={selection.allSelected}
-          indeterminate={selection.selectedCount > 0 && !selection.allSelected}
-          onCheckedChange={() => selection.toggleAll()}
-        />
+        <div
+          className="flex items-center justify-center cursor-pointer px-1 py-1 -mx-1 -my-1"
+          onClick={(e) => { e.stopPropagation(); selection.toggleAll(); }}
+        >
+          <Checkbox
+            checked={selection.allSelected}
+            indeterminate={selection.selectedCount > 0 && !selection.allSelected}
+            tabIndex={-1}
+          />
+        </div>
       ),
       cell: ({ row }) => (
-        <Checkbox
-          checked={selection.isSelected(row.original.id)}
-          onCheckedChange={() => selection.toggleRow(row.original.id, false)}
-        />
+        <div
+          className="flex items-center justify-center cursor-pointer px-1 py-1 -mx-1 -my-1"
+          onClick={(e) => { e.stopPropagation(); selection.toggleRow(row.original.id, e.shiftKey); }}
+        >
+          <Checkbox
+            checked={selection.isSelected(row.original.id)}
+            tabIndex={-1}
+          />
+        </div>
       ),
     }),
     orderHelper.accessor("orderNumber", {
