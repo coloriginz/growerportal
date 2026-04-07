@@ -49,6 +49,9 @@ interface FustType {
   name: string;
   category: string;
   pricePerUnit: string;
+  rentalPricePerUnit: string;
+  depositArticleCode: string;
+  rentalArticleCode: string;
   isActive: boolean;
   sortOrder: number;
 }
@@ -81,6 +84,7 @@ const CATEGORIES = ["emmers", "karren", "kratten", "dozen", "opzetrekken", "over
 
 export function FustSettings() {
   const { t } = useLanguage();
+  const tAny = t as unknown as (key: string) => string;
   const { data, loading, refetch } = useFetch<SettingsData>("/api/fust/settings");
   const [saving, setSaving] = useState(false);
 
@@ -106,6 +110,9 @@ export function FustSettings() {
   const [ftName, setFtName] = useState("");
   const [ftCategory, setFtCategory] = useState("emmers");
   const [ftPrice, setFtPrice] = useState("");
+  const [ftRentalPrice, setFtRentalPrice] = useState("");
+  const [ftDepositArticleCode, setFtDepositArticleCode] = useState("2907");
+  const [ftRentalArticleCode, setFtRentalArticleCode] = useState("2908");
   const [ftActive, setFtActive] = useState(true);
   const [ftSortOrder, setFtSortOrder] = useState("0");
 
@@ -207,6 +214,9 @@ export function FustSettings() {
       setFtName("");
       setFtCategory("emmers");
       setFtPrice("");
+      setFtRentalPrice("");
+      setFtDepositArticleCode("2907");
+      setFtRentalArticleCode("2908");
       setFtActive(true);
       setFtSortOrder("0");
     } else {
@@ -214,6 +224,9 @@ export function FustSettings() {
       setFtName(ft.name);
       setFtCategory(ft.category);
       setFtPrice(String(Number(ft.pricePerUnit)));
+      setFtRentalPrice(String(Number(ft.rentalPricePerUnit)));
+      setFtDepositArticleCode(ft.depositArticleCode);
+      setFtRentalArticleCode(ft.rentalArticleCode);
       setFtActive(ft.isActive);
       setFtSortOrder(String(ft.sortOrder));
     }
@@ -228,6 +241,9 @@ export function FustSettings() {
       name: ftName.trim(),
       category: ftCategory,
       pricePerUnit: Number(ftPrice),
+      rentalPricePerUnit: Number(ftRentalPrice) || 0,
+      depositArticleCode: ftDepositArticleCode.trim() || "2907",
+      rentalArticleCode: ftRentalArticleCode.trim() || "2908",
       isActive: ftActive,
       sortOrder: Number(ftSortOrder) || 0,
     };
@@ -344,6 +360,7 @@ export function FustSettings() {
                   <TableHead>{t("fust.name")}</TableHead>
                   <TableHead>{t("fust.category")}</TableHead>
                   <TableHead className="text-right">{t("fust.price")}</TableHead>
+                  <TableHead className="text-right">{tAny("fust.rentalPrice")}</TableHead>
                   <TableHead>{t("common.status")}</TableHead>
                   <TableHead className="w-20" />
                 </TableRow>
@@ -364,6 +381,11 @@ export function FustSettings() {
                     </TableCell>
                     <TableCell className="text-right">
                       {formatCurrencyDetailed(Number(ft.pricePerUnit))}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {Number(ft.rentalPricePerUnit) > 0
+                        ? formatCurrencyDetailed(Number(ft.rentalPricePerUnit))
+                        : "—"}
                     </TableCell>
                     <TableCell>
                       {ft.isActive ? (
@@ -699,6 +721,41 @@ export function FustSettings() {
                   required
                 />
               </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="ft-rental-price">{tAny("fust.rentalPrice")}</Label>
+                <Input
+                  id="ft-rental-price"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={ftRentalPrice}
+                  onChange={(e) => setFtRentalPrice(e.target.value)}
+                  placeholder="0.00"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="ft-deposit-code">{tAny("fust.depositArticleCode")}</Label>
+                <Input
+                  id="ft-deposit-code"
+                  value={ftDepositArticleCode}
+                  onChange={(e) => setFtDepositArticleCode(e.target.value)}
+                  placeholder="2907"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="ft-rental-code">{tAny("fust.rentalArticleCode")}</Label>
+                <Input
+                  id="ft-rental-code"
+                  value={ftRentalArticleCode}
+                  onChange={(e) => setFtRentalArticleCode(e.target.value)}
+                  placeholder="2908"
+                />
+              </div>
+              <div />
             </div>
             <div className="space-y-2">
               <Label>{t("common.status")}</Label>

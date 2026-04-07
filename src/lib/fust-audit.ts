@@ -24,6 +24,10 @@ export const FUST_AUDIT_ACTIONS = [
   "voucher_uploaded",
   "voucher_matched",
   "voucher_unmatched",
+  // Grower Invoice
+  "grower_invoice_created",
+  "grower_invoice_sent",
+  "grower_invoice_status_changed",
 ] as const;
 
 export type FustAuditAction = (typeof FUST_AUDIT_ACTIONS)[number];

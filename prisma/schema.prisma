@@ -49,6 +49,9 @@ model User {
   // Commercie: growers assigned to this user
   assignedGrowers Grower[] @relation("CommercieGrowers")
 
+  // Fust grower invoices created by this user
+  fustGrowerInvoices FustGrowerInvoice[]
+
   // Transporteur: link to transporter company
   transporterId  String?
   transporter    Transporter? @relation(fields: [transporterId], references: [id])
@@ -96,6 +99,7 @@ model Grower {
   defaultTransporter   Transporter? @relation("DefaultTransporter", fields: [defaultTransporterId], references: [id])
   fustOrders           FustOrder[]
   fustCharges          FustGrowerCharge[]
+  fustGrowerInvoices   FustGrowerInvoice[]
 
   @@index([commercieId])
   @@index([companyId])
@@ -327,19 +331,23 @@ model Transporter {
 }
 
 model FustType {
-  id           String  @id @default(uuid())
-  code         String  @unique
-  name         String
-  category     String  // emmers, karren, kratten, dozen, opzetrekken, overig
-  pricePerUnit Decimal @db.Decimal(8,2)
-  imageUrl     String?
-  isActive     Boolean @default(true)
-  sortOrder    Int     @default(0)
+  id                  String  @id @default(uuid())
+  code                String  @unique
+  name                String
+  category            String  // emmers, karren, kratten, dozen, opzetrekken, overig
+  pricePerUnit        Decimal @db.Decimal(8,2) // statiegeld
+  rentalPricePerUnit  Decimal @db.Decimal(8,2) @default(0) // fusthuur
+  depositArticleCode  String  @default("2907") // artikelcode statiegeld (Exact Globe)
+  rentalArticleCode   String  @default("2908") // artikelcode fusthuur (Exact Globe)
+  imageUrl            String?
+  isActive            Boolean @default(true)
+  sortOrder           Int     @default(0)
 
-  orderItems           FustOrderItem[]
-  deliveryItems        FustDeliveryItem[]
-  invoiceItems         FustInvoiceItem[]
-  issuanceVoucherItems FustIssuanceVoucherItem[]
+  orderItems            FustOrderItem[]
+  deliveryItems         FustDeliveryItem[]
+  invoiceItems          FustInvoiceItem[]
+  issuanceVoucherItems  FustIssuanceVoucherItem[]
+  growerInvoiceItems    FustGrowerInvoiceItem[]
 }
 
 model FustOrder {
@@ -363,7 +371,9 @@ model FustOrder {
 
   items        FustOrderItem[]
   delivery     FustDelivery?
-  voucherLinks FustVoucherOrderLink[]
+  voucherLinks       FustVoucherOrderLink[]
+  growerInvoiceItems FustGrowerInvoiceItem[]
+  invoicedAt         DateTime?
 
   @@index([growerId])
   @@index([status])
@@ -468,6 +478,59 @@ model FustGrowerCharge {
 
   @@index([growerId])
   @@index([invoiceId])
+}
+
+// ─── FUST GROWER INVOICES ──────────────────────────────
+
+model FustGrowerInvoice {
+  id              String   @id @default(uuid())
+  invoiceNumber   String   @unique          // Auto: "FI-2026-0042"
+  invoiceDate     DateTime
+  growerId        String
+  grower          Grower   @relation(fields: [growerId], references: [id])
+
+  subtotalExVat   Decimal  @db.Decimal(10,2)
+  vatRate         Decimal  @db.Decimal(4,2) @default(21.00)
+  vatAmount       Decimal  @db.Decimal(10,2)
+  totalInclVat    Decimal  @db.Decimal(10,2)
+
+  status          String   @default("draft")  // draft | sent | paid
+  pdfUrl          String?                     // Vercel Blob URL
+  xmlUrl          String?                     // Vercel Blob URL (eExact XML)
+  sentAt          DateTime?
+  sentTo          String?                     // email address
+  notes           String?
+
+  createdById     String?
+  createdBy       User?    @relation(fields: [createdById], references: [id])
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  items           FustGrowerInvoiceItem[]
+
+  @@index([growerId])
+  @@index([status])
+  @@index([invoiceDate])
+}
+
+model FustGrowerInvoiceItem {
+  id            String            @id @default(uuid())
+  invoiceId     String
+  invoice       FustGrowerInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  orderId       String?
+  order         FustOrder?        @relation(fields: [orderId], references: [id])
+  fustTypeId    String?
+  fustType      FustType?         @relation(fields: [fustTypeId], references: [id])
+
+  articleCode   String            // "2907" or "2908" (snapshot)
+  description   String            // "Emmers O50cm - Statiegeld" (snapshot)
+  quantity      Int
+  unitPrice     Decimal           @db.Decimal(8,2)
+  totalPrice    Decimal           @db.Decimal(10,2)
+  lineType      String            // "deposit" | "rental"
+
+  @@index([invoiceId])
+  @@index([orderId])
 }
 
 // ─── FUST ISSUANCE VOUCHERS (RFH Uitgiftebonnen) ──────
