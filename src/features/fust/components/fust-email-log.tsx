@@ -301,7 +301,7 @@ export function FustEmailLog() {
 
       {/* Detail Sheet */}
       <Sheet open={!!selectedId} onOpenChange={(open) => { if (!open) setSelectedId(null); }}>
-        <SheetContent className="w-full sm:max-w-2xl overflow-y-auto">
+        <SheetContent className="w-full sm:w-[50vw] sm:max-w-none overflow-y-auto">
           <SheetHeader>
             <SheetTitle>{t("fust.emailLog.details" as Parameters<typeof t>[0])}</SheetTitle>
           </SheetHeader>
