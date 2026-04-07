@@ -2,9 +2,9 @@
 
 ## Overview
 
-Multi-tenant web portal for **Coloriginz**, a Dutch flower trading company that works on consignment with growers worldwide. Growers (kwekers) use this portal to track sales, lots, quality issues, documents, and shipment forecasts. Internal users (commercie/admin) manage growers and view aggregate insights.
+Multi-tenant web portal for **Coloriginz**, a Dutch flower trading company that works on consignment with growers worldwide. Growers (kwekers) use this portal to track sales, lots, quality issues, documents, and shipment forecasts. Internal users (commercie/admin) manage growers and view aggregate insights. Transporteurs manage fust pickups and deliveries. Finance handles fust invoicing and voucher matching.
 
-**Domain:** Cut flower trade (consignment model). Growers ship flowers, Coloriginz sells at Dutch flower auctions (VBA, VPL) and direct sales, then settles via salessheets.
+**Domain:** Cut flower trade (consignment model). Growers ship flowers, Coloriginz sells at Dutch flower auctions (VBA, VPL) and direct sales, then settles via salessheets. Fust (containers/crates) is tracked separately: growers order fust, transporteurs pick up and deliver, finance reconciles via invoices and issuance vouchers.
 
 ---
 
@@ -39,7 +39,7 @@ src/
 │   ├── icon.svg                      # Favicon (SVG leaf)
 │   ├── login/page.tsx                # Public login page
 │   ├── activate/                     # Account activation flow
-│   ├── (portal)/                     # Protected route group
+│   ├── (portal)/                     # Protected route group (grower/commercie/admin/finance)
 │   │   ├── layout.tsx                # AppShell wrapper (auth check)
 │   │   ├── dashboard/                # Dashboard (grower + aggregate)
 │   │   ├── sales/                    # Sales analytics + trends
@@ -47,9 +47,12 @@ src/
 │   │   ├── quality/                  # Quality issues
 │   │   ├── documents/                # Document management
 │   │   ├── forecasts/                # Shipment forecasts (weekly grid)
+│   │   ├── fust/                     # Fust pages (orders, pickups, deliveries, vouchers, invoices, activity)
 │   │   ├── profile/                  # Grower profile
 │   │   ├── growers/                  # Grower management (admin/commercie)
 │   │   └── admin/                    # User management (admin)
+│   ├── (fust-portal)/                # Standalone fust portal (transporteur login)
+│   │   └── fust-portal/             # FustShell layout + pages (my-orders, pickups, deliveries, etc.)
 │   └── api/                          # API routes (see below)
 ├── components/
 │   ├── layout/                       # AppShell, GrowerSelector, TestBanner, etc.
@@ -64,6 +67,11 @@ src/
 │   ├── index.ts                      # Translation system
 │   ├── en.json                       # English translations
 │   └── nl.json                       # Dutch translations
+├── features/
+│   └── fust/                         # Fust feature module
+│       ├── components/               # Fust UI (orders, pickups, deliveries, invoices, vouchers, audit, settings)
+│       ├── lib/                      # Voucher/invoice PDF parsers
+│       └── navigation/               # Fust nav config
 ├── lib/
 │   ├── auth.ts                       # NextAuth configuration
 │   ├── db.ts                         # Prisma client singleton
@@ -71,8 +79,12 @@ src/
 │   ├── format.ts                     # Currency, number, date formatting (nl-NL)
 │   ├── export-csv.ts                 # CSV export utility
 │   ├── email.ts                      # Nodemailer setup
-│   ├── email-templates.ts            # HTML email templates
-│   ├── logo-base64.ts               # Base64 logo for emails (CID attachment)
+│   ├── email-templates.ts            # HTML email templates (activation, reset, fust approved, fust delivered)
+│   ├── fust-notifications.ts        # Fust email triggers (order approved → transporter, delivery confirmed → grower)
+│   ├── fust-audit.ts                # Audit trail helper: logFustEvent()
+│   ├── company-config.ts            # Multi-company branding config
+│   ├── company-logos.ts             # Base64 logos per company
+│   ├── company-helpers.ts           # getGrowerEmailBranding()
 │   ├── quality-codes.ts             # Quality code mappings
 │   ├── chart-colors.ts              # Recharts color palette
 │   ├── grower-context.ts            # Server-side grower context
@@ -96,6 +108,8 @@ prisma/
 - **grower**: Can only see own data. Linked to a single Grower record via `user.growerId`.
 - **commercie**: Account manager. Can view any grower's data by passing `?growerId=` in URL. Sees aggregate dashboard when no grower selected.
 - **admin**: Full access. Same multi-tenant view as commercie, plus user management.
+- **transporteur**: Fust portal only. Manages pickups and deliveries. Linked to a Transporter record via `user.transporterId`.
+- **finance**: Fust invoicing and voucher matching. Same nav as commercie in main portal, plus fust finance pages.
 
 ### Key Patterns
 ```typescript
@@ -111,8 +125,9 @@ session.user = {
   id: string;
   name: string;
   email: string;
-  role: "grower" | "commercie" | "admin";
-  growerId: string | null;  // only set for grower users
+  role: "grower" | "commercie" | "admin" | "transporteur" | "finance";
+  growerId: string | null;       // only set for grower users
+  transporterId: string | null;  // only set for transporteur users
 }
 ```
 
@@ -121,12 +136,24 @@ session.user = {
 ## Database Schema (Key Models)
 
 ### Core Entities
-- **User** - Authentication. Has role, optional growerId link.
+- **User** - Authentication. Has role, optional growerId/transporterId link.
 - **Grower** - Supplier. Has code (e.g., "PCFUP"), company, address, certificates.
+- **Company** - Multi-tenant company entity (e.g., Coloriginz, OZ Import). Growers belong to a company for branding.
+- **Transporter** - Logistics partner. Manages fust pickups/deliveries.
 - **Lot** - A batch of flowers delivered. Has productName, articleGroup, stemLength, totalStems, status (in_transit/selling/sold).
 - **Transaction** - Individual sale from a lot. Has salesType (Direct/VBA/VPL), stems, pricePerStem, amount.
 - **SalesSheet** - Invoice grouping lots. Has totalTurnover, totalCosts, netResult.
 - **ShipmentForecast** - Weekly forecast per product per grower. Unique on (growerId, productName, year, week).
+
+### Fust Entities
+- **FustType** - Container type (emmers, karren, kratten, etc.) with price per unit.
+- **FustOrder** - Grower orders fust. Status: pending → approved → scheduled → in_transit → delivered. Soft delete (deletedAt).
+- **FustOrderItem** - Line items per order (fustType + quantity + deliveredQuantity).
+- **FustPickup** - Transporter picks up fust from multiple orders. Status: planned → picked_up → completed.
+- **FustDelivery** - 1:1 with FustOrder. Tracks delivery status and actual quantities.
+- **FustInvoice** - Transporter invoice (PDF upload + parsed items). Status: pending → approved/rejected.
+- **FustIssuanceVoucher** - Auction voucher matched to orders for reconciliation.
+- **FustAuditLog** - Centralized audit trail for all fust events (19 action types). Denormalized orderId for timeline queries.
 
 ### Relationships
 ```
@@ -137,6 +164,11 @@ Grower → has many → QualityIssues
 Grower → has many → Documents
 Grower → has many → Certificates
 Grower → belongs to → User (commercie, via commercieId)
+Grower → belongs to → Company (via companyId)
+Grower → has many → FustOrders → has one → FustDelivery
+Transporter → has many → FustPickups → has many → FustDeliveries
+FustOrder → has many → FustOrderItems
+FustPickup → has many → FustDeliveries
 ```
 
 ### Important Constraints
@@ -171,6 +203,22 @@ Grower → belongs to → User (commercie, via commercieId)
 | `/api/admin/users/[id]` | GET, PUT, DELETE | User CRUD |
 | `/api/activate` | POST | Account activation (set password) |
 | `/api/change-requests` | GET, POST | Grower change requests |
+| `/api/companies` | GET | Company list (for grower brand selector) |
+| `/api/admin/commercie` | GET | Commercie/admin users (for account manager selector) |
+| `/api/fust/types` | GET | Fust types catalog |
+| `/api/fust/settings` | GET, PUT | Fust settings (auto-approve threshold) |
+| `/api/fust/dashboard` | GET | Fust dashboard KPIs |
+| `/api/fust/orders` | GET, POST | Fust orders (soft-delete filtered) |
+| `/api/fust/orders/[id]` | GET, PATCH, DELETE | Order detail, approve/reject/cancel, soft delete |
+| `/api/fust/pickups` | GET, POST | Pickup management |
+| `/api/fust/pickups/[id]` | GET, PATCH | Pickup status + link orders |
+| `/api/fust/deliveries/[id]` | PATCH | Confirm delivery (triggers grower email) |
+| `/api/fust/invoices` | GET, POST | Invoice list and PDF upload |
+| `/api/fust/invoices/[id]` | PATCH | Invoice status change |
+| `/api/fust/invoices/[id]/charges` | POST | Create charges from invoice |
+| `/api/fust/vouchers` | GET, POST | Issuance voucher list and PDF upload |
+| `/api/fust/vouchers/[id]/match` | POST, DELETE | Match/unmatch voucher to orders |
+| `/api/fust/audit` | GET | Audit log (filterable, paginated, role-scoped) |
 
 ### API Conventions
 - All routes use `requireAuth()` for session check
@@ -246,6 +294,24 @@ Type-safe: `t()` accepts only keys that exist in the JSON files.
 - Account activation via email link
 - Commercie assignment
 - Change request system
+- Multi-company branding (Company entity with custom logos, email from-addresses)
+
+### Fust Management
+- **Webshop**: Growers order fust containers from a catalog (FustType with categories: emmers, karren, kratten, dozen, opzetrekken, overig)
+- **Auto-approve**: Orders below a configurable threshold are auto-approved
+- **Pickups**: Transporteurs group approved orders into pickups, mark as picked up
+- **Deliveries**: 1:1 with orders. Transporteur confirms delivery with actual quantities → triggers email to grower
+- **Invoices**: Finance uploads transporter invoices (PDF parsed), approves/rejects, creates charges
+- **Vouchers**: Auction issuance vouchers (PDF parsed) matched to orders for reconciliation
+- **Audit trail**: All fust actions logged to FustAuditLog (19 event types). Per-order timeline UI + admin activity page
+- **Soft delete**: FustOrders use deletedAt/deletedById instead of hard delete
+- **Two portals**: `(portal)/fust/` for grower/admin/commercie/finance, `(fust-portal)/fust-portal/` for transporteurs (standalone FustShell layout)
+
+### Email Notifications
+- **Account activation**: Credentials email to new users (all roles)
+- **Password reset**: Reset link email
+- **Fust order approved**: Email to transporter when order is approved (includes items, requested date)
+- **Fust delivery confirmed**: Email to grower when transporter confirms delivery (includes ordered vs delivered quantities)
 
 ---
 
@@ -272,9 +338,11 @@ NEXT_PUBLIC_IS_TEST= # "true" for test environment banner
 
 ### Demo Accounts (test environment)
 ```
-Admin:     admin@coloriginz.com       / Colori2026!
-Commercie: iris.inkoper@coloriginz.com / FloraDesk#24
-Grower:    pcfup@example.com           / GreenField99
+Admin:        admin@coloriginz.com        / Colori2026!
+Commercie:    iris.inkoper@coloriginz.com  / FloraDesk#24
+Grower:       pcfup@example.com            / GreenField99
+Transporteur: chauffeur@flowertrans.nl     / Transport#2026
+Finance:      finance@coloriginz.com       / Finance#2026
 ```
 
 ### Important Notes
