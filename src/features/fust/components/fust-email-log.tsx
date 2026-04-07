@@ -472,13 +472,11 @@ function DetailRow({
   children?: React.ReactNode;
 }) {
   return (
-    <div className="flex items-start justify-between gap-4">
-      <span className="text-sm text-muted-foreground shrink-0">{label}</span>
-      {children || (
-        <span className={`text-sm text-right ${mono ? "font-mono" : ""}`}>
-          {value || "-"}
-        </span>
-      )}
+    <div>
+      <span className="text-xs text-muted-foreground">{label}</span>
+      <div className={`text-sm break-all ${mono ? "font-mono text-xs" : ""}`}>
+        {children || value || "-"}
+      </div>
     </div>
   );
 }
