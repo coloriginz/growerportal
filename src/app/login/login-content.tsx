@@ -45,14 +45,15 @@ export function LoginContent() {
   }
 
   return (
-    <div className="grid min-h-screen lg:grid-cols-2">
+    <div className="flex min-h-screen flex-col">
       {/* Test Environment Banner */}
       {isTest && (
-        <div className="col-span-full flex items-center justify-center bg-red-600 px-4 py-1.5 text-xs font-semibold tracking-wide text-white uppercase">
+        <div className="flex items-center justify-center bg-red-600 px-4 py-1.5 text-xs font-semibold tracking-wide text-white uppercase">
           Test Environment
         </div>
       )}
 
+      <div className="grid flex-1 lg:grid-cols-2">
       {/* Left: Login Form */}
       <div className="flex flex-col justify-center px-8 py-12 lg:px-16">
         <div className="mx-auto w-full max-w-sm">
@@ -164,6 +165,7 @@ export function LoginContent() {
         />
         {/* Subtle gradient overlay for depth */}
         <div className="absolute inset-0 bg-gradient-to-r from-background/20 to-transparent" />
+      </div>
       </div>
     </div>
   );

@@ -35,11 +35,7 @@ export function createVoucherColumns(
       cell: ({ row }) => (
         <Checkbox
           checked={selection.isSelected(row.original.id)}
-          onCheckedChange={() => {}}
-          onClick={(e: React.MouseEvent) => {
-            e.stopPropagation();
-            selection.toggleRow(row.original.id, e.shiftKey);
-          }}
+          onCheckedChange={() => selection.toggleRow(row.original.id, false)}
         />
       ),
     }),
@@ -133,11 +129,7 @@ export function createOrderColumns(
       cell: ({ row }) => (
         <Checkbox
           checked={selection.isSelected(row.original.id)}
-          onCheckedChange={() => {}}
-          onClick={(e: React.MouseEvent) => {
-            e.stopPropagation();
-            selection.toggleRow(row.original.id, e.shiftKey);
-          }}
+          onCheckedChange={() => selection.toggleRow(row.original.id, false)}
         />
       ),
     }),
