@@ -301,9 +301,24 @@ export function FustEmailLog() {
 
       {/* Detail Sheet */}
       <Sheet open={!!selectedId} onOpenChange={(open) => { if (!open) setSelectedId(null); }}>
-        <SheetContent className="w-full sm:w-[50vw] data-[side=right]:sm:max-w-none overflow-y-auto">
-          <SheetHeader>
-            <SheetTitle>{t("fust.emailLog.details" as Parameters<typeof t>[0])}</SheetTitle>
+        <SheetContent className="w-full sm:w-[50vw] data-[side=right]:sm:max-w-none overflow-y-auto p-6">
+          <SheetHeader className="pb-4 border-b">
+            <div className="flex items-center justify-between">
+              <SheetTitle>{t("fust.emailLog.details" as Parameters<typeof t>[0])}</SheetTitle>
+              {detail && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleReprocess}
+                  disabled={reprocessing}
+                >
+                  <RiRefreshLine className={`mr-1.5 h-3.5 w-3.5 ${reprocessing ? "animate-spin" : ""}`} />
+                  {reprocessing
+                    ? t("fust.emailLog.reprocessing" as Parameters<typeof t>[0])
+                    : t("fust.emailLog.reprocess" as Parameters<typeof t>[0])}
+                </Button>
+              )}
+            </div>
           </SheetHeader>
 
           {detailLoading ? (
@@ -313,144 +328,146 @@ export function FustEmailLog() {
               <Skeleton className="h-4 w-2/3" />
             </div>
           ) : detail ? (
-            <div className="mt-6 space-y-6">
-              {/* Metadata */}
-              <div className="space-y-3">
-                <DetailRow
-                  label={t("fust.emailLog.subject" as Parameters<typeof t>[0])}
-                  value={detail.subject}
-                />
-                <DetailRow
-                  label={t("fust.emailLog.from" as Parameters<typeof t>[0])}
-                  value={detail.fromAddress}
-                />
-                <DetailRow
-                  label={t("fust.emailLog.received" as Parameters<typeof t>[0])}
-                  value={detail.receivedAt ? formatTimestamp(detail.receivedAt) : null}
-                />
-                <DetailRow
-                  label={t("common.status" as Parameters<typeof t>[0])}
-                >
-                  <Badge variant={statusBadgeVariant[detail.status] || "outline"}>
-                    {t(`fust.emailLog.${detail.status.toLowerCase()}` as Parameters<typeof t>[0])}
-                  </Badge>
-                </DetailRow>
-              </div>
-
-              {/* Processing details */}
-              <div className="space-y-3">
-                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
-                  Processing
-                </h3>
-                <DetailRow
-                  label={t("fust.emailLog.transactionNumber" as Parameters<typeof t>[0])}
-                  value={detail.transactionNumber}
-                />
-                <DetailRow
-                  label={t("fust.emailLog.reportId" as Parameters<typeof t>[0])}
-                  value={detail.reportId}
-                  mono
-                />
-                {detail.pdfUrl && (
-                  <DetailRow label={t("fust.emailLog.viewPdf" as Parameters<typeof t>[0])}>
-                    <a
-                      href={detail.pdfUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
-                    >
-                      <RiFileTextLine className="h-4 w-4" />
-                      PDF
-                      <RiExternalLinkLine className="h-3 w-3" />
-                    </a>
+            <div className="mt-5 space-y-5">
+              {/* ── Top: Email metadata ── */}
+              <div className="space-y-2">
+                <p className="text-sm font-medium leading-snug">
+                  {detail.subject || "-"}
+                </p>
+                <div className="grid grid-cols-3 gap-4">
+                  <DetailRow
+                    label={t("fust.emailLog.from" as Parameters<typeof t>[0])}
+                    value={detail.fromAddress}
+                  />
+                  <DetailRow
+                    label={t("fust.emailLog.received" as Parameters<typeof t>[0])}
+                    value={detail.receivedAt ? formatTimestamp(detail.receivedAt) : null}
+                  />
+                  <DetailRow
+                    label={t("common.status" as Parameters<typeof t>[0])}
+                  >
+                    <Badge variant={statusBadgeVariant[detail.status] || "outline"}>
+                      {t(`fust.emailLog.${detail.status.toLowerCase()}` as Parameters<typeof t>[0])}
+                    </Badge>
                   </DetailRow>
-                )}
+                </div>
               </div>
 
-              {/* Linked voucher */}
+              {/* ── Processing + PDF row ── */}
+              <div className="rounded-lg border bg-muted/20 p-4">
+                <div className="grid grid-cols-3 gap-4">
+                  <DetailRow
+                    label={t("fust.emailLog.transactionNumber" as Parameters<typeof t>[0])}
+                    value={detail.transactionNumber}
+                  />
+                  <DetailRow
+                    label={t("fust.emailLog.reportId" as Parameters<typeof t>[0])}
+                    value={detail.reportId}
+                    mono
+                  />
+                  <DetailRow label={t("fust.emailLog.viewPdf" as Parameters<typeof t>[0])}>
+                    {detail.pdfUrl ? (
+                      <a
+                        href={detail.pdfUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
+                      >
+                        <RiFileTextLine className="h-4 w-4" />
+                        PDF
+                        <RiExternalLinkLine className="h-3 w-3" />
+                      </a>
+                    ) : (
+                      <span className="text-sm text-muted-foreground">-</span>
+                    )}
+                  </DetailRow>
+                </div>
+              </div>
+
+              {/* ── Errors ── */}
+              {detail.errors && (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-900 dark:bg-amber-950/30">
+                  <p className="text-xs font-semibold text-amber-700 dark:text-amber-300 uppercase tracking-wider mb-1.5">
+                    {t("fust.emailLog.errors" as Parameters<typeof t>[0])}
+                  </p>
+                  {detail.errors.split(";").map((err, i) => (
+                    <p key={i} className="text-sm text-amber-800 dark:text-amber-200">
+                      {err.trim()}
+                    </p>
+                  ))}
+                </div>
+              )}
+
+              {/* ── Parsed voucher with items table ── */}
               {detail.voucher && (
-                <div className="space-y-3">
-                  <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+                <div className="space-y-2">
+                  <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                     {t("fust.emailLog.linkedVoucher" as Parameters<typeof t>[0])}
                   </h3>
-                  <div className="rounded-lg border p-3 space-y-1">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium">
-                        #{detail.voucher.transactionNumber}
-                      </span>
+                  <div className="rounded-lg border overflow-hidden">
+                    {/* Voucher header */}
+                    <div className="flex items-center justify-between px-4 py-2.5 bg-muted/30 border-b">
+                      <div className="flex items-center gap-3">
+                        <span className="text-sm font-semibold">
+                          #{detail.voucher.transactionNumber}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          {formatDate(new Date(detail.voucher.transactionDate))}
+                        </span>
+                        {detail.voucher.customerName && (
+                          <span className="text-xs text-muted-foreground">
+                            &middot; {detail.voucher.customerName}
+                          </span>
+                        )}
+                      </div>
                       <Badge variant="outline">{detail.voucher.type}</Badge>
                     </div>
-                    {detail.voucher.customerName && (
-                      <p className="text-sm text-muted-foreground">{detail.voucher.customerName}</p>
-                    )}
-                    <p className="text-xs text-muted-foreground">
-                      {formatDate(new Date(detail.voucher.transactionDate))}
-                    </p>
+                    {/* Voucher items as table */}
                     {detail.voucher.items.length > 0 && (
-                      <div className="mt-2 space-y-1">
-                        {detail.voucher.items.map((item) => (
-                          <div key={item.id} className="flex justify-between text-xs">
-                            <span>{item.description} ({item.fustCode})</span>
-                            <span className="font-mono">{item.quantity}</span>
-                          </div>
-                        ))}
-                      </div>
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="text-xs">{t("fust.code" as Parameters<typeof t>[0])}</TableHead>
+                            <TableHead className="text-xs">{t("fust.fustType" as Parameters<typeof t>[0])}</TableHead>
+                            <TableHead className="text-xs text-right">{t("fust.quantity" as Parameters<typeof t>[0])}</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {detail.voucher.items.map((item) => (
+                            <TableRow key={item.id}>
+                              <TableCell className="font-mono text-xs py-1.5">{item.fustCode}</TableCell>
+                              <TableCell className="text-sm py-1.5">{item.description}</TableCell>
+                              <TableCell className="text-sm font-semibold text-right py-1.5">{item.quantity}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
                     )}
                   </div>
                 </div>
               )}
 
-              {/* Errors */}
-              {detail.errors && (
-                <div className="space-y-2">
-                  <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
-                    {t("fust.emailLog.errors" as Parameters<typeof t>[0])}
-                  </h3>
-                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-900 dark:bg-amber-950/30">
-                    {detail.errors.split(";").map((err, i) => (
-                      <p key={i} className="text-sm text-amber-800 dark:text-amber-200">
-                        {err.trim()}
-                      </p>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Email body */}
+              {/* ── Email body ── */}
               {(detail.emailBodyHtml || detail.emailBody) && (
                 <div className="space-y-2">
-                  <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+                  <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                     {t("fust.emailLog.emailBody" as Parameters<typeof t>[0])}
                   </h3>
-                  <div className="rounded-lg border bg-muted/30 max-h-[200px] overflow-y-auto">
+                  <div className="rounded-lg border bg-muted/20 overflow-hidden">
                     {detail.emailBodyHtml ? (
                       <iframe
                         srcDoc={detail.emailBodyHtml}
-                        className="w-full h-[180px] border-0"
+                        className="w-full h-[350px] border-0"
                         sandbox=""
                         title="Email body"
                       />
                     ) : (
-                      <pre className="p-3 text-xs whitespace-pre-wrap">
+                      <pre className="p-4 text-xs leading-relaxed whitespace-pre-wrap max-h-[350px] overflow-y-auto">
                         {detail.emailBody}
                       </pre>
                     )}
                   </div>
                 </div>
-              )}
-
-              {/* Reprocess button */}
-              {detail.status === "ERROR" && (
-                <Button
-                  onClick={handleReprocess}
-                  disabled={reprocessing}
-                  className="w-full"
-                >
-                  <RiRefreshLine className={`mr-2 h-4 w-4 ${reprocessing ? "animate-spin" : ""}`} />
-                  {reprocessing
-                    ? t("fust.emailLog.reprocessing" as Parameters<typeof t>[0])
-                    : t("fust.emailLog.reprocess" as Parameters<typeof t>[0])}
-                </Button>
               )}
             </div>
           ) : null}
@@ -472,9 +489,9 @@ function DetailRow({
   children?: React.ReactNode;
 }) {
   return (
-    <div>
-      <span className="text-xs text-muted-foreground">{label}</span>
-      <div className={`text-sm break-all ${mono ? "font-mono text-xs" : ""}`}>
+    <div className="min-w-0">
+      <p className="text-xs text-muted-foreground mb-0.5">{label}</p>
+      <div className={`text-sm truncate ${mono ? "font-mono text-xs" : ""}`}>
         {children || value || "-"}
       </div>
     </div>
