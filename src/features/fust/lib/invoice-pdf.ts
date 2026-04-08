@@ -1,15 +1,31 @@
 import type { TDocumentDefinitions, Content, TableCell } from "pdfmake/interfaces";
-import * as path from "path";
 
 // pdfmake server-side entry point (singleton). No type declarations for server API.
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const pdfmake = require("pdfmake/js/index.js") as {
   setFonts: (fonts: Record<string, Record<string, string>>) => void;
   setUrlAccessPolicy: (callback: ((url: string) => boolean) | undefined) => void;
+  virtualfs: {
+    writeFileSync: (filename: string, content: Buffer) => void;
+  };
   createPdf: (docDefinition: TDocumentDefinitions) => {
     getBuffer: () => Promise<Buffer>;
   };
 };
+
+// Load Roboto fonts from pdfmake's own font container (uses __dirname internally,
+// which works because pdfmake is in serverExternalPackages and not webpack-bundled).
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const fontContainer = require("pdfmake/js/browser-extensions/fonts/Roboto") as {
+  vfs: Record<string, { data: string; encoding: BufferEncoding }>;
+  fonts: Record<string, Record<string, string>>;
+};
+
+// Write fonts into pdfmake's virtual file system
+for (const [name, entry] of Object.entries(fontContainer.vfs)) {
+  pdfmake.virtualfs.writeFileSync(name, Buffer.from(entry.data, entry.encoding));
+}
+pdfmake.setFonts(fontContainer.fonts);
 
 // Suppress "No URL access policy defined" warning — we only use local font files.
 pdfmake.setUrlAccessPolicy(() => false);
@@ -91,23 +107,6 @@ const LIGHT_GRAY = "#999999";
  * Uses pdfmake server-side (PdfPrinter) with bundled Roboto fonts.
  */
 export async function generateInvoicePdf(data: InvoicePdfData): Promise<Buffer> {
-  // ------- Font setup (server-side, read .ttf from pdfmake package) -------
-  const fontsDir = path.join(
-    path.dirname(require.resolve("pdfmake/package.json")),
-    "build",
-    "fonts",
-    "Roboto",
-  );
-
-  pdfmake.setFonts({
-    Roboto: {
-      normal: path.join(fontsDir, "Roboto-Regular.ttf"),
-      bold: path.join(fontsDir, "Roboto-Medium.ttf"),
-      italics: path.join(fontsDir, "Roboto-Italic.ttf"),
-      bolditalics: path.join(fontsDir, "Roboto-MediumItalic.ttf"),
-    },
-  });
-
   // ------- Build document definition -------
   const docDefinition = buildDocDefinition(data);
 
