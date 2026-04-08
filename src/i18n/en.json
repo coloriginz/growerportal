@@ -642,6 +642,8 @@
     "notesPlaceholder": "Optional notes...",
     "generating": "Generating...",
     "generate": "Generate",
+    "previewPdf": "Preview PDF",
+    "loadingPreview": "Loading preview...",
     "send": "Send"
   }
 }

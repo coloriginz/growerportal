@@ -32,6 +32,7 @@ import {
   RiSendPlaneLine,
   RiDownloadLine,
   RiCheckLine,
+  RiEyeLine,
 } from "@remixicon/react";
 import { toast } from "sonner";
 
@@ -161,6 +162,7 @@ export function FustInvoicing() {
 
   // Action loading state
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [previewing, setPreviewing] = useState(false);
 
   // Filter orders: voucher links present AND not yet invoiced
   const readyOrders = useMemo(() => {
@@ -265,6 +267,36 @@ export function FustInvoicing() {
       toast.error("Failed to generate invoice");
     } finally {
       setGenerating(false);
+    }
+  };
+
+  const handlePreview = async () => {
+    if (!canGenerate) return;
+    setPreviewing(true);
+    try {
+      const growerId = selectedOrders[0].grower.id;
+      const res = await fetch("/api/fust/grower-invoices/preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          growerId,
+          orderIds: selectedOrders.map((o) => o.id),
+          invoiceDate,
+          notes: notes.trim() || undefined,
+        }),
+      });
+      if (res.ok) {
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        window.open(url, "_blank");
+      } else {
+        const data = await res.json().catch(() => null);
+        toast.error(data?.error || "Failed to generate preview");
+      }
+    } catch {
+      toast.error("Failed to generate preview");
+    } finally {
+      setPreviewing(false);
     }
   };
 
@@ -694,7 +726,17 @@ export function FustInvoicing() {
             >
               {tAny("fust.cancel")}
             </Button>
-            <Button onClick={handleGenerate} disabled={generating}>
+            <Button
+              variant="outline"
+              onClick={handlePreview}
+              disabled={previewing || generating}
+            >
+              <RiEyeLine className="mr-1.5 h-4 w-4" />
+              {previewing
+                ? tAny("fust.loadingPreview")
+                : tAny("fust.previewPdf")}
+            </Button>
+            <Button onClick={handleGenerate} disabled={generating || previewing}>
               {generating
                 ? tAny("fust.generating")
                 : tAny("fust.generate")}

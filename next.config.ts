@@ -5,6 +5,7 @@ const nextConfig: NextConfig = {
   outputFileTracingIncludes: {
     "/api/fust/vouchers": ["./node_modules/pdfjs-dist/**/*"],
     "/api/fust/grower-invoices": ["./node_modules/pdfmake/**/*"],
+    "/api/fust/grower-invoices/preview": ["./node_modules/pdfmake/**/*"],
   },
   experimental: {
     optimizePackageImports: ["@remixicon/react", "recharts", "date-fns"],

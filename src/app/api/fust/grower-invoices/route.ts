@@ -220,7 +220,86 @@ export async function POST(request: NextRequest) {
   // 5. Generate invoice number
   const invoiceNumber = await generateInvoiceNumber();
 
-  // 6. Create invoice + items in a transaction
+  // 6. Generate PDF + XML BEFORE any DB writes (so failures don't leave orphaned data)
+  const formattedDate = new Intl.DateTimeFormat("nl-NL", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(new Date(invoiceDate));
+
+  const branding = await getGrowerEmailBranding(growerId);
+
+  const pdfData = {
+    invoiceNumber,
+    invoiceDate: formattedDate,
+    grower: {
+      code: grower.code,
+      name: grower.name,
+      company: grower.company,
+      street: grower.street,
+      city: grower.city,
+      postalCode: grower.postalCode,
+      country: grower.country,
+    },
+    items: invoiceItems.map((item) => ({
+      articleCode: item.articleCode,
+      description: item.description,
+      quantity: item.quantity,
+      unitPrice: item.unitPrice,
+      totalPrice: item.totalPrice,
+    })),
+    subtotalExVat,
+    vatRate,
+    vatAmount,
+    totalInclVat,
+    notes: notes || null,
+    branding: {
+      companyName: branding.companyName,
+      logoBase64: branding.logoBase64,
+    },
+  };
+
+  let pdfBuffer: Buffer;
+  try {
+    pdfBuffer = await generateInvoicePdf(pdfData);
+  } catch (err) {
+    console.error("PDF generation failed:", err);
+    return NextResponse.json(
+      { error: "Failed to generate invoice PDF" },
+      { status: 500 }
+    );
+  }
+
+  const xmlContent = generateExactXml({
+    invoiceNumber,
+    invoiceDate, // ISO format for XML
+    grower: {
+      code: grower.code,
+      name: grower.company || grower.name,
+    },
+    items: invoiceItems.map((item) => ({
+      articleCode: item.articleCode,
+      description: item.description,
+      quantity: item.quantity,
+      unitPrice: item.unitPrice,
+      totalPrice: item.totalPrice,
+      vatCode: "2", // 21% NL high tariff
+    })),
+  });
+
+  // 7. Upload PDF and XML to Vercel Blob
+  const pdfBlob = await put(
+    `fust-grower-invoices/${invoiceNumber}.pdf`,
+    pdfBuffer,
+    { access: "public", contentType: "application/pdf" }
+  );
+  const xmlBlob = await put(
+    `fust-grower-invoices/${invoiceNumber}.xml`,
+    xmlContent,
+    { access: "public", contentType: "application/xml" }
+  );
+
+  // 8. NOW commit to DB — invoice + mark orders as invoiced — only after PDF+XML are ready
   const invoice = await prisma.$transaction(async (tx) => {
     const created = await tx.fustGrowerInvoice.create({
       data: {
@@ -234,6 +313,8 @@ export async function POST(request: NextRequest) {
         status: "draft",
         notes: notes || null,
         createdById: session!.user.id,
+        pdfUrl: pdfBlob.url,
+        xmlUrl: xmlBlob.url,
         items: {
           create: invoiceItems.map((item) => ({
             orderId: item.orderId,
@@ -275,102 +356,7 @@ export async function POST(request: NextRequest) {
     return created;
   });
 
-  // 7. Generate PDF
-  const formattedDate = new Intl.DateTimeFormat("nl-NL", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  }).format(new Date(invoiceDate));
-
-  const branding = await getGrowerEmailBranding(growerId);
-
-  const pdfBuffer = await generateInvoicePdf({
-    invoiceNumber,
-    invoiceDate: formattedDate,
-    grower: {
-      code: grower.code,
-      name: grower.name,
-      company: grower.company,
-      street: grower.street,
-      city: grower.city,
-      postalCode: grower.postalCode,
-      country: grower.country,
-    },
-    items: invoiceItems.map((item) => ({
-      articleCode: item.articleCode,
-      description: item.description,
-      quantity: item.quantity,
-      unitPrice: item.unitPrice,
-      totalPrice: item.totalPrice,
-    })),
-    subtotalExVat,
-    vatRate,
-    vatAmount,
-    totalInclVat,
-    notes: notes || null,
-    branding: {
-      companyName: branding.companyName,
-      logoBase64: branding.logoBase64,
-    },
-  });
-
-  // 8. Generate XML
-  const xmlContent = generateExactXml({
-    invoiceNumber,
-    invoiceDate, // ISO format for XML
-    grower: {
-      code: grower.code,
-      name: grower.company || grower.name,
-    },
-    items: invoiceItems.map((item) => ({
-      articleCode: item.articleCode,
-      description: item.description,
-      quantity: item.quantity,
-      unitPrice: item.unitPrice,
-      totalPrice: item.totalPrice,
-      vatCode: "2", // 21% NL high tariff
-    })),
-  });
-
-  // 9. Upload PDF and XML to Vercel Blob
-  const pdfBlob = await put(
-    `fust-grower-invoices/${invoiceNumber}.pdf`,
-    pdfBuffer,
-    { access: "public", contentType: "application/pdf" }
-  );
-  const xmlBlob = await put(
-    `fust-grower-invoices/${invoiceNumber}.xml`,
-    xmlContent,
-    { access: "public", contentType: "application/xml" }
-  );
-
-  // 10. Update invoice with PDF and XML URLs
-  const updated = await prisma.fustGrowerInvoice.update({
-    where: { id: invoice.id },
-    data: {
-      pdfUrl: pdfBlob.url,
-      xmlUrl: xmlBlob.url,
-    },
-    include: {
-      items: {
-        include: {
-          fustType: { select: { id: true, code: true, name: true } },
-          order: { select: { id: true, orderNumber: true } },
-        },
-      },
-      grower: {
-        select: {
-          id: true,
-          code: true,
-          name: true,
-          company: true,
-        },
-      },
-      createdBy: { select: { name: true } },
-    },
-  });
-
-  // 11. Audit log
+  // 9. Audit log
   await logFustEvent({
     entityType: "grower_invoice",
     entityId: invoice.id,
@@ -385,5 +371,5 @@ export async function POST(request: NextRequest) {
     },
   });
 
-  return NextResponse.json(updated, { status: 201 });
+  return NextResponse.json(invoice, { status: 201 });
 }

@@ -642,6 +642,8 @@
     "notesPlaceholder": "Optionele opmerkingen...",
     "generating": "Genereren...",
     "generate": "Genereren",
+    "previewPdf": "PDF Voorbeeld",
+    "loadingPreview": "Voorbeeld laden...",
     "send": "Versturen"
   }
 }
