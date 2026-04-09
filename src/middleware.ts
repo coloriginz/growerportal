@@ -43,13 +43,17 @@ export function middleware(request: NextRequest) {
     return response;
   }
 
-  // Static assets, _next, favicon — let them through
+  // Static assets, _next, favicon, public files — let them through
   if (
     pathname.startsWith("/_next") ||
     pathname.startsWith("/icon") ||
-    pathname === "/favicon.ico"
+    pathname === "/favicon.ico" ||
+    /\.(jpg|jpeg|png|gif|svg|webp|ico|woff2?|ttf|css|js|map)$/i.test(pathname)
   ) {
-    return NextResponse.next();
+    const response = NextResponse.next();
+    response.headers.set("x-fust-domain", "1");
+    setCompanyHeader(response, hostname);
+    return response;
   }
 
   // Rewrite all other paths: / → /fust-portal, /orders → /fust-portal/orders, etc.
