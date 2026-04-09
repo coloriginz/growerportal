@@ -30,6 +30,9 @@ import { ChangePasswordDialog } from "@/components/layout/change-password-dialog
 import { TestBanner } from "@/components/layout/test-banner";
 import { isTest } from "@/lib/env";
 import { isFustDomainClient, fustHref } from "@/lib/fust-hostname";
+import { getCompanyBranding } from "@/lib/company-config";
+import { useCompanyBranding } from "@/components/providers/company-provider";
+import Image from "next/image";
 import type { Role } from "@/types";
 
 interface FustShellProps {
@@ -40,6 +43,7 @@ interface FustShellProps {
     role: string;
     growerId: string | null;
     fustEnabled?: boolean;
+    companySlug?: string | null;
   };
   children: React.ReactNode;
 }
@@ -81,6 +85,8 @@ export function FustShell({ user, children }: FustShellProps) {
   const userRole = user.role as Role;
   const isStandalone = isFustDomainClient();
   const href = (path: string) => fustHref(path, isStandalone);
+  const hostBranding = useCompanyBranding();
+  const company = user.companySlug ? getCompanyBranding(user.companySlug) : hostBranding;
 
   const filteredNav = navItems.filter((item) => {
     if (!item.roles?.includes(userRole)) return false;
@@ -104,9 +110,10 @@ export function FustShell({ user, children }: FustShellProps) {
       <div className="flex h-full flex-col">
         {/* Header */}
         <div className="flex h-16 items-center px-6">
-          <Link href={href("/fust-portal")} onClick={() => setMobileOpen(false)} className="flex items-center gap-2">
-            <RiBox3Line className="h-6 w-6 text-primary" />
-            <span className="text-lg font-bold tracking-tight">Fust Portal</span>
+          <Link href={href("/fust-portal")} onClick={() => setMobileOpen(false)} className="flex items-center gap-2.5">
+            <Image src={company.logoPath} alt={company.name} width={100} height={28} className="dark:brightness-0 dark:invert" />
+            <span className="text-sidebar-foreground/30 text-lg font-light">|</span>
+            <span className="text-sm font-semibold tracking-tight">Fust Portal</span>
           </Link>
         </div>
 
@@ -237,8 +244,9 @@ export function FustShell({ user, children }: FustShellProps) {
               <RiMenuLine className="h-5 w-5" />
             </Button>
             <Link href={href("/fust-portal")} className="flex items-center gap-2">
-              <RiBox3Line className="h-5 w-5 text-primary" />
-              <span className="font-bold">Fust Portal</span>
+              <Image src={company.logoPath} alt={company.name} width={80} height={22} className="dark:brightness-0 dark:invert" />
+              <span className="text-sidebar-foreground/30 font-light">|</span>
+              <span className="text-sm font-semibold">Fust Portal</span>
             </Link>
           </header>
 
