@@ -52,20 +52,16 @@ export async function POST(request: NextRequest) {
       deletedAt: null,
     },
     include: {
-      delivery: {
+      items: {
         include: {
-          items: {
-            include: {
-              fustType: {
-                select: {
-                  id: true,
-                  name: true,
-                  pricePerUnit: true,
-                  rentalPricePerUnit: true,
-                  depositArticleCode: true,
-                  rentalArticleCode: true,
-                },
-              },
+          fustType: {
+            select: {
+              id: true,
+              name: true,
+              pricePerUnit: true,
+              rentalPricePerUnit: true,
+              depositArticleCode: true,
+              rentalArticleCode: true,
             },
           },
         },
@@ -90,10 +86,9 @@ export async function POST(request: NextRequest) {
   }> = [];
 
   for (const order of orders) {
-    if (!order.delivery) continue;
-    for (const deliveryItem of order.delivery.items) {
-      const ft = deliveryItem.fustType;
-      const qty = deliveryItem.quantity;
+    for (const orderItem of order.items) {
+      const ft = orderItem.fustType;
+      const qty = orderItem.deliveredQuantity ?? orderItem.quantity;
 
       const depositUnitPrice = Number(ft.pricePerUnit);
       invoiceItems.push({

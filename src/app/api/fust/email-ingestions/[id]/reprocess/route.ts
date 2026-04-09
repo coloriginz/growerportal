@@ -20,6 +20,16 @@ export async function POST(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
+  // Delete previously created voucher (if any) so reprocessing can recreate it.
+  // Cascade deletes items + order links automatically.
+  if (ingestion.voucherId) {
+    await prisma.fustIssuanceVoucher.delete({
+      where: { id: ingestion.voucherId },
+    }).catch(() => {
+      // Voucher may have been deleted manually — ignore
+    });
+  }
+
   // Reset status to PROCESSING
   await prisma.fustEmailIngestion.update({
     where: { id },

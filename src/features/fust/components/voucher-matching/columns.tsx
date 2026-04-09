@@ -34,6 +34,7 @@ export function createVoucherColumns(
             checked={selection.allSelected}
             indeterminate={selection.selectedCount > 0 && !selection.allSelected}
             tabIndex={-1}
+            className="pointer-events-none"
           />
         </div>
       ),
@@ -45,6 +46,7 @@ export function createVoucherColumns(
           <Checkbox
             checked={selection.isSelected(row.original.id)}
             tabIndex={-1}
+            className="pointer-events-none"
           />
         </div>
       ),
@@ -138,6 +140,7 @@ export function createOrderColumns(
             checked={selection.allSelected}
             indeterminate={selection.selectedCount > 0 && !selection.allSelected}
             tabIndex={-1}
+            className="pointer-events-none"
           />
         </div>
       ),
@@ -149,6 +152,7 @@ export function createOrderColumns(
           <Checkbox
             checked={selection.isSelected(row.original.id)}
             tabIndex={-1}
+            className="pointer-events-none"
           />
         </div>
       ),
