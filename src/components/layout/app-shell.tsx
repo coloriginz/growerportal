@@ -40,6 +40,7 @@ import { TestBanner } from "@/components/layout/test-banner";
 import { OfflineIndicator } from "@/components/layout/offline-indicator";
 import { ChangePasswordDialog } from "@/components/layout/change-password-dialog";
 import { useCompanyBranding } from "@/components/providers/company-provider";
+import { getCompanyBranding } from "@/lib/company-config";
 import { isTest } from "@/lib/env";
 import type { Role } from "@/types";
 
@@ -51,6 +52,7 @@ interface AppShellProps {
     role: string;
     growerId: string | null;
     fustEnabled?: boolean;
+    companySlug?: string | null;
   };
   children: React.ReactNode;
 }
@@ -121,7 +123,8 @@ export function AppShell({ user, children }: AppShellProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { t } = useLanguage();
-  const company = useCompanyBranding();
+  const hostBranding = useCompanyBranding();
+  const company = user.companySlug ? getCompanyBranding(user.companySlug) : hostBranding;
   const growerId = searchParams.get("growerId");
   const userRole = user.role as Role;
   const showGrowerSelector = userRole === "admin" || userRole === "commercie" || userRole === "finance";

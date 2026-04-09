@@ -15,19 +15,21 @@ export default async function PortalLayout({
     redirect("/login");
   }
 
-  // Check fustEnabled for grower users
+  // Check fustEnabled and company branding for grower users
   let fustEnabled = false;
+  let companySlug: string | null = null;
   if (session.user.role === "grower" && session.user.growerId) {
     const grower = await prisma.grower.findUnique({
       where: { id: session.user.growerId },
-      select: { fustEnabled: true },
+      select: { fustEnabled: true, companyEntity: { select: { slug: true } } },
     });
     fustEnabled = grower?.fustEnabled ?? false;
+    companySlug = grower?.companyEntity?.slug ?? null;
   }
 
   return (
     <Suspense>
-      <AppShell user={{ ...session.user, fustEnabled }}>{children}</AppShell>
+      <AppShell user={{ ...session.user, fustEnabled, companySlug }}>{children}</AppShell>
     </Suspense>
   );
 }
