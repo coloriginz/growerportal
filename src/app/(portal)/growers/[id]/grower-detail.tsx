@@ -392,6 +392,7 @@ export function GrowerDetail({ growerId }: { growerId: string }) {
               <Label>{t("growers.accountManager")}</Label>
               {commercieUsers !== null ? (
                 <Select
+                  key={`cm-${commercieUsers.length}`}
                   value={form.commercieId || "none"}
                   onValueChange={(v) => {
                     if (v !== null) setForm({ ...form, commercieId: v === "none" ? "" : v });
@@ -434,6 +435,7 @@ export function GrowerDetail({ growerId }: { growerId: string }) {
               <Label>Company</Label>
               {companies !== null ? (
                 <Select
+                  key={`co-${companies.length}`}
                   value={form.companyId || "none"}
                   onValueChange={(v) => {
                     if (v !== null) setForm({ ...form, companyId: v === "none" ? "" : v });
