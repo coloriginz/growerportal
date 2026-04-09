@@ -134,7 +134,7 @@ export function FustGrowerDeliveries({ growerId }: FustGrowerDeliveriesProps) {
                       <div className="flex flex-col gap-0.5">
                         {order.items.map((item) => (
                           <span key={item.id} className="text-xs">
-                            {formatNumber(item.quantity)}x {item.fustType.name}
+                            {formatNumber(item.quantity)}x {item.fustType.code} — {item.fustType.name}
                           </span>
                         ))}
                       </div>

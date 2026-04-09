@@ -213,7 +213,7 @@ function OrdersTable({ orders, onTimeline, t, emptyIcon, emptyMessage }: OrdersT
                   <div className="flex flex-col gap-0.5">
                     {order.items.map((item) => (
                       <span key={item.id} className="text-xs">
-                        {item.quantity}x {item.fustType.name}
+                        {item.quantity}x {item.fustType.code} — {item.fustType.name}
                       </span>
                     ))}
                   </div>

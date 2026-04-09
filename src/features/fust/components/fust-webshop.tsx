@@ -315,7 +315,7 @@ export function FustWebshop({ growerId, userRole }: FustWebshopProps) {
                           key={item.fustType.id}
                           className="inline-flex items-center gap-1.5 rounded-md bg-muted px-2 py-1 text-xs"
                         >
-                          {item.quantity}x {item.fustType.name}
+                          {item.quantity}x {item.fustType.code} — {item.fustType.name}
                           <span className="text-muted-foreground">
                             {formatCurrencyDetailed(Number(item.fustType.pricePerUnit) * item.quantity)}
                           </span>

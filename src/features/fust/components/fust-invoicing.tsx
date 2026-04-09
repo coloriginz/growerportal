@@ -437,7 +437,7 @@ export function FustInvoicing() {
                   {readyOrders.map((order) => {
                     const isSelected = selectedIds.has(order.id);
                     const itemsSummary = order.items
-                      .map((item) => `${item.quantity}x ${item.fustType.name}`)
+                      .map((item) => `${item.quantity}x ${item.fustType.code} — ${item.fustType.name}`)
                       .join(", ");
                     return (
                       <TableRow

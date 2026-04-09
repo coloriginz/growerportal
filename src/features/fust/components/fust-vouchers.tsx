@@ -554,7 +554,7 @@ function MatchDialog({
                     </div>
                     <div className="text-muted-foreground">
                       {order.items
-                        .map((item) => `${item.quantity}x ${item.fustType.name}`)
+                        .map((item) => `${item.quantity}x ${item.fustType.code} — ${item.fustType.name}`)
                         .join(", ")}
                     </div>
                     {order.deliveredAt && (

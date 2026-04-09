@@ -175,7 +175,7 @@ export function createOrderColumns(
       header: () => t("fust.items"),
       cell: ({ row }) => {
         const summary = row.original.items
-          .map((item) => `${item.quantity}x ${item.fustType.name}`)
+          .map((item) => `${item.quantity}x ${item.fustType.code} — ${item.fustType.name}`)
           .join(", ");
         return (
           <span className="truncate text-muted-foreground" title={summary}>
