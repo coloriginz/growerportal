@@ -298,7 +298,7 @@ export function GrowerDetail({ growerId }: { growerId: string }) {
           </Button>
           <div>
             <h1>
-              {grower.code} - {grower.name}
+              {grower.code} - {grower.company || grower.name}
             </h1>
           </div>
         </div>
@@ -315,14 +315,6 @@ export function GrowerDetail({ growerId }: { growerId: string }) {
               <div className="space-y-2">
                 <Label>{t("growers.code")}</Label>
                 <Input value={grower.code} disabled />
-              </div>
-              <div className="space-y-2">
-                <Label>{t("growers.name")}</Label>
-                <Input
-                  value={form.name}
-                  onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  required
-                />
               </div>
               <div className="space-y-2">
                 <Label>{t("growers.company")}</Label>
@@ -417,6 +409,12 @@ export function GrowerDetail({ growerId }: { growerId: string }) {
                         {u.name}
                       </SelectItem>
                     ))}
+                    {/* Show assigned user if not in the active list */}
+                    {grower.commercie && !commercieUsers.some((u) => u.id === grower.commercie!.id) && (
+                      <SelectItem value={grower.commercie.id}>
+                        {grower.commercie.name} (inactive)
+                      </SelectItem>
+                    )}
                   </SelectContent>
                 </Select>
               ) : (
@@ -451,6 +449,12 @@ export function GrowerDetail({ growerId }: { growerId: string }) {
                         {c.name}
                       </SelectItem>
                     ))}
+                    {/* Show assigned company if not in the list */}
+                    {grower.companyEntity && !companies.some((c) => c.id === grower.companyEntity!.id) && (
+                      <SelectItem value={grower.companyEntity.id}>
+                        {grower.companyEntity.name}
+                      </SelectItem>
+                    )}
                   </SelectContent>
                 </Select>
               ) : (
