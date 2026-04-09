@@ -9,13 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   Table,
   TableBody,
@@ -79,9 +73,9 @@ interface FustOrder {
 
 function StatusBadge({ status }: { status: string }) {
   const { t } = useLanguage();
-  const statusMap: Record<string, { variant: "default" | "secondary" | "destructive" | "outline"; key: string }> = {
-    pending: { variant: "outline", key: "fust.pending" },
-    approved: { variant: "default", key: "fust.approved" },
+  const statusMap: Record<string, { variant: "default" | "secondary" | "destructive" | "outline"; key: string; className?: string }> = {
+    pending: { variant: "default", key: "fust.pending", className: "bg-orange-500 text-white border-orange-500 hover:bg-orange-500/80" },
+    approved: { variant: "outline", key: "fust.approved", className: "border-green-600 text-green-700 dark:text-green-400 dark:border-green-500" },
     rejected: { variant: "destructive", key: "fust.rejected" },
     scheduled: { variant: "secondary", key: "fust.scheduled" },
     in_transit: { variant: "secondary", key: "fust.inTransit" },
@@ -90,7 +84,7 @@ function StatusBadge({ status }: { status: string }) {
   };
   const config = statusMap[status] || { variant: "outline" as const, key: status };
   return (
-    <Badge variant={config.variant}>
+    <Badge variant={config.variant} className={config.className}>
       {t(config.key as Parameters<typeof t>[0])}
     </Badge>
   );
@@ -100,7 +94,6 @@ export function FustOrders() {
   const { t } = useLanguage();
   const searchParams = useSearchParams();
   const growerId = searchParams.get("growerId");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
   const [rejectDialogOrder, setRejectDialogOrder] = useState<FustOrder | null>(null);
   const [rejectionReason, setRejectionReason] = useState("");
   const [processing, setProcessing] = useState<string | null>(null);
@@ -109,11 +102,25 @@ export function FustOrders() {
   const url = useMemo(() => {
     const params = new URLSearchParams();
     if (growerId) params.set("growerId", growerId);
-    if (statusFilter && statusFilter !== "all") params.set("status", statusFilter);
     return `/api/fust/orders?${params.toString()}`;
-  }, [growerId, statusFilter]);
+  }, [growerId]);
 
   const { data: orders, loading, refetch } = useFetch<FustOrder[]>(url);
+
+  const activeOrders = useMemo(
+    () => orders?.filter((o) => o.status === "pending" || o.status === "approved") || [],
+    [orders]
+  );
+
+  const deliveredOrders = useMemo(
+    () => orders?.filter((o) => o.status === "delivered") || [],
+    [orders]
+  );
+
+  const otherOrders = useMemo(
+    () => orders?.filter((o) => o.status === "rejected" || o.status === "cancelled") || [],
+    [orders]
+  );
 
   const handleApprove = async (order: FustOrder) => {
     setProcessing(order.id);
@@ -176,137 +183,73 @@ export function FustOrders() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="text-2xl font-bold tracking-tight">{t("fust.title")}</h1>
-        <div className="flex items-center gap-2">
-          <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v ?? "all")}>
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder={t("fust.filterByStatus")} />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">{t("common.all")}</SelectItem>
-              <SelectItem value="pending">{t("fust.pending")}</SelectItem>
-              <SelectItem value="approved">{t("fust.approved")}</SelectItem>
-              <SelectItem value="rejected">{t("fust.rejected")}</SelectItem>
-              <SelectItem value="delivered">{t("fust.delivered")}</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
+      <h1 className="text-2xl font-bold tracking-tight">{t("fust.title")}</h1>
 
       {loading ? (
         <Skeleton className="h-48" />
-      ) : !orders || orders.length === 0 ? (
-        <div className="py-12 text-center text-muted-foreground">
-          <RiBox3Line className="mx-auto mb-3 h-10 w-10 opacity-30" />
-          <p>{t("fust.noOrders")}</p>
-        </div>
       ) : (
-        <div className="overflow-x-auto rounded-lg border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>{t("fust.orderNumber")}</TableHead>
-                <TableHead>{t("fust.grower")}</TableHead>
-                <TableHead>{t("fust.createdAt")}</TableHead>
-                <TableHead>{t("fust.requestedDate")}</TableHead>
-                <TableHead>{t("fust.status")}</TableHead>
-                <TableHead>{t("fust.items")}</TableHead>
-                <TableHead className="text-right">{t("fust.total")}</TableHead>
-                <TableHead>{t("common.actions")}</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {orders.map((order) => {
-                const total = order.items.reduce(
-                  (sum, item) => sum + Number(item.fustType.pricePerUnit) * item.quantity,
-                  0
-                );
-                return (
-                  <TableRow key={order.id}>
-                    <TableCell className="font-medium">{order.orderNumber}</TableCell>
-                    <TableCell>
-                      <div>
-                        <p className="text-sm font-medium">{order.grower.code}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {order.grower.company || order.grower.name}
-                        </p>
-                      </div>
-                    </TableCell>
-                    <TableCell>{formatDate(order.createdAt)}</TableCell>
-                    <TableCell>
-                      {order.requestedDate ? formatDate(order.requestedDate) : "-"}
-                    </TableCell>
-                    <TableCell>
-                      <StatusBadge status={order.status} />
-                      {order.rejectionReason && (
-                        <p className="mt-1 text-xs text-destructive">{order.rejectionReason}</p>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex flex-col gap-0.5">
-                        {order.items.map((item) => (
-                          <div key={item.id} className="flex items-center gap-2 text-xs">
-                            <span className="font-mono font-semibold text-primary">{item.fustType.code}</span>
-                            <span className="truncate">{item.fustType.name}</span>
-                            <span className="font-medium">{item.quantity}x</span>
-                          </div>
-                        ))}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right font-medium">
-                      {formatCurrencyDetailed(total)}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1">
-                        {order.status === "pending" && (
-                          <>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7 text-green-600 hover:bg-green-50 hover:text-green-700 dark:hover:bg-green-950"
-                              onClick={() => handleApprove(order)}
-                              disabled={processing === order.id}
-                              title={t("fust.approve")}
-                            >
-                              {processing === order.id ? (
-                                <RiLoader4Line className="h-4 w-4 animate-spin" />
-                              ) : (
-                                <RiCheckLine className="h-4 w-4" />
-                              )}
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7 text-red-600 hover:bg-red-50 hover:text-red-700 dark:hover:bg-red-950"
-                              onClick={() => {
-                                setRejectDialogOrder(order);
-                                setRejectionReason("");
-                              }}
-                              disabled={processing === order.id}
-                              title={t("fust.reject")}
-                            >
-                              <RiCloseLine className="h-4 w-4" />
-                            </Button>
-                          </>
-                        )}
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 text-muted-foreground hover:text-foreground"
-                          onClick={() => setTimelineOrder(order)}
-                          title={t("fust.history")}
-                        >
-                          <RiHistoryLine className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </div>
+        <Tabs defaultValue="active">
+          <TabsList>
+            <TabsTrigger value="active">
+              {t("fust.activeOrders" as Parameters<typeof t>[0])}
+              {activeOrders.length > 0 && (
+                <Badge variant="default" className="ml-1.5 h-5 min-w-5 px-1.5">
+                  {activeOrders.length}
+                </Badge>
+              )}
+            </TabsTrigger>
+            <TabsTrigger value="delivered">
+              {t("fust.delivered")}
+              {deliveredOrders.length > 0 && (
+                <Badge variant="secondary" className="ml-1.5 h-5 min-w-5 px-1.5">
+                  {deliveredOrders.length}
+                </Badge>
+              )}
+            </TabsTrigger>
+            {otherOrders.length > 0 && (
+              <TabsTrigger value="other">
+                {t("fust.rejectedCancelled" as Parameters<typeof t>[0])}
+                <Badge variant="secondary" className="ml-1.5 h-5 min-w-5 px-1.5">
+                  {otherOrders.length}
+                </Badge>
+              </TabsTrigger>
+            )}
+          </TabsList>
+
+          <TabsContent value="active">
+            <OrdersTable
+              orders={activeOrders}
+              processing={processing}
+              onApprove={handleApprove}
+              onReject={(order) => { setRejectDialogOrder(order); setRejectionReason(""); }}
+              onTimeline={setTimelineOrder}
+              t={t}
+              emptyMessage={t("fust.noOrders")}
+            />
+          </TabsContent>
+
+          <TabsContent value="delivered">
+            <OrdersTable
+              orders={deliveredOrders}
+              processing={processing}
+              onTimeline={setTimelineOrder}
+              t={t}
+              emptyMessage={t("fust.noOrders")}
+            />
+          </TabsContent>
+
+          {otherOrders.length > 0 && (
+            <TabsContent value="other">
+              <OrdersTable
+                orders={otherOrders}
+                processing={processing}
+                onTimeline={setTimelineOrder}
+                t={t}
+                emptyMessage={t("fust.noOrders")}
+              />
+            </TabsContent>
+          )}
+        </Tabs>
       )}
 
       {/* Rejection reason dialog */}
@@ -362,6 +305,134 @@ export function FustOrders() {
           </div>
         </SheetContent>
       </Sheet>
+    </div>
+  );
+}
+
+// ─── Extracted Orders Table ───
+
+interface OrdersTableProps {
+  orders: FustOrder[];
+  processing: string | null;
+  onApprove?: (order: FustOrder) => void;
+  onReject?: (order: FustOrder) => void;
+  onTimeline: (order: FustOrder) => void;
+  t: ReturnType<typeof useLanguage>["t"];
+  emptyMessage: string;
+}
+
+function OrdersTable({ orders, processing, onApprove, onReject, onTimeline, t, emptyMessage }: OrdersTableProps) {
+  if (orders.length === 0) {
+    return (
+      <div className="py-12 text-center text-muted-foreground">
+        <RiBox3Line className="mx-auto mb-3 h-10 w-10 opacity-30" />
+        <p>{emptyMessage}</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="overflow-x-auto rounded-lg border">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>{t("fust.orderNumber")}</TableHead>
+            <TableHead>{t("fust.grower")}</TableHead>
+            <TableHead>{t("fust.createdAt")}</TableHead>
+            <TableHead>{t("fust.requestedDate")}</TableHead>
+            <TableHead>{t("fust.status")}</TableHead>
+            <TableHead>{t("fust.items")}</TableHead>
+            <TableHead className="text-right">{t("fust.total")}</TableHead>
+            <TableHead>{t("common.actions")}</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {orders.map((order) => {
+            const total = order.items.reduce(
+              (sum, item) => sum + Number(item.fustType.pricePerUnit) * item.quantity,
+              0
+            );
+            return (
+              <TableRow key={order.id}>
+                <TableCell className="font-medium">{order.orderNumber}</TableCell>
+                <TableCell>
+                  <div>
+                    <p className="text-sm font-medium">{order.grower.code}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {order.grower.company || order.grower.name}
+                    </p>
+                  </div>
+                </TableCell>
+                <TableCell>{formatDate(order.createdAt)}</TableCell>
+                <TableCell>
+                  {order.requestedDate ? formatDate(order.requestedDate) : "-"}
+                </TableCell>
+                <TableCell>
+                  <StatusBadge status={order.status} />
+                  {order.rejectionReason && (
+                    <p className="mt-1 text-xs text-destructive">{order.rejectionReason}</p>
+                  )}
+                </TableCell>
+                <TableCell>
+                  <div className="flex flex-col gap-0.5">
+                    {order.items.map((item) => (
+                      <div key={item.id} className="flex items-center gap-2 text-xs">
+                        <span className="font-mono font-semibold text-primary">{item.fustType.code}</span>
+                        <span className="truncate">{item.fustType.name}</span>
+                        <span className="font-medium">{item.quantity}x</span>
+                      </div>
+                    ))}
+                  </div>
+                </TableCell>
+                <TableCell className="text-right font-medium">
+                  {formatCurrencyDetailed(total)}
+                </TableCell>
+                <TableCell>
+                  <div className="flex items-center gap-1">
+                    {order.status === "pending" && onApprove && onReject && (
+                      <>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-green-600 hover:bg-green-50 hover:text-green-700 dark:hover:bg-green-950"
+                          onClick={() => onApprove(order)}
+                          disabled={processing === order.id}
+                          title={t("fust.approve")}
+                        >
+                          {processing === order.id ? (
+                            <RiLoader4Line className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <RiCheckLine className="h-4 w-4" />
+                          )}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-red-600 hover:bg-red-50 hover:text-red-700 dark:hover:bg-red-950"
+                          onClick={() => onReject(order)}
+                          disabled={processing === order.id}
+                          title={t("fust.reject")}
+                        >
+                          <RiCloseLine className="h-4 w-4" />
+                        </Button>
+                      </>
+                    )}
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                      onClick={() => onTimeline(order)}
+                      title={t("fust.history")}
+                    >
+                      <RiHistoryLine className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </TableCell>
+              </TableRow>
+            );
+          })}
+        </TableBody>
+      </Table>
     </div>
   );
 }

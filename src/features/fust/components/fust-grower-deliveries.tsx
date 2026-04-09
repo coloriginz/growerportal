@@ -59,9 +59,9 @@ interface FustOrder {
 
 function StatusBadge({ status }: { status: string }) {
   const { t } = useLanguage();
-  const statusMap: Record<string, { variant: "default" | "secondary" | "destructive" | "outline"; key: string }> = {
-    pending: { variant: "outline", key: "fust.pending" },
-    approved: { variant: "default", key: "fust.approved" },
+  const statusMap: Record<string, { variant: "default" | "secondary" | "destructive" | "outline"; key: string; className?: string }> = {
+    pending: { variant: "default", key: "fust.pending", className: "bg-orange-500 text-white border-orange-500 hover:bg-orange-500/80" },
+    approved: { variant: "outline", key: "fust.approved", className: "border-green-600 text-green-700 dark:text-green-400 dark:border-green-500" },
     rejected: { variant: "destructive", key: "fust.rejected" },
     scheduled: { variant: "secondary", key: "fust.scheduled" },
     in_transit: { variant: "secondary", key: "fust.inTransit" },
@@ -69,7 +69,7 @@ function StatusBadge({ status }: { status: string }) {
     cancelled: { variant: "destructive", key: "fust.cancelled" },
   };
   const config = statusMap[status] || { variant: "outline" as const, key: status };
-  return <Badge variant={config.variant}>{t(config.key as Parameters<typeof t>[0])}</Badge>;
+  return <Badge variant={config.variant} className={config.className}>{t(config.key as Parameters<typeof t>[0])}</Badge>;
 }
 
 interface FustGrowerDeliveriesProps {

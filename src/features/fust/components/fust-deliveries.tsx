@@ -9,6 +9,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   Dialog,
   DialogContent,
@@ -19,6 +20,7 @@ import {
 import {
   RiTruckLine,
   RiCheckLine,
+  RiCheckboxCircleLine,
 } from "@remixicon/react";
 import { toast } from "sonner";
 
@@ -64,14 +66,14 @@ function StatusBadge({ status }: { status: string }) {
   const { t } = useLanguage();
   const statusMap: Record<
     string,
-    { variant: "default" | "secondary" | "destructive" | "outline"; key: string }
+    { variant: "default" | "secondary" | "destructive" | "outline"; key: string; className?: string }
   > = {
     approved: { variant: "secondary", key: "fust.approved" },
     delivered: { variant: "default", key: "fust.delivered" },
   };
   const config = statusMap[status] || { variant: "outline" as const, key: status };
   return (
-    <Badge variant={config.variant}>
+    <Badge variant={config.variant} className={config.className}>
       {t(config.key as Parameters<typeof t>[0])}
     </Badge>
   );
@@ -156,43 +158,61 @@ export function FustDeliveries() {
         {t("fust.deliveries" as Parameters<typeof t>[0])}
       </h1>
 
-      {/* Pending Deliveries */}
-      <section>
-        <h2 className="mb-3 text-lg font-semibold">
-          {t("fust.pendingDeliveries" as Parameters<typeof t>[0])}
-        </h2>
-        {pendingOrders.length === 0 ? (
-          <div className="py-12 text-center text-muted-foreground">
-            <RiTruckLine className="mx-auto mb-3 h-10 w-10 opacity-30" />
-            <p>{t("fust.noDeliveriesPending" as Parameters<typeof t>[0])}</p>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {pendingOrders.map((order) => (
-              <OrderCard
-                key={order.id}
-                order={order}
-                onConfirm={() => openConfirmDialog(order)}
-                t={t}
-              />
-            ))}
-          </div>
-        )}
-      </section>
-
-      {/* Completed Deliveries */}
-      {completedOrders.length > 0 && (
-        <section>
-          <h2 className="mb-3 text-lg font-semibold">
+      <Tabs defaultValue="pending">
+        <TabsList>
+          <TabsTrigger value="pending">
+            {t("fust.pendingDeliveries" as Parameters<typeof t>[0])}
+            {pendingOrders.length > 0 && (
+              <Badge variant="default" className="ml-1.5 h-5 min-w-5 px-1.5">
+                {pendingOrders.length}
+              </Badge>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="completed">
             {t("fust.completedDeliveries" as Parameters<typeof t>[0])}
-          </h2>
-          <div className="space-y-3">
-            {completedOrders.map((order) => (
-              <OrderCard key={order.id} order={order} t={t} />
-            ))}
-          </div>
-        </section>
-      )}
+            {completedOrders.length > 0 && (
+              <Badge variant="secondary" className="ml-1.5 h-5 min-w-5 px-1.5">
+                {completedOrders.length}
+              </Badge>
+            )}
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="pending">
+          {pendingOrders.length === 0 ? (
+            <div className="py-12 text-center text-muted-foreground">
+              <RiTruckLine className="mx-auto mb-3 h-10 w-10 opacity-30" />
+              <p>{t("fust.noDeliveriesPending" as Parameters<typeof t>[0])}</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {pendingOrders.map((order) => (
+                <OrderCard
+                  key={order.id}
+                  order={order}
+                  onConfirm={() => openConfirmDialog(order)}
+                  t={t}
+                />
+              ))}
+            </div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="completed">
+          {completedOrders.length === 0 ? (
+            <div className="py-12 text-center text-muted-foreground">
+              <RiCheckboxCircleLine className="mx-auto mb-3 h-10 w-10 opacity-30" />
+              <p>{t("fust.noCompletedDeliveries" as Parameters<typeof t>[0])}</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {completedOrders.map((order) => (
+                <OrderCard key={order.id} order={order} t={t} />
+              ))}
+            </div>
+          )}
+        </TabsContent>
+      </Tabs>
 
       {/* Confirm Delivery Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>

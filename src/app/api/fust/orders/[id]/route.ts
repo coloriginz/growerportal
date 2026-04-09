@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { requireAuth } from "@/lib/api-helpers";
-import { sendOrderApprovedNotification } from "@/lib/fust-notifications";
+import { sendOrderApprovedNotification, sendOrderDeliveredNotification } from "@/lib/fust-notifications";
 import { logFustEvent } from "@/lib/fust-audit";
 import { isTest } from "@/lib/env";
 
@@ -161,16 +161,29 @@ export async function PATCH(
   let previewUrl: string | false = false;
   if (status === "approved") {
     if (isTest) {
-      // In test mode: await to get Ethereal preview URL
       try {
         previewUrl = await sendOrderApprovedNotification(id);
       } catch (err) {
         console.error("[FustOrders] Failed to send approval notification:", err);
       }
     } else {
-      // Production: fire-and-forget for fast response
       sendOrderApprovedNotification(id).catch((err) => {
         console.error("[FustOrders] Failed to send approval notification:", err);
+      });
+    }
+  }
+
+  // Send grower notification on delivery
+  if (status === "delivered") {
+    if (isTest) {
+      try {
+        previewUrl = await sendOrderDeliveredNotification(id);
+      } catch (err) {
+        console.error("[FustOrders] Failed to send delivery notification:", err);
+      }
+    } else {
+      sendOrderDeliveredNotification(id).catch((err) => {
+        console.error("[FustOrders] Failed to send delivery notification:", err);
       });
     }
   }

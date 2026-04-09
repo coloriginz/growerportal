@@ -558,6 +558,9 @@
     "actor": "Gebruiker",
     "details": "Details",
     "entity": "Entiteit",
+    "activeOrders": "Actief",
+    "rejectedCancelled": "Afgewezen / Geannuleerd",
+    "noCompletedDeliveries": "Geen afgeronde leveringen",
     "emailLog": {
       "title": "Email Verwerkingslog",
       "search": "Zoek op onderwerp, afzender, transactie...",

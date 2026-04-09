@@ -558,6 +558,9 @@
     "actor": "Actor",
     "details": "Details",
     "entity": "Entity",
+    "activeOrders": "Active",
+    "rejectedCancelled": "Rejected / Cancelled",
+    "noCompletedDeliveries": "No completed deliveries",
     "emailLog": {
       "title": "Email Ingestion Log",
       "search": "Search subject, sender, transaction...",
