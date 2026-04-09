@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { requireAuth, resolveGrowerId } from "@/lib/api-helpers";
 import { sendOrderApprovedNotification } from "@/lib/fust-notifications";
 import { logFustEvent } from "@/lib/fust-audit";
+import { isTest } from "@/lib/env";
 
 const orderItemSchema = z.object({
   fustTypeId: z.string().uuid(),
@@ -183,10 +184,16 @@ export async function POST(request: NextRequest) {
   // Send transporter notification if auto-approved
   let previewUrl: string | false = false;
   if (grower.autoApproveOrders) {
-    try {
-      previewUrl = await sendOrderApprovedNotification(order.id);
-    } catch (err) {
-      console.error("[FustOrders] Failed to send auto-approve notification:", err);
+    if (isTest) {
+      try {
+        previewUrl = await sendOrderApprovedNotification(order.id);
+      } catch (err) {
+        console.error("[FustOrders] Failed to send auto-approve notification:", err);
+      }
+    } else {
+      sendOrderApprovedNotification(order.id).catch((err) => {
+        console.error("[FustOrders] Failed to send auto-approve notification:", err);
+      });
     }
   }
 

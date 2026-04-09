@@ -18,14 +18,15 @@ const ROLE_LABELS: Record<Role, string> = {
 
 interface TestBannerProps {
   userRole: string;
+  fustOnly?: boolean;
 }
 
-export function TestBanner({ userRole }: TestBannerProps) {
+export function TestBanner({ userRole, fustOnly }: TestBannerProps) {
   return (
     <div className="flex items-center justify-center gap-3 bg-red-600 px-4 py-1.5 text-xs font-semibold tracking-wide text-white">
       <span className="flex-1 text-center uppercase">Test Environment</span>
       <div className="flex items-center gap-2">
-        <RoleSwitcher currentRole={userRole} />
+        <RoleSwitcher currentRole={userRole} fustOnly={fustOnly} />
         <EmailSwitcher />
       </div>
     </div>
@@ -69,7 +70,7 @@ interface TransporterOption {
   name: string;
 }
 
-function RoleSwitcher({ currentRole }: { currentRole: string }) {
+function RoleSwitcher({ currentRole, fustOnly }: { currentRole: string; fustOnly?: boolean }) {
   const [open, setOpen] = useState(false);
   const [switching, setSwitching] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -99,7 +100,7 @@ function RoleSwitcher({ currentRole }: { currentRole: string }) {
 
   // Load entity lists: try sessionStorage first, then fetch from API
   useEffect(() => {
-    const GROWERS_KEY = "test_banner_growers";
+    const GROWERS_KEY = fustOnly ? "test_banner_growers_fust" : "test_banner_growers";
     const TRANSPORTERS_KEY = "test_banner_transporters";
 
     // Restore from cache immediately
@@ -112,7 +113,7 @@ function RoleSwitcher({ currentRole }: { currentRole: string }) {
 
     // Attempt fresh fetch (succeeds when admin/commercie, 403 otherwise)
     Promise.all([
-      fetch("/api/growers").then((r) => r.ok ? r.json() : null),
+      fetch(`/api/growers${fustOnly ? "?fustOnly=true" : ""}`).then((r) => r.ok ? r.json() : null),
       fetch("/api/transporters").then((r) => r.ok ? r.json() : null),
     ]).then(([g, t]) => {
       if (g) {

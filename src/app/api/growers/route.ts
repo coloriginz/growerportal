@@ -9,10 +9,12 @@ export async function GET(request: NextRequest) {
 
   const url = new URL(request.url);
   const full = url.searchParams.get("full");
+  const fustOnly = url.searchParams.get("fustOnly") === "true";
 
   // Simple mode: return minimal data for dropdowns
   if (!full) {
     const growers = await prisma.grower.findMany({
+      where: fustOnly ? { fustEnabled: true } : undefined,
       select: {
         id: true,
         code: true,

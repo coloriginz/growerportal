@@ -545,13 +545,11 @@ export function FustSettings() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">{t("fust.noTransporter")}</SelectItem>
-                  {data.transporters
-                    .filter((tr) => tr.isActive)
-                    .map((tr) => (
-                      <SelectItem key={tr.id} value={tr.id}>
-                        {tr.name}
-                      </SelectItem>
-                    ))}
+                  {data.transporters.map((tr) => (
+                    <SelectItem key={tr.id} value={tr.id}>
+                      {tr.name}{!tr.isActive ? " (inactive)" : ""}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
               {growerEnabled && !growerTransporterId && (

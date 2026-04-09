@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { requireAuth } from "@/lib/api-helpers";
 import { sendOrderApprovedNotification } from "@/lib/fust-notifications";
 import { logFustEvent } from "@/lib/fust-audit";
+import { isTest } from "@/lib/env";
 
 const deliveryItemSchema = z.object({
   fustTypeId: z.string().uuid(),
@@ -159,10 +160,18 @@ export async function PATCH(
   // Send transporter notification on approval
   let previewUrl: string | false = false;
   if (status === "approved") {
-    try {
-      previewUrl = await sendOrderApprovedNotification(id);
-    } catch (err) {
-      console.error("[FustOrders] Failed to send approval notification:", err);
+    if (isTest) {
+      // In test mode: await to get Ethereal preview URL
+      try {
+        previewUrl = await sendOrderApprovedNotification(id);
+      } catch (err) {
+        console.error("[FustOrders] Failed to send approval notification:", err);
+      }
+    } else {
+      // Production: fire-and-forget for fast response
+      sendOrderApprovedNotification(id).catch((err) => {
+        console.error("[FustOrders] Failed to send approval notification:", err);
+      });
     }
   }
 

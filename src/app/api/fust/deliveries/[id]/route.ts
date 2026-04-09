@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { requireAuth } from "@/lib/api-helpers";
 import { logFustEvent } from "@/lib/fust-audit";
 import { sendDeliveryConfirmedNotification } from "@/lib/fust-notifications";
+import { isTest } from "@/lib/env";
 
 const deliveryItemSchema = z.object({
   fustTypeId: z.string().uuid(),
@@ -110,10 +111,16 @@ export async function PATCH(
     });
 
     // Notify grower of delivery
-    try {
-      await sendDeliveryConfirmedNotification(id);
-    } catch (emailErr) {
-      console.error("[FustDelivery] Failed to send delivery email:", emailErr);
+    if (isTest) {
+      try {
+        await sendDeliveryConfirmedNotification(id);
+      } catch (emailErr) {
+        console.error("[FustDelivery] Failed to send delivery email:", emailErr);
+      }
+    } else {
+      sendDeliveryConfirmedNotification(id).catch((emailErr) => {
+        console.error("[FustDelivery] Failed to send delivery email:", emailErr);
+      });
     }
 
     // If all deliveries in the pickup are delivered, mark pickup as completed

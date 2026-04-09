@@ -37,7 +37,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { RiCheckLine, RiCloseLine, RiBox3Line, RiHistoryLine } from "@remixicon/react";
+import { RiCheckLine, RiCloseLine, RiBox3Line, RiHistoryLine, RiLoader4Line } from "@remixicon/react";
 import { toast } from "sonner";
 import { FustOrderTimeline } from "./fust-order-timeline";
 
@@ -269,7 +269,11 @@ export function FustOrders() {
                               disabled={processing === order.id}
                               title={t("fust.approve")}
                             >
-                              <RiCheckLine className="h-4 w-4" />
+                              {processing === order.id ? (
+                                <RiLoader4Line className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <RiCheckLine className="h-4 w-4" />
+                              )}
                             </Button>
                             <Button
                               variant="ghost"
@@ -338,6 +342,9 @@ export function FustOrders() {
               onClick={handleReject}
               disabled={!rejectionReason.trim() || processing === rejectDialogOrder?.id}
             >
+              {processing === rejectDialogOrder?.id && (
+                <RiLoader4Line className="mr-2 h-4 w-4 animate-spin" />
+              )}
               {t("fust.reject")}
             </Button>
           </DialogFooter>
