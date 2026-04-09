@@ -20,14 +20,19 @@ export async function POST(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  // Delete previously created voucher (if any) so reprocessing can recreate it.
+  // Delete previously created voucher so reprocessing can recreate it.
   // Cascade deletes items + order links automatically.
+  // Check both by direct link AND by transaction number (link may have been
+  // cleared by a previous failed reprocess attempt, leaving an orphaned voucher).
   if (ingestion.voucherId) {
     await prisma.fustIssuanceVoucher.delete({
       where: { id: ingestion.voucherId },
-    }).catch(() => {
-      // Voucher may have been deleted manually — ignore
-    });
+    }).catch(() => {});
+  }
+  if (ingestion.transactionNumber) {
+    await prisma.fustIssuanceVoucher.delete({
+      where: { transactionNumber: ingestion.transactionNumber },
+    }).catch(() => {});
   }
 
   // Reset status to PROCESSING
