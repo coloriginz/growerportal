@@ -4,12 +4,11 @@
  */
 
 import { logoBase64 } from "@/lib/logo-base64";
+import { mypeonyLogoBase64 } from "@/lib/mypeony-logo-base64";
 
-// For now, MyPeony uses the same logo as Coloriginz (placeholder).
-// Replace with actual MyPeony logo base64 when available.
 const logos: Record<string, string> = {
   coloriginz: logoBase64,
-  mypeony: logoBase64, // TODO: replace with actual MyPeony logo
+  mypeony: mypeonyLogoBase64,
 };
 
 const DEFAULT_SLUG = "coloriginz";
