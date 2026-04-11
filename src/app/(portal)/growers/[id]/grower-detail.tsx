@@ -52,6 +52,7 @@ interface GrowerData {
   commercieId: string | null;
   companyId: string | null;
   companyEntity: CompanyOption | null;
+  preferredLanguage: string;
   seasonStartMonth: number;
   commercie: { id: string; name: string; email: string } | null;
   certificates: {
@@ -101,6 +102,7 @@ export function GrowerDetail({ growerId }: { growerId: string }) {
     ggn: "",
     commercieId: "",
     companyId: "",
+    preferredLanguage: "en",
     seasonStartMonth: "1",
   });
 
@@ -129,6 +131,7 @@ export function GrowerDetail({ growerId }: { growerId: string }) {
           ggn: data.ggn || "",
           commercieId: data.commercieId || "",
           companyId: data.companyId || "",
+          preferredLanguage: data.preferredLanguage || "en",
           seasonStartMonth: String(data.seasonStartMonth ?? 1),
         });
       } else {
@@ -176,6 +179,7 @@ export function GrowerDetail({ growerId }: { growerId: string }) {
           ggn: form.ggn || null,
           commercieId: form.commercieId || null,
           companyId: form.companyId || null,
+          preferredLanguage: form.preferredLanguage,
           seasonStartMonth: parseInt(form.seasonStartMonth),
         }),
       });
@@ -464,6 +468,33 @@ export function GrowerDetail({ growerId }: { growerId: string }) {
               )}
               <p className="text-xs text-muted-foreground">
                 Determines the branding (logo, emails) for this grower.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Communication Language */}
+        <Card>
+          <CardHeader>
+            <CardTitle>{t("common.preferredLanguage")}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="max-w-sm space-y-2">
+              <Label>{t("common.preferredLanguage")}</Label>
+              <Select
+                value={form.preferredLanguage}
+                onValueChange={(v) => { if (v) setForm({ ...form, preferredLanguage: v }); }}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="en">English</SelectItem>
+                  <SelectItem value="nl">Nederlands</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                {t("common.preferredLanguageDescription")}
               </p>
             </div>
           </CardContent>

@@ -52,6 +52,7 @@ export async function GET(
     phone: grower.phone,
     vatNumber: grower.vatNumber,
     ggn: grower.ggn,
+    preferredLanguage: grower.preferredLanguage,
     commercie: grower.commercie,
     commercieId: grower.commercieId,
     companyId: grower.companyId,
@@ -86,6 +87,7 @@ const updateGrowerSchema = z.object({
   commercieId: z.string().nullable().optional(),
   companyId: z.string().nullable().optional(),
   seasonStartMonth: z.number().int().min(1).max(12).optional(),
+  preferredLanguage: z.enum(["en", "nl"]).optional(),
 });
 
 export async function PUT(

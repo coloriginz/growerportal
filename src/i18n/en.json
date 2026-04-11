@@ -29,7 +29,9 @@
     "description": "Description",
     "clearFilters": "Clear filters",
     "selected": "Selected",
-    "type": "Type"
+    "type": "Type",
+    "preferredLanguage": "Communication Language",
+    "preferredLanguageDescription": "Language used for emails sent to this grower."
   },
   "auth": {
     "login": "Sign In",

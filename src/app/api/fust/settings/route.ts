@@ -20,6 +20,7 @@ export async function GET() {
         fustEnabled: true,
         autoApproveOrders: true,
         defaultTransporterId: true,
+        preferredLanguage: true,
       },
       orderBy: { code: "asc" },
     }),
@@ -35,6 +36,7 @@ const updateGrowerSchema = z.object({
   fustEnabled: z.boolean(),
   autoApproveOrders: z.boolean().optional(),
   defaultTransporterId: z.string().uuid().nullable(),
+  preferredLanguage: z.enum(["en", "nl"]).optional(),
 });
 
 const updateFustTypeSchema = z.object({
@@ -58,6 +60,7 @@ const updateTransporterSchema = z.object({
   email: z.string().email().optional().nullable(),
   phone: z.string().optional().nullable(),
   isActive: z.boolean().optional(),
+  preferredLanguage: z.enum(["en", "nl"]).optional(),
 });
 
 export async function PATCH(request: NextRequest) {
@@ -70,7 +73,7 @@ export async function PATCH(request: NextRequest) {
     const parsed = updateGrowerSchema.safeParse(body);
     if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
 
-    const { growerId, fustEnabled, autoApproveOrders, defaultTransporterId } = parsed.data;
+    const { growerId, fustEnabled, autoApproveOrders, defaultTransporterId, preferredLanguage } = parsed.data;
 
     // Cannot enable fust without a transporter
     if (fustEnabled && !defaultTransporterId) {
@@ -84,6 +87,7 @@ export async function PATCH(request: NextRequest) {
         defaultTransporterId,
         // Auto-approve only makes sense when fust is enabled
         autoApproveOrders: fustEnabled ? (autoApproveOrders ?? false) : false,
+        ...(preferredLanguage !== undefined && { preferredLanguage }),
       },
     });
     return NextResponse.json({ success: true });

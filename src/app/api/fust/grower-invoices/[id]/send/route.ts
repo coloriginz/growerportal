@@ -25,6 +25,7 @@ export async function POST(
           code: true,
           name: true,
           company: true,
+          preferredLanguage: true,
           users: {
             where: { isActive: true, role: "grower" },
             select: { email: true, name: true },
@@ -63,13 +64,15 @@ export async function POST(
     );
   }
 
-  // 5. Get branding
+  // 5. Get branding + language
   const branding = await getGrowerEmailBranding(invoice.growerId);
   const portalUrl = process.env.APP_URL || process.env.NEXTAUTH_URL || "http://localhost:3000";
   const growerName = invoice.grower.company || invoice.grower.name;
+  const language = (invoice.grower.preferredLanguage === "nl" ? "nl" : "en") as "en" | "nl";
+  const dateLocale = language === "nl" ? "nl-NL" : "en-GB";
 
   // 6. Format invoice date and total for email
-  const formattedDate = new Intl.DateTimeFormat("nl-NL", {
+  const formattedDate = new Intl.DateTimeFormat(dateLocale, {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
@@ -87,6 +90,7 @@ export async function POST(
     invoiceDate: formattedDate,
     totalAmount: formattedTotal,
     portalUrl,
+    language,
     branding: {
       companyName: branding.companyName,
       portalName: branding.portalName,
@@ -108,7 +112,9 @@ export async function POST(
   // 10. Send email
   const result = await sendEmail({
     to: toAddresses.join(", "),
-    subject: `Factuur ${invoice.invoiceNumber} - ${branding.companyName}`,
+    subject: language === "nl"
+      ? `Fust Factuur ${invoice.invoiceNumber} - ${branding.companyName}`
+      : `Fust Invoice ${invoice.invoiceNumber} - ${branding.companyName}`,
     html,
     from: fromAddress,
     attachments: [

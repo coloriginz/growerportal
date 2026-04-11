@@ -61,6 +61,7 @@ interface Transporter {
   name: string;
   email: string | null;
   phone: string | null;
+  preferredLanguage: string;
   isActive: boolean;
 }
 
@@ -72,6 +73,7 @@ interface GrowerSetting {
   fustEnabled: boolean;
   autoApproveOrders: boolean;
   defaultTransporterId: string | null;
+  preferredLanguage: string;
 }
 
 interface SettingsData {
@@ -98,11 +100,13 @@ export function FustSettings() {
   const [growerEnabled, setGrowerEnabled] = useState(false);
   const [growerAutoApprove, setGrowerAutoApprove] = useState(false);
   const [growerTransporterId, setGrowerTransporterId] = useState<string | null>(null);
+  const [growerLanguage, setGrowerLanguage] = useState("en");
 
   // Transporter form state
   const [trName, setTrName] = useState("");
   const [trEmail, setTrEmail] = useState("");
   const [trPhone, setTrPhone] = useState("");
+  const [trLanguage, setTrLanguage] = useState("en");
   const [trActive, setTrActive] = useState(true);
 
   // FustType form state
@@ -148,6 +152,7 @@ export function FustSettings() {
     setGrowerEnabled(grower.fustEnabled);
     setGrowerAutoApprove(grower.autoApproveOrders);
     setGrowerTransporterId(grower.defaultTransporterId);
+    setGrowerLanguage(grower.preferredLanguage || "en");
     setGrowerDialog(grower);
   };
 
@@ -163,6 +168,7 @@ export function FustSettings() {
       fustEnabled: growerEnabled,
       autoApproveOrders: growerAutoApprove,
       defaultTransporterId: growerTransporterId,
+      preferredLanguage: growerLanguage,
     });
     if (ok) {
       toast.success(t("fust.settingsSaved"));
@@ -177,11 +183,13 @@ export function FustSettings() {
       setTrName("");
       setTrEmail("");
       setTrPhone("");
+      setTrLanguage("en");
       setTrActive(true);
     } else {
       setTrName(tr.name);
       setTrEmail(tr.email || "");
       setTrPhone(tr.phone || "");
+      setTrLanguage(tr.preferredLanguage || "en");
       setTrActive(tr.isActive);
     }
     setTransporterDialog(tr);
@@ -194,6 +202,7 @@ export function FustSettings() {
       name: trName.trim(),
       email: trEmail.trim() || null,
       phone: trPhone.trim() || null,
+      preferredLanguage: trLanguage,
       isActive: trActive,
     };
     if (transporterDialog !== "new" && transporterDialog) {
@@ -294,6 +303,7 @@ export function FustSettings() {
                   <TableHead>{t("fust.name")}</TableHead>
                   <TableHead>{t("fust.enabled")}</TableHead>
                   <TableHead>{t("fust.defaultTransporter")}</TableHead>
+                  <TableHead>{t("common.preferredLanguage")}</TableHead>
                   <TableHead className="w-12" />
                 </TableRow>
               </TableHeader>
@@ -323,6 +333,11 @@ export function FustSettings() {
                         </div>
                       </TableCell>
                       <TableCell>{transporter?.name || "-"}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline">
+                          {grower.preferredLanguage === "nl" ? "NL" : "EN"}
+                        </Badge>
+                      </TableCell>
                       <TableCell>
                         <Button
                           variant="ghost"
@@ -537,6 +552,7 @@ export function FustSettings() {
                 {growerEnabled && <span className="ml-1 text-destructive">*</span>}
               </Label>
               <Select
+                key={`tr-${data.transporters.length}`}
                 value={growerTransporterId || "none"}
                 onValueChange={(v) => setGrowerTransporterId(v === "none" ? null : v)}
               >
@@ -572,6 +588,21 @@ export function FustSettings() {
                 </label>
               </div>
             )}
+            <div className="space-y-2">
+              <Label>{t("common.preferredLanguage")}</Label>
+              <Select
+                value={growerLanguage}
+                onValueChange={(v) => v && setGrowerLanguage(v)}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="en">English</SelectItem>
+                  <SelectItem value="nl">Nederlands</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setGrowerDialog(null)}>
@@ -618,6 +649,21 @@ export function FustSettings() {
                 value={trPhone}
                 onChange={(e) => setTrPhone(e.target.value)}
               />
+            </div>
+            <div className="space-y-2">
+              <Label>{t("common.preferredLanguage")}</Label>
+              <Select
+                value={trLanguage}
+                onValueChange={(v) => v && setTrLanguage(v)}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="en">English</SelectItem>
+                  <SelectItem value="nl">Nederlands</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-2">
               <Label>{t("common.status")}</Label>

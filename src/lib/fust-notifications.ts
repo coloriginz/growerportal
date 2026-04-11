@@ -13,7 +13,7 @@ export async function sendOrderApprovedNotification(orderId: string): Promise<st
           code: true,
           name: true,
           company: true,
-          defaultTransporter: { select: { email: true, name: true } },
+          defaultTransporter: { select: { email: true, name: true, preferredLanguage: true } },
         },
       },
     },
@@ -34,6 +34,8 @@ export async function sendOrderApprovedNotification(orderId: string): Promise<st
 
   const branding = await getGrowerEmailBranding(order.growerId);
   const portalUrl = process.env.APP_URL || process.env.NEXTAUTH_URL || "http://localhost:3000";
+  const language = (order.grower.defaultTransporter?.preferredLanguage === "nl" ? "nl" : "en") as "en" | "nl";
+  const dateLocale = language === "nl" ? "nl-NL" : "en-GB";
 
   const html = fustOrderApprovedEmailHtml({
     orderNumber: order.orderNumber,
@@ -44,10 +46,11 @@ export async function sendOrderApprovedNotification(orderId: string): Promise<st
       quantity: item.quantity,
     })),
     requestedDate: order.requestedDate
-      ? new Intl.DateTimeFormat("nl-NL", { day: "2-digit", month: "2-digit", year: "numeric" }).format(order.requestedDate)
+      ? new Intl.DateTimeFormat(dateLocale, { day: "2-digit", month: "2-digit", year: "numeric" }).format(order.requestedDate)
       : null,
     notes: order.notes,
     portalUrl,
+    language,
     branding: {
       companyName: branding.companyName,
       portalName: branding.portalName,
@@ -59,9 +62,13 @@ export async function sendOrderApprovedNotification(orderId: string): Promise<st
     ? `"${branding.emailName}" <${branding.emailFrom}>`
     : undefined;
 
+  const subject = language === "nl"
+    ? `Fust Bestelling Goedgekeurd: ${order.orderNumber} - ${order.grower.company || order.grower.name}`
+    : `Fust Order Approved: ${order.orderNumber} - ${order.grower.company || order.grower.name}`;
+
   const result = await sendEmail({
     to: transporterEmail,
-    subject: `Fust Order Approved: ${order.orderNumber} - ${order.grower.company || order.grower.name}`,
+    subject,
     html,
     from: fromAddress,
     attachments: [
@@ -96,6 +103,7 @@ export async function sendDeliveryConfirmedNotification(
               id: true,
               name: true,
               company: true,
+              preferredLanguage: true,
               users: {
                 where: { isActive: true, role: "grower" },
                 select: { email: true, name: true },
@@ -123,6 +131,8 @@ export async function sendDeliveryConfirmedNotification(
   const branding = await getGrowerEmailBranding(delivery.order.grower.id);
   const portalUrl = process.env.APP_URL || process.env.NEXTAUTH_URL || "http://localhost:3000";
   const growerName = delivery.order.grower.company || delivery.order.grower.name;
+  const language = (delivery.order.grower.preferredLanguage === "nl" ? "nl" : "en") as "en" | "nl";
+  const dateLocale = language === "nl" ? "nl-NL" : "en-GB";
 
   // Build items list: match delivery items to order items by fustTypeId
   const orderItemMap = new Map(
@@ -134,7 +144,7 @@ export async function sendDeliveryConfirmedNotification(
     delivered: di.quantity,
   }));
 
-  const deliveredDate = new Intl.DateTimeFormat("nl-NL", {
+  const deliveredDate = new Intl.DateTimeFormat(dateLocale, {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
@@ -146,6 +156,7 @@ export async function sendDeliveryConfirmedNotification(
     items,
     deliveredDate,
     portalUrl,
+    language,
     branding: {
       companyName: branding.companyName,
       portalName: branding.portalName,
@@ -160,9 +171,13 @@ export async function sendDeliveryConfirmedNotification(
 
   const toAddresses = growerUsers.map((u) => u.email);
 
+  const subject = language === "nl"
+    ? `Fust Levering Bevestigd: ${delivery.order.orderNumber}`
+    : `Fust Delivery Confirmed: ${delivery.order.orderNumber}`;
+
   const result = await sendEmail({
     to: toAddresses.join(", "),
-    subject: `Fust Delivery Confirmed: ${delivery.order.orderNumber}`,
+    subject,
     html,
     from: fromAddress,
     attachments: [
@@ -198,6 +213,7 @@ export async function sendOrderDeliveredNotification(
           id: true,
           name: true,
           company: true,
+          preferredLanguage: true,
           users: {
             where: { isActive: true, role: "grower" },
             select: { email: true, name: true },
@@ -223,6 +239,8 @@ export async function sendOrderDeliveredNotification(
   const branding = await getGrowerEmailBranding(order.grower.id);
   const portalUrl = process.env.APP_URL || process.env.NEXTAUTH_URL || "http://localhost:3000";
   const growerName = order.grower.company || order.grower.name;
+  const language = (order.grower.preferredLanguage === "nl" ? "nl" : "en") as "en" | "nl";
+  const dateLocale = language === "nl" ? "nl-NL" : "en-GB";
 
   const items = order.items.map((item) => ({
     fustTypeName: item.fustType.name,
@@ -230,7 +248,7 @@ export async function sendOrderDeliveredNotification(
     delivered: item.deliveredQuantity ?? item.quantity,
   }));
 
-  const deliveredDate = new Intl.DateTimeFormat("nl-NL", {
+  const deliveredDate = new Intl.DateTimeFormat(dateLocale, {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
@@ -242,6 +260,7 @@ export async function sendOrderDeliveredNotification(
     items,
     deliveredDate,
     portalUrl,
+    language,
     branding: {
       companyName: branding.companyName,
       portalName: branding.portalName,
@@ -256,9 +275,13 @@ export async function sendOrderDeliveredNotification(
 
   const toAddresses = growerUsers.map((u) => u.email);
 
+  const subject = language === "nl"
+    ? `Fust Levering Bevestigd: ${order.orderNumber}`
+    : `Fust Delivery Confirmed: ${order.orderNumber}`;
+
   const result = await sendEmail({
     to: toAddresses.join(", "),
-    subject: `Fust Delivery Confirmed: ${order.orderNumber}`,
+    subject,
     html,
     from: fromAddress,
     attachments: [

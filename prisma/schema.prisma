@@ -71,6 +71,7 @@ model Grower {
   phone          String?
   vatNumber      String?
   ggn            String?  // GlobalGAP number
+  preferredLanguage String @default("en") // "en" | "nl"
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -321,6 +322,7 @@ model Transporter {
   name      String
   email     String?
   phone     String?
+  preferredLanguage String @default("en") // "en" | "nl"
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

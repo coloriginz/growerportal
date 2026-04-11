@@ -29,7 +29,9 @@
     "description": "Omschrijving",
     "clearFilters": "Filters wissen",
     "selected": "Geselecteerd",
-    "type": "Type"
+    "type": "Type",
+    "preferredLanguage": "Communicatietaal",
+    "preferredLanguageDescription": "Taal die gebruikt wordt voor e-mails naar deze kweker."
   },
   "auth": {
     "login": "Inloggen",
