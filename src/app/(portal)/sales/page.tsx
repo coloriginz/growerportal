@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import { getActiveGrowerId } from "@/lib/grower-context";
+import { getActiveSupplierId } from "@/lib/supplier-context";
 import { SalesContent } from "./sales-content";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -9,11 +9,11 @@ interface Props {
 
 export default async function SalesPage({ searchParams }: Props) {
   const params = await searchParams;
-  const growerId = await getActiveGrowerId(params);
+  const supplierId = await getActiveSupplierId(params);
 
   return (
     <Suspense fallback={<Skeleton className="h-96" />}>
-      <SalesContent growerId={growerId} />
+      <SalesContent supplierId={supplierId} />
     </Suspense>
   );
 }

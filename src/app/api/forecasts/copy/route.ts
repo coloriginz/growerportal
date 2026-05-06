@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
-import { requireAuth, resolveGrowerId } from "@/lib/api-helpers";
+import { requireAuth, resolveSupplierId } from "@/lib/api-helpers";
 
 const copySchema = z.object({
-  growerId: z.string().optional(),
+  supplierId: z.string().optional(),
   sourceYear: z.number().int(),
   sourceWeek: z.number().int().min(1).max(53),
   numberOfWeeks: z.number().int().min(1).max(12),
@@ -41,16 +41,16 @@ export async function POST(request: NextRequest) {
   }
 
   const { sourceYear, sourceWeek, numberOfWeeks } = parsed.data;
-  const requestedGrowerId = parsed.data.growerId || null;
-  const growerId = resolveGrowerId(session!, requestedGrowerId);
+  const requestedSupplierId = parsed.data.supplierId || null;
+  const supplierId = resolveSupplierId(session!, requestedSupplierId);
 
-  if (!growerId) {
-    return NextResponse.json({ error: "No grower specified" }, { status: 400 });
+  if (!supplierId) {
+    return NextResponse.json({ error: "No supplier specified" }, { status: 400 });
   }
 
   // Fetch source week data
   const sourceForecasts = await prisma.shipmentForecast.findMany({
-    where: { growerId, year: sourceYear, week: sourceWeek },
+    where: { supplierId, year: sourceYear, week: sourceWeek },
   });
 
   if (sourceForecasts.length === 0) {
@@ -74,15 +74,15 @@ export async function POST(request: NextRequest) {
     for (const forecast of sourceForecasts) {
       await prisma.shipmentForecast.upsert({
         where: {
-          growerId_productName_year_week: {
-            growerId,
+          supplierId_productName_year_week: {
+            supplierId,
             productName: forecast.productName,
             year: target.year,
             week: target.week,
           },
         },
         create: {
-          growerId,
+          supplierId,
           productName: forecast.productName,
           articleGroup: forecast.articleGroup,
           year: target.year,

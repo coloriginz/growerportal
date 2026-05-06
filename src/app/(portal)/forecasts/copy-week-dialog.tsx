@@ -25,7 +25,7 @@ interface CopyWeekDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   weeksWithData: { year: number; week: number }[];
-  growerId: string | null;
+  supplierId: string | null;
   onCopied: () => void;
 }
 
@@ -33,7 +33,7 @@ export function CopyWeekDialog({
   open,
   onOpenChange,
   weeksWithData,
-  growerId,
+  supplierId,
   onCopied,
 }: CopyWeekDialogProps) {
   const { t } = useLanguage();
@@ -42,7 +42,7 @@ export function CopyWeekDialog({
   const [copying, setCopying] = useState(false);
 
   const handleCopy = async () => {
-    if (!sourceWeek || !growerId) return;
+    if (!sourceWeek || !supplierId) return;
 
     const [year, week] = sourceWeek.split("-").map(Number);
     setCopying(true);
@@ -52,7 +52,7 @@ export function CopyWeekDialog({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          growerId,
+          supplierId,
           sourceYear: year,
           sourceWeek: week,
           numberOfWeeks,

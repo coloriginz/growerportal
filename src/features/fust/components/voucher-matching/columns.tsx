@@ -119,7 +119,7 @@ export function createVoucherColumns(
   ];
 }
 
-// ─── Order Columns (no grower — grouped by it) ────────
+// ─── Order Columns (no supplier — grouped by it) ────────
 
 const orderHelper = createColumnHelper<OrderRef>();
 

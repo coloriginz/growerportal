@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { requireAuth, resolveGrowerId } from "@/lib/api-helpers";
+import { requireAuth, resolveSupplierId } from "@/lib/api-helpers";
 import { startOfDay, subDays, startOfWeek, startOfMonth, startOfYear, format, getISOWeek, setISOWeek, setYear, endOfISOWeek, startOfISOWeek } from "date-fns";
 import { getSeasonStart } from "@/lib/season";
 
@@ -9,18 +9,18 @@ export async function GET(request: NextRequest) {
   if (error) return error;
 
   const params = request.nextUrl.searchParams;
-  const requestedGrowerId = params.get("growerId");
+  const requestedSupplierId = params.get("supplierId");
   const period = params.get("period") || "ytd";
   const weekNumber = params.get("week") ? parseInt(params.get("week")!) : null;
   const yearParam = params.get("year") ? parseInt(params.get("year")!) : null;
-  const growerId = resolveGrowerId(session!, requestedGrowerId);
+  const supplierId = resolveSupplierId(session!, requestedSupplierId);
 
   // Multi-select filters
   const filterProducts = params.getAll("product");
   const filterSalesTypes = params.getAll("salesType");
   const filterStemLengths = params.getAll("stemLength").map((s) => parseInt(s));
 
-  if (!growerId) {
+  if (!supplierId) {
     return NextResponse.json({
       totalStems: 0, totalTurnover: 0, avgPrice: 0,
       bySalesType: [], byProduct: [], daily: [],
@@ -62,13 +62,13 @@ export async function GET(request: NextRequest) {
     }
     case "ytd":
     default: {
-      // Use season start if a specific grower is selected
-      if (growerId) {
-        const growerRecord = await prisma.grower.findUnique({
-          where: { id: growerId },
+      // Use season start if a specific supplier is selected
+      if (supplierId) {
+        const supplierRecord = await prisma.supplier.findUnique({
+          where: { id: supplierId },
           select: { seasonStartMonth: true },
         });
-        dateFrom = getSeasonStart(now, growerRecord?.seasonStartMonth ?? 1);
+        dateFrom = getSeasonStart(now, supplierRecord?.seasonStartMonth ?? 1);
       } else {
         dateFrom = startOfYear(now);
       }
@@ -81,14 +81,13 @@ export async function GET(request: NextRequest) {
     : { gte: dateFrom };
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const lotFilter: Record<string, any> = { growerId };
+  const lotFilter: Record<string, any> = { supplierId };
   if (filterProducts.length > 0) lotFilter.productName = { in: filterProducts };
   if (filterStemLengths.length > 0) lotFilter.stemLength = { in: filterStemLengths };
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const baseWhere: Record<string, any> = {
     lot: lotFilter,
-    isCorrection: false,
     date: dateFilter,
   };
   if (filterSalesTypes.length > 0) baseWhere.salesType = { in: filterSalesTypes };
@@ -158,8 +157,7 @@ export async function GET(request: NextRequest) {
     lyTo.setFullYear(lyTo.getFullYear() - 1);
     const lyTotals = await prisma.transaction.aggregate({
       where: {
-        lot: { growerId },
-        isCorrection: false,
+        lot: { supplierId },
         date: { gte: lyFrom, lte: lyTo },
       },
       _sum: { stems: true, amount: true },

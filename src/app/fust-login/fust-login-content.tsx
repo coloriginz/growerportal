@@ -116,7 +116,7 @@ export function FustLoginContent() {
               </p>
               <div className="space-y-1">
                 {[
-                  { label: "Grower", email: "pcfup@example.com", password: "GreenField99" },
+                  { label: "Supplier", email: "pcfup@example.com", password: "GreenField99" },
                   { label: "Admin", email: "admin@coloriginz.com", password: "Colori2026!" },
                   { label: "Transporteur", email: "chauffeur@flowertrans.nl", password: "Transport#2026" },
                   { label: "Finance", email: "finance@coloriginz.com", password: "Finance#2026" },

@@ -1,14 +1,14 @@
 import { prisma } from "@/lib/db";
 import { sendEmail } from "@/lib/email";
 import { fustOrderApprovedEmailHtml, fustDeliveryConfirmedEmailHtml } from "@/lib/email-templates";
-import { getGrowerEmailBranding } from "@/lib/company-helpers";
+import { getSupplierEmailBranding } from "@/lib/company-helpers";
 
 export async function sendOrderApprovedNotification(orderId: string): Promise<string | false> {
   const order = await prisma.fustOrder.findUnique({
     where: { id: orderId },
     include: {
       items: { include: { fustType: { select: { name: true } } } },
-      grower: {
+      supplier: {
         select: {
           code: true,
           name: true,
@@ -24,7 +24,7 @@ export async function sendOrderApprovedNotification(orderId: string): Promise<st
     return false;
   }
 
-  const transporterEmail = order.grower.defaultTransporter?.email;
+  const transporterEmail = order.supplier.defaultTransporter?.email;
   if (!transporterEmail) {
     console.warn(
       `[FustNotification] No transporter email for order ${order.orderNumber}, skipping email`
@@ -32,15 +32,15 @@ export async function sendOrderApprovedNotification(orderId: string): Promise<st
     return false;
   }
 
-  const branding = await getGrowerEmailBranding(order.growerId);
+  const branding = await getSupplierEmailBranding(order.supplierId);
   const portalUrl = process.env.APP_URL || process.env.NEXTAUTH_URL || "http://localhost:3000";
-  const language = (order.grower.defaultTransporter?.preferredLanguage === "nl" ? "nl" : "en") as "en" | "nl";
+  const language = (order.supplier.defaultTransporter?.preferredLanguage === "nl" ? "nl" : "en") as "en" | "nl";
   const dateLocale = language === "nl" ? "nl-NL" : "en-GB";
 
   const html = fustOrderApprovedEmailHtml({
     orderNumber: order.orderNumber,
-    growerName: order.grower.company || order.grower.name,
-    growerCode: order.grower.code,
+    supplierName: order.supplier.company || order.supplier.name,
+    supplierCode: order.supplier.code,
     items: order.items.map((item) => ({
       fustTypeName: item.fustType.name,
       quantity: item.quantity,
@@ -63,8 +63,8 @@ export async function sendOrderApprovedNotification(orderId: string): Promise<st
     : undefined;
 
   const subject = language === "nl"
-    ? `Fust Bestelling Goedgekeurd: ${order.orderNumber} - ${order.grower.company || order.grower.name}`
-    : `Fust Order Approved: ${order.orderNumber} - ${order.grower.company || order.grower.name}`;
+    ? `Fust Bestelling Goedgekeurd: ${order.orderNumber} - ${order.supplier.company || order.supplier.name}`
+    : `Fust Order Approved: ${order.orderNumber} - ${order.supplier.company || order.supplier.name}`;
 
   const result = await sendEmail({
     to: transporterEmail,
@@ -98,14 +98,14 @@ export async function sendDeliveryConfirmedNotification(
       order: {
         include: {
           items: { include: { fustType: { select: { name: true } } } },
-          grower: {
+          supplier: {
             select: {
               id: true,
               name: true,
               company: true,
               preferredLanguage: true,
               users: {
-                where: { isActive: true, role: "grower" },
+                where: { isActive: true, role: "supplier" },
                 select: { email: true, name: true },
               },
             },
@@ -120,18 +120,18 @@ export async function sendDeliveryConfirmedNotification(
     return false;
   }
 
-  const growerUsers = delivery.order.grower.users;
-  if (growerUsers.length === 0) {
+  const supplierUsers = delivery.order.supplier.users;
+  if (supplierUsers.length === 0) {
     console.warn(
-      `[FustNotification] No active grower users for order ${delivery.order.orderNumber}, skipping email`
+      `[FustNotification] No active supplier users for order ${delivery.order.orderNumber}, skipping email`
     );
     return false;
   }
 
-  const branding = await getGrowerEmailBranding(delivery.order.grower.id);
+  const branding = await getSupplierEmailBranding(delivery.order.supplier.id);
   const portalUrl = process.env.APP_URL || process.env.NEXTAUTH_URL || "http://localhost:3000";
-  const growerName = delivery.order.grower.company || delivery.order.grower.name;
-  const language = (delivery.order.grower.preferredLanguage === "nl" ? "nl" : "en") as "en" | "nl";
+  const supplierName = delivery.order.supplier.company || delivery.order.supplier.name;
+  const language = (delivery.order.supplier.preferredLanguage === "nl" ? "nl" : "en") as "en" | "nl";
   const dateLocale = language === "nl" ? "nl-NL" : "en-GB";
 
   // Build items list: match delivery items to order items by fustTypeId
@@ -152,7 +152,7 @@ export async function sendDeliveryConfirmedNotification(
 
   const html = fustDeliveryConfirmedEmailHtml({
     orderNumber: delivery.order.orderNumber,
-    growerName,
+    supplierName,
     items,
     deliveredDate,
     portalUrl,
@@ -169,7 +169,7 @@ export async function sendDeliveryConfirmedNotification(
       ? `"${branding.emailName}" <${branding.emailFrom}>`
       : undefined;
 
-  const toAddresses = growerUsers.map((u) => u.email);
+  const toAddresses = supplierUsers.map((u) => u.email);
 
   const subject = language === "nl"
     ? `Fust Levering Bevestigd: ${delivery.order.orderNumber}`
@@ -198,7 +198,7 @@ export async function sendDeliveryConfirmedNotification(
 }
 
 /**
- * Send delivery confirmation email to grower when an order is marked as delivered
+ * Send delivery confirmation email to supplier when an order is marked as delivered
  * (via the orders endpoint, without a FustDelivery record).
  */
 export async function sendOrderDeliveredNotification(
@@ -208,14 +208,14 @@ export async function sendOrderDeliveredNotification(
     where: { id: orderId },
     include: {
       items: { include: { fustType: { select: { name: true } } } },
-      grower: {
+      supplier: {
         select: {
           id: true,
           name: true,
           company: true,
           preferredLanguage: true,
           users: {
-            where: { isActive: true, role: "grower" },
+            where: { isActive: true, role: "supplier" },
             select: { email: true, name: true },
           },
         },
@@ -228,18 +228,18 @@ export async function sendOrderDeliveredNotification(
     return false;
   }
 
-  const growerUsers = order.grower.users;
-  if (growerUsers.length === 0) {
+  const supplierUsers = order.supplier.users;
+  if (supplierUsers.length === 0) {
     console.warn(
-      `[FustNotification] No active grower users for order ${order.orderNumber}, skipping delivery email`
+      `[FustNotification] No active supplier users for order ${order.orderNumber}, skipping delivery email`
     );
     return false;
   }
 
-  const branding = await getGrowerEmailBranding(order.grower.id);
+  const branding = await getSupplierEmailBranding(order.supplier.id);
   const portalUrl = process.env.APP_URL || process.env.NEXTAUTH_URL || "http://localhost:3000";
-  const growerName = order.grower.company || order.grower.name;
-  const language = (order.grower.preferredLanguage === "nl" ? "nl" : "en") as "en" | "nl";
+  const supplierName = order.supplier.company || order.supplier.name;
+  const language = (order.supplier.preferredLanguage === "nl" ? "nl" : "en") as "en" | "nl";
   const dateLocale = language === "nl" ? "nl-NL" : "en-GB";
 
   const items = order.items.map((item) => ({
@@ -256,7 +256,7 @@ export async function sendOrderDeliveredNotification(
 
   const html = fustDeliveryConfirmedEmailHtml({
     orderNumber: order.orderNumber,
-    growerName,
+    supplierName,
     items,
     deliveredDate,
     portalUrl,
@@ -273,7 +273,7 @@ export async function sendOrderDeliveredNotification(
       ? `"${branding.emailName}" <${branding.emailFrom}>`
       : undefined;
 
-  const toAddresses = growerUsers.map((u) => u.email);
+  const toAddresses = supplierUsers.map((u) => u.email);
 
   const subject = language === "nl"
     ? `Fust Levering Bevestigd: ${order.orderNumber}`

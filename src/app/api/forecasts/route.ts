@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
-import { requireAuth, resolveGrowerId } from "@/lib/api-helpers";
+import { requireAuth, resolveSupplierId } from "@/lib/api-helpers";
 
 const forecastSchema = z.object({
   productName: z.string().min(1),
@@ -14,12 +14,12 @@ const forecastSchema = z.object({
 });
 
 const batchSchema = z.object({
-  growerId: z.string().optional(),
+  supplierId: z.string().optional(),
   forecasts: z.array(forecastSchema),
 });
 
 const deleteProductSchema = z.object({
-  growerId: z.string().optional(),
+  supplierId: z.string().optional(),
   productName: z.string().min(1),
 });
 
@@ -28,10 +28,10 @@ export async function GET(request: NextRequest) {
   if (error) return error;
 
   const params = request.nextUrl.searchParams;
-  const requestedGrowerId = params.get("growerId");
-  const growerId = resolveGrowerId(session!, requestedGrowerId);
+  const requestedSupplierId = params.get("supplierId");
+  const supplierId = resolveSupplierId(session!, requestedSupplierId);
 
-  if (!growerId) {
+  if (!supplierId) {
     return NextResponse.json({ forecasts: [], products: [] });
   }
 
@@ -50,7 +50,7 @@ export async function GET(request: NextRequest) {
   // Fetch forecasts in the given week range
   const forecasts = await prisma.shipmentForecast.findMany({
     where: {
-      growerId,
+      supplierId,
       OR: [
         // Same year: week between from and to
         {
@@ -74,7 +74,7 @@ export async function GET(request: NextRequest) {
 
   // Get distinct product names from historical lots for autocomplete
   const lotProducts = await prisma.lot.findMany({
-    where: { growerId },
+    where: { supplierId },
     select: { productName: true, articleGroup: true },
     distinct: ["productName"],
     orderBy: { productName: "asc" },
@@ -82,7 +82,7 @@ export async function GET(request: NextRequest) {
 
   // Also include products from existing forecasts
   const forecastProducts = await prisma.shipmentForecast.findMany({
-    where: { growerId },
+    where: { supplierId },
     select: { productName: true, articleGroup: true },
     distinct: ["productName"],
     orderBy: { productName: "asc" },
@@ -120,11 +120,11 @@ export async function POST(request: NextRequest) {
   }
 
   const { forecasts } = parsed.data;
-  const requestedGrowerId = parsed.data.growerId || null;
-  const growerId = resolveGrowerId(session!, requestedGrowerId);
+  const requestedSupplierId = parsed.data.supplierId || null;
+  const supplierId = resolveSupplierId(session!, requestedSupplierId);
 
-  if (!growerId) {
-    return NextResponse.json({ error: "No grower specified" }, { status: 400 });
+  if (!supplierId) {
+    return NextResponse.json({ error: "No supplier specified" }, { status: 400 });
   }
 
   const results = [];
@@ -134,7 +134,7 @@ export async function POST(request: NextRequest) {
       // Delete the record if all values are zero/empty
       await prisma.shipmentForecast.deleteMany({
         where: {
-          growerId,
+          supplierId,
           productName: forecast.productName,
           year: forecast.year,
           week: forecast.week,
@@ -145,15 +145,15 @@ export async function POST(request: NextRequest) {
       // Upsert
       const result = await prisma.shipmentForecast.upsert({
         where: {
-          growerId_productName_year_week: {
-            growerId,
+          supplierId_productName_year_week: {
+            supplierId,
             productName: forecast.productName,
             year: forecast.year,
             week: forecast.week,
           },
         },
         create: {
-          growerId,
+          supplierId,
           productName: forecast.productName,
           articleGroup: forecast.articleGroup ?? null,
           year: forecast.year,
@@ -190,16 +190,16 @@ export async function DELETE(request: NextRequest) {
     );
   }
 
-  const requestedGrowerId = parsed.data.growerId || null;
-  const growerId = resolveGrowerId(session!, requestedGrowerId);
+  const requestedSupplierId = parsed.data.supplierId || null;
+  const supplierId = resolveSupplierId(session!, requestedSupplierId);
 
-  if (!growerId) {
-    return NextResponse.json({ error: "No grower specified" }, { status: 400 });
+  if (!supplierId) {
+    return NextResponse.json({ error: "No supplier specified" }, { status: 400 });
   }
 
   const deleted = await prisma.shipmentForecast.deleteMany({
     where: {
-      growerId,
+      supplierId,
       productName: parsed.data.productName,
     },
   });

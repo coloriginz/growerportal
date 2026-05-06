@@ -110,7 +110,7 @@ export async function PATCH(
       metadata: { pickupId: delivery.pickupId },
     });
 
-    // Notify grower of delivery
+    // Notify supplier of delivery
     if (isTest) {
       try {
         await sendDeliveryConfirmedNotification(id);
@@ -156,7 +156,7 @@ export async function PATCH(
       order: {
         include: {
           items: { include: { fustType: true } },
-          grower: { select: { id: true, code: true, name: true, company: true } },
+          supplier: { select: { id: true, code: true, name: true, company: true } },
         },
       },
       items: { include: { fustType: true } },

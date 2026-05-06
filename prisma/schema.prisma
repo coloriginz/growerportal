@@ -22,7 +22,7 @@ model Company {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  growers Grower[]
+  suppliers Supplier[]
 }
 
 // ─── USERS & AUTH ────────────────────────────────────────
@@ -32,7 +32,7 @@ model User {
   email          String   @unique
   passwordHash   String?
   name           String
-  role           String   @default("grower") // grower, commercie, admin, transporteur, finance
+  role           String   @default("supplier") // supplier, commercie, admin, transporteur, finance
   isActive       Boolean  @default(false)
   activationToken    String?   @unique
   resetToken         String?   @unique
@@ -40,14 +40,14 @@ model User {
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 
-  // Grower-specific: link to grower profile
-  growerId       String?
-  grower         Grower?  @relation(fields: [growerId], references: [id])
+  // Supplier-specific: link to supplier profile
+  supplierId     String?
+  supplier       Supplier? @relation(fields: [supplierId], references: [id])
 
-  @@index([growerId])
+  @@index([supplierId])
 
-  // Commercie: growers assigned to this user
-  assignedGrowers Grower[] @relation("CommercieGrowers")
+  // Commercie: suppliers assigned to this user
+  assignedSuppliers Supplier[] @relation("CommercieSuppliers")
 
   // Fust grower invoices created by this user
   fustGrowerInvoices FustGrowerInvoice[]
@@ -57,12 +57,13 @@ model User {
   transporter    Transporter? @relation(fields: [transporterId], references: [id])
 }
 
-// ─── GROWER ──────────────────────────────────────────────
+// ─── SUPPLIER (formerly Grower — the login entity / leverancier) ──
 
-model Grower {
+model Supplier {
   id             String   @id @default(uuid())
   code           String   @unique // e.g. "PCFUP", "COLXSHA"
   name           String
+  fabricId       Int?     @unique // rel_id_leverancier from Fabric
   company        String?
   street         String?
   city           String?
@@ -72,18 +73,23 @@ model Grower {
   vatNumber      String?
   ggn            String?  // GlobalGAP number
   preferredLanguage String @default("en") // "en" | "nl"
+  accountManagerName String? // AM Naam from Fabric
+  accountManagerCode String? // AM Code from Fabric
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
   // Relations
   users          User[]
-  commercie      User?    @relation("CommercieGrowers", fields: [commercieId], references: [id])
+  commercie      User?    @relation("CommercieSuppliers", fields: [commercieId], references: [id])
   commercieId    String?
   seasonStartMonth Int @default(1) // 1=Jan, 10=Oct, etc.
 
   // Company branding
   companyId      String?
   companyEntity  Company? @relation(fields: [companyId], references: [id])
+
+  // Sub-entities: kwekers (growers/farms) under this supplier
+  growers        Grower[]
 
   certificates   Certificate[]
   lots           Lot[]
@@ -105,19 +111,37 @@ model Grower {
   @@index([commercieId])
   @@index([companyId])
   @@index([defaultTransporterId])
+  @@index([fabricId])
+}
+
+// ─── GROWER (Kweker — farm sub-entity under Supplier) ──
+
+model Grower {
+  id             String   @id @default(uuid())
+  fabricId       Int?     @unique // rel_id_kweker from Fabric
+  name           String?          // Grower/farm name (if available)
+  supplierId     String
+  supplier       Supplier @relation(fields: [supplierId], references: [id])
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  lots           Lot[]
+
+  @@index([supplierId])
+  @@index([fabricId])
 }
 
 model Certificate {
   id          String   @id @default(uuid())
-  growerId    String
-  grower      Grower   @relation(fields: [growerId], references: [id], onDelete: Cascade)
+  supplierId  String
+  supplier    Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
   type        String   // e.g. "GlobalGAP", "MPS"
   number      String
   validFrom   DateTime?
   validUntil  DateTime?
   createdAt   DateTime @default(now())
 
-  @@index([growerId])
+  @@index([supplierId])
 }
 
 // ─── SALES SHEETS ────────────────────────────────────────
@@ -125,8 +149,9 @@ model Certificate {
 model SalesSheet {
   id              String   @id @default(uuid())
   invoiceNumber   String   @unique
-  growerId        String
-  grower          Grower   @relation(fields: [growerId], references: [id], onDelete: Cascade)
+  fabricParthdrId Int?     @unique // parthdr_id from Fabric (levering-ID)
+  supplierId      String
+  supplier        Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
   invoiceDate     DateTime
   deliveryDate    DateTime
   flightContainer String?
@@ -134,6 +159,8 @@ model SalesSheet {
   totalTurnover   Decimal  @db.Decimal(12, 2)
   totalCosts      Decimal  @db.Decimal(12, 2)
   netResult       Decimal  @db.Decimal(12, 2)
+  lastReceiptDate      DateTime? // Laatste Ontvangstdatum
+  lastRegistrationDate DateTime? // Laatste Aanmelddatum
   pdfDocumentId   String?  // Link to Document
   pdfDocument     Document? @relation(fields: [pdfDocumentId], references: [id])
   createdAt       DateTime @default(now())
@@ -141,8 +168,9 @@ model SalesSheet {
   lots            Lot[]
   costs           SalesSheetCost[]
 
-  @@index([growerId])
+  @@index([supplierId])
   @@index([invoiceDate])
+  @@index([fabricParthdrId])
 }
 
 model SalesSheetCost {
@@ -151,6 +179,12 @@ model SalesSheetCost {
   salesSheet    SalesSheet @relation(fields: [salesSheetId], references: [id], onDelete: Cascade)
   description   String     // e.g. "Commission direct sales", "Handling charges"
   amount        Decimal    @db.Decimal(12, 2)
+  fabricShkostId Int?      @unique // shkost_id from Fabric
+  fabricKostId   Int?      // kost_id from Fabric
+  costTypeCode   String?   // Kost Type Code (VRK, VEI, INK, VWK)
+  costTypeName   String?   // Kost Type Naam
+  totalTurnover  Decimal?  @db.Decimal(12, 2) // Totaal Omzet (context)
+  totalQuantity  Int?      // Totaal Aantal (context)
 
   @@index([salesSheetId])
 }
@@ -159,15 +193,21 @@ model SalesSheetCost {
 
 model Lot {
   id             String     @id @default(uuid())
-  lotNumber      String     // e.g. "3881599"
+  lotNumber      String     // Partijnummer
   refNumber      String     // "Your Ref Number" - links lot to costs
-  growerId       String
-  grower         Grower     @relation(fields: [growerId], references: [id], onDelete: Cascade)
+  fabricPartId   Int?       @unique // part_id from Fabric
+  fabricParthdrId Int?      // parthdr_id from Fabric
+  supplierId     String
+  supplier       Supplier   @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  growerId       String?    // Optional link to Grower (kweker sub-entity)
+  grower         Grower?    @relation(fields: [growerId], references: [id])
   salesSheetId   String?
   salesSheet     SalesSheet? @relation(fields: [salesSheetId], references: [id])
-  productCode    String     // e.g. "PCFUP"
-  productName    String     // e.g. "Protea Cynaroides Madiba"
+  articleCode    String?    // Artikel Code from Fabric
+  productName    String     // Artikel Naam
   articleGroup   String     // e.g. "Protea"
+  purchaseType   String?    // Inkooptype Code (CONS, FOB, CIF)
+  fabricArticleId Int?      // art_id from Fabric
   colli          Int        // Number of boxes/buckets
   stemLength     Int        // cm
   totalStems     Int
@@ -176,19 +216,30 @@ model Lot {
   containerType  String     @default("Box") // Box, Bucket, Other
   deliveryDate   DateTime
   status         String     @default("sold") // in_transit, selling, sold
+  // Quality attributes (moved from Transaction — exist at lot/partij level)
+  s1             String?
+  s2             String?
+  s3             String?
+  // Correction fields
+  correctionReasonId Int?   // reden_id_correctie from Fabric
+  invoicedColli      Int?   // Inkoopfactuur colli
+  invoicedVolume     Int?   // Inkoopfactuur volume
+  correctionVolume   Int?   // Inslagcorrectie volume
   createdAt      DateTime   @default(now())
 
   transactions   Transaction[]
-  costs          LotCost[]
   qualityIssues  QualityIssue[]
 
-  @@unique([lotNumber, growerId])
+  @@unique([lotNumber, supplierId])
+  @@index([supplierId])
+  @@index([supplierId, productName])
+  @@index([supplierId, stemLength])
   @@index([growerId])
-  @@index([growerId, productName])
-  @@index([growerId, stemLength])
   @@index([salesSheetId])
   @@index([deliveryDate])
   @@index([refNumber])
+  @@index([fabricPartId])
+  @@index([fabricParthdrId])
 }
 
 // ─── TRANSACTIONS ────────────────────────────────────────
@@ -197,45 +248,27 @@ model Transaction {
   id            String   @id @default(uuid())
   lotId         String
   lot           Lot      @relation(fields: [lotId], references: [id], onDelete: Cascade)
+  fabricOrdregId Int?    @unique // ordreg_id from Fabric
+  fabricGrowerId Int?    // rel_id_kweker from Fabric (for grower linking)
   date          DateTime
-  salesType     String   // "Direct sales", "VBA", "VPL", "Production"
+  salesType     String   // "VMP", "Aurora", "Veilen", "Persoonlijk"
   stems         Int
   pricePerStem  Decimal  @db.Decimal(10, 4)
   amount        Decimal  @db.Decimal(12, 2)
-  qualityCode   String?  // e.g. "110"
-  qualityNote   String?  // e.g. "Few damaged flowers/bud/fruit"
-  s1            String?  // Quality attribute
-  s2            String?  // Quality attribute
-  s3            String?  // Quality attribute
-  isCorrection  Boolean  @default(false) // Handling, stock check, etc.
-  correctionType String? // "Handling: less in box", "stock check shortage", etc.
   createdAt     DateTime @default(now())
 
   @@index([lotId])
   @@index([date])
   @@index([salesType])
-  @@index([isCorrection, date])
-}
-
-// ─── LOT COSTS ───────────────────────────────────────────
-
-model LotCost {
-  id          String   @id @default(uuid())
-  lotId       String
-  lot         Lot      @relation(fields: [lotId], references: [id], onDelete: Cascade)
-  description String   // e.g. "Handling charges", "Commission direct sales"
-  amount      Decimal  @db.Decimal(12, 2)
-  createdAt   DateTime @default(now())
-
-  @@index([lotId])
+  @@index([fabricOrdregId])
 }
 
 // ─── DOCUMENTS ───────────────────────────────────────────
 
 model Document {
   id          String   @id @default(uuid())
-  growerId    String
-  grower      Grower   @relation(fields: [growerId], references: [id], onDelete: Cascade)
+  supplierId  String
+  supplier    Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
   type        String   // "salessheet", "contract", "growing_plan", "other"
   name        String
   fileName    String
@@ -247,7 +280,7 @@ model Document {
 
   salesSheets SalesSheet[]
 
-  @@index([growerId])
+  @@index([supplierId])
   @@index([type])
 }
 
@@ -255,8 +288,8 @@ model Document {
 
 model QualityIssue {
   id          String   @id @default(uuid())
-  growerId    String
-  grower      Grower   @relation(fields: [growerId], references: [id], onDelete: Cascade)
+  supplierId  String
+  supplier    Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
   lotId       String
   lot         Lot      @relation(fields: [lotId], references: [id], onDelete: Cascade)
   code        String   // e.g. "110", "154"
@@ -265,8 +298,8 @@ model QualityIssue {
   date        DateTime
   createdAt   DateTime @default(now())
 
-  @@index([growerId])
-  @@index([growerId, date])
+  @@index([supplierId])
+  @@index([supplierId, date])
   @@index([lotId])
 }
 
@@ -274,8 +307,8 @@ model QualityIssue {
 
 model ShipmentForecast {
   id           String   @id @default(uuid())
-  growerId     String
-  grower       Grower   @relation(fields: [growerId], references: [id], onDelete: Cascade)
+  supplierId   String
+  supplier     Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
   productName  String
   articleGroup String?
   year         Int
@@ -287,8 +320,8 @@ model ShipmentForecast {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  @@unique([growerId, productName, year, week])
-  @@index([growerId])
+  @@unique([supplierId, productName, year, week])
+  @@index([supplierId])
   @@index([year, week])
 }
 
@@ -304,15 +337,15 @@ model Setting {
 
 model ChangeRequest {
   id          String   @id @default(uuid())
-  growerId    String
-  grower      Grower   @relation(fields: [growerId], references: [id], onDelete: Cascade)
+  supplierId  String
+  supplier    Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
   message     String
   status      String   @default("pending") // pending, handled
   createdAt   DateTime @default(now())
   handledAt   DateTime?
   handledBy   String?
 
-  @@index([growerId])
+  @@index([supplierId])
 }
 
 // ─── FUST (CONTAINER/CRATE ORDERING) ────────────────────
@@ -328,7 +361,7 @@ model Transporter {
   updatedAt DateTime @updatedAt
 
   users     User[]
-  growers   Grower[]   @relation("DefaultTransporter")
+  suppliers Supplier[] @relation("DefaultTransporter")
   pickups   FustPickup[]
 }
 
@@ -355,8 +388,8 @@ model FustType {
 model FustOrder {
   id              String    @id @default(uuid())
   orderNumber     String    @unique
-  growerId        String
-  grower          Grower    @relation(fields: [growerId], references: [id], onDelete: Cascade)
+  supplierId      String
+  supplier        Supplier  @relation(fields: [supplierId], references: [id], onDelete: Cascade)
   status          String    @default("pending") // pending, approved, rejected, scheduled, in_transit, delivered, cancelled
   requestedDate   DateTime?
   notes           String?
@@ -377,7 +410,7 @@ model FustOrder {
   growerInvoiceItems FustGrowerInvoiceItem[]
   invoicedAt         DateTime?
 
-  @@index([growerId])
+  @@index([supplierId])
   @@index([status])
   @@index([createdAt])
 }
@@ -471,14 +504,14 @@ model FustGrowerCharge {
   id          String      @id @default(uuid())
   invoiceId   String
   invoice     FustInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
-  growerId    String
-  grower      Grower      @relation(fields: [growerId], references: [id])
+  supplierId  String
+  supplier    Supplier    @relation(fields: [supplierId], references: [id])
   amount      Decimal     @db.Decimal(10,2)
   description String?
   status      String      @default("pending") // pending, invoiced, paid
   createdAt   DateTime    @default(now())
 
-  @@index([growerId])
+  @@index([supplierId])
   @@index([invoiceId])
 }
 
@@ -488,8 +521,8 @@ model FustGrowerInvoice {
   id              String   @id @default(uuid())
   invoiceNumber   String   @unique          // Auto: "FI-2026-0042"
   invoiceDate     DateTime
-  growerId        String
-  grower          Grower   @relation(fields: [growerId], references: [id])
+  supplierId      String
+  supplier        Supplier @relation(fields: [supplierId], references: [id])
 
   subtotalExVat   Decimal  @db.Decimal(10,2)
   vatRate         Decimal  @db.Decimal(4,2) @default(21.00)
@@ -510,7 +543,7 @@ model FustGrowerInvoice {
 
   items           FustGrowerInvoiceItem[]
 
-  @@index([growerId])
+  @@index([supplierId])
   @@index([status])
   @@index([invoiceDate])
 }
@@ -627,4 +660,96 @@ model FustAuditLog {
   @@index([action])
   @@index([actorId])
   @@index([createdAt])
+}
+
+// ─── STAGING TABLES (raw Fabric data import) ────────────
+
+model StagingKbtLeverancier {
+  id            String   @id @default(uuid())
+  naam          String
+  code          String
+  fabricId      Int      // rel_id_leverancier
+  amNaam        String?
+  amCode        String?
+  importBatchId String
+  importedAt    DateTime @default(now())
+
+  @@index([fabricId])
+  @@index([code])
+  @@index([importBatchId])
+}
+
+model StagingKbtPartij {
+  id                    String   @id @default(uuid())
+  inkoopFactuurNummer   String?
+  partijnummer          Int
+  leverDatum            DateTime?
+  artikelNaam           String?
+  artikelCode           String?
+  inkooptypeCode        String?
+  s01                   String?
+  s02                   String?
+  s03                   String?
+  partId                Int
+  parthdrId             Int
+  relIdLeverancier      Int
+  artId                 Int?
+  redenIdCorrectie      Int?
+  inkoopfactuurColli    Int?
+  inkoopfactuurVolume   Int?
+  inslagcorrectieVolume Int?
+  importBatchId         String
+  importedAt            DateTime @default(now())
+
+  @@index([partId])
+  @@index([parthdrId])
+  @@index([relIdLeverancier])
+  @@index([importBatchId])
+}
+
+model StagingKbtOrder {
+  id                 String   @id @default(uuid())
+  datumKeyVertrek    DateTime
+  partId             Int
+  parthdrId          Int
+  ordregId           Int
+  relIdKweker        Int
+  relIdLeverancier   Int
+  artikelNaam        String?
+  inkooptype         String?
+  verkooptype        String?
+  verkoopvolume      Int?
+  verkoopColli       Int?
+  afrekenomzet       Decimal? @db.Decimal(12,2)
+  gemAfrekenprijs    Decimal? @db.Decimal(10,4)
+  importBatchId      String
+  importedAt         DateTime @default(now())
+
+  @@index([partId])
+  @@index([parthdrId])
+  @@index([ordregId])
+  @@index([relIdLeverancier])
+  @@index([importBatchId])
+}
+
+model StagingKbtShcost {
+  id                     String   @id @default(uuid())
+  referentie             String?
+  kostNaam               String?
+  kostTypeCode           String?
+  kostTypeNaam           String?
+  totaalOmzet            Decimal? @db.Decimal(12,2)
+  totaalAantal           Int?
+  salesheetAmount        Decimal? @db.Decimal(12,2)
+  laatsteOntvangstdatum  DateTime?
+  laatsteAanmelddatum    DateTime?
+  parthdrId              Int
+  shkostId               Int
+  kostId                 Int?
+  importBatchId          String
+  importedAt             DateTime @default(now())
+
+  @@index([parthdrId])
+  @@index([shkostId])
+  @@index([importBatchId])
 }

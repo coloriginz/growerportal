@@ -13,7 +13,7 @@ export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { error, session } = await requireAuth(["finance", "admin", "grower"]);
+  const { error, session } = await requireAuth(["finance", "admin", "supplier"]);
   if (error) return error;
 
   const { id } = await params;
@@ -27,7 +27,7 @@ export async function GET(
           order: { select: { id: true, orderNumber: true, requestedDate: true } },
         },
       },
-      grower: {
+      supplier: {
         select: {
           id: true,
           code: true,
@@ -48,8 +48,8 @@ export async function GET(
     return NextResponse.json({ error: "Invoice not found" }, { status: 404 });
   }
 
-  // Growers can only see their own invoices
-  if (session!.user.role === "grower" && invoice.growerId !== session!.user.growerId) {
+  // Suppliers can only see their own invoices
+  if (session!.user.role === "supplier" && invoice.supplierId !== session!.user.supplierId) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -96,7 +96,7 @@ export async function PATCH(
           order: { select: { id: true, orderNumber: true } },
         },
       },
-      grower: {
+      supplier: {
         select: {
           id: true,
           code: true,

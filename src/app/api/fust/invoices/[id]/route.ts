@@ -29,7 +29,7 @@ export async function GET(
       },
       charges: {
         include: {
-          grower: { select: { id: true, code: true, name: true, company: true } },
+          supplier: { select: { id: true, code: true, name: true, company: true } },
         },
       },
     },
@@ -89,7 +89,7 @@ export async function PATCH(
       },
       charges: {
         include: {
-          grower: { select: { id: true, code: true, name: true, company: true } },
+          supplier: { select: { id: true, code: true, name: true, company: true } },
         },
       },
     },

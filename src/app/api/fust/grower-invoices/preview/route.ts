@@ -3,10 +3,10 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { requireAuth } from "@/lib/api-helpers";
 import { generateInvoicePdf } from "@/features/fust/lib/invoice-pdf";
-import { getGrowerEmailBranding } from "@/lib/company-helpers";
+import { getSupplierEmailBranding } from "@/lib/company-helpers";
 
 const previewSchema = z.object({
-  growerId: z.string().uuid(),
+  supplierId: z.string().uuid(),
   orderIds: z.array(z.string().uuid()).min(1),
   invoiceDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   notes: z.string().optional().nullable(),
@@ -22,11 +22,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  const { growerId, orderIds, invoiceDate, notes } = parsed.data;
+  const { supplierId, orderIds, invoiceDate, notes } = parsed.data;
 
-  // Validate grower
-  const grower = await prisma.grower.findUnique({
-    where: { id: growerId },
+  // Validate supplier
+  const supplier = await prisma.supplier.findUnique({
+    where: { id: supplierId },
     select: {
       id: true,
       code: true,
@@ -38,15 +38,15 @@ export async function POST(request: NextRequest) {
       country: true,
     },
   });
-  if (!grower) {
-    return NextResponse.json({ error: "Grower not found" }, { status: 404 });
+  if (!supplier) {
+    return NextResponse.json({ error: "Supplier not found" }, { status: 404 });
   }
 
   // Validate orders
   const orders = await prisma.fustOrder.findMany({
     where: {
       id: { in: orderIds },
-      growerId,
+      supplierId,
       status: "delivered",
       invoicedAt: null,
       deletedAt: null,
@@ -126,21 +126,21 @@ export async function POST(request: NextRequest) {
   }).format(new Date(invoiceDate));
 
   // Get branding
-  const branding = await getGrowerEmailBranding(growerId);
+  const branding = await getSupplierEmailBranding(supplierId);
 
   // Generate preview PDF (no DB writes, no Blob upload)
   try {
     const pdfBuffer = await generateInvoicePdf({
       invoiceNumber: "PREVIEW",
       invoiceDate: formattedDate,
-      grower: {
-        code: grower.code,
-        name: grower.name,
-        company: grower.company,
-        street: grower.street,
-        city: grower.city,
-        postalCode: grower.postalCode,
-        country: grower.country,
+      supplier: {
+        code: supplier.code,
+        name: supplier.name,
+        company: supplier.company,
+        street: supplier.street,
+        city: supplier.city,
+        postalCode: supplier.postalCode,
+        country: supplier.country,
       },
       items: invoiceItems,
       subtotalExVat,

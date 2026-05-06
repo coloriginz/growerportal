@@ -18,7 +18,7 @@ import { useLanguage } from "@/components/providers/language-provider";
 import { formatDate } from "@/lib/format";
 import { toast } from "sonner";
 
-interface GrowerProfile {
+interface SupplierProfile {
   id: string;
   code: string;
   name: string;
@@ -41,8 +41,8 @@ interface GrowerProfile {
   }[];
 }
 
-export function ProfileContent({ growerId }: { growerId: string | null }) {
-  const [profile, setProfile] = useState<GrowerProfile | null>(null);
+export function ProfileContent({ supplierId }: { supplierId: string | null }) {
+  const [profile, setProfile] = useState<SupplierProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [changeMessage, setChangeMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -50,12 +50,12 @@ export function ProfileContent({ growerId }: { growerId: string | null }) {
 
   useEffect(() => {
     async function fetchProfile() {
-      if (!growerId) {
+      if (!supplierId) {
         setLoading(false);
         return;
       }
       try {
-        const res = await fetch(`/api/profile?growerId=${growerId}`);
+        const res = await fetch(`/api/profile?supplierId=${supplierId}`);
         if (res.ok) {
           setProfile(await res.json());
         }
@@ -64,16 +64,16 @@ export function ProfileContent({ growerId }: { growerId: string | null }) {
       }
     }
     fetchProfile();
-  }, [growerId]);
+  }, [supplierId]);
 
   async function handleChangeRequest() {
-    if (!changeMessage.trim() || !growerId) return;
+    if (!changeMessage.trim() || !supplierId) return;
     setSubmitting(true);
     try {
       const res = await fetch("/api/change-requests", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ growerId, message: changeMessage }),
+        body: JSON.stringify({ supplierId, message: changeMessage }),
       });
       if (res.ok) {
         toast.success(t("profile.changeRequestSent"));
@@ -84,7 +84,7 @@ export function ProfileContent({ growerId }: { growerId: string | null }) {
     }
   }
 
-  if (!growerId) {
+  if (!supplierId) {
     return (
       <div className="page-content">
         <div className="page-header">
@@ -94,7 +94,7 @@ export function ProfileContent({ growerId }: { growerId: string | null }) {
           <div className="empty-state-icon">
             <RiUserLine />
           </div>
-          <p className="empty-state-text">{t("nav.selectGrower")}</p>
+          <p className="empty-state-text">{t("nav.selectSupplier")}</p>
         </div>
       </div>
     );
@@ -108,10 +108,10 @@ export function ProfileContent({ growerId }: { growerId: string | null }) {
         <h1>{t("profile.title")}</h1>
       </div>
 
-      {/* Grower Info */}
+      {/* Supplier Info */}
       <Card>
         <CardHeader>
-          <CardTitle>{t("profile.growerInfo")}</CardTitle>
+          <CardTitle>{t("profile.supplierInfo")}</CardTitle>
         </CardHeader>
         <CardContent>
           <dl className="grid gap-x-8 gap-y-5 sm:grid-cols-2">

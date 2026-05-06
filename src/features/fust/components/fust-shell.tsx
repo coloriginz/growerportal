@@ -41,7 +41,7 @@ interface FustShellProps {
     name: string;
     email: string;
     role: string;
-    growerId: string | null;
+    supplierId: string | null;
     fustEnabled?: boolean;
     companySlug?: string | null;
   };
@@ -57,9 +57,9 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { href: "/fust-portal", labelKey: "nav.fustCatalogue", icon: RiPriceTag3Line, roles: ["commercie", "admin"] },
-  { href: "/fust-portal", labelKey: "nav.fustOrder", icon: RiShoppingCartLine, roles: ["grower"] },
-  { href: "/fust-portal/my-orders", labelKey: "nav.fustMyOrders", icon: RiBox3Line, roles: ["grower"] },
-  { href: "/fust-portal/deliveries", labelKey: "nav.fustDeliveries", icon: RiTruckLine, roles: ["grower"] },
+  { href: "/fust-portal", labelKey: "nav.fustOrder", icon: RiShoppingCartLine, roles: ["supplier"] },
+  { href: "/fust-portal/my-orders", labelKey: "nav.fustMyOrders", icon: RiBox3Line, roles: ["supplier"] },
+  { href: "/fust-portal/deliveries", labelKey: "nav.fustDeliveries", icon: RiTruckLine, roles: ["supplier"] },
   { href: "/fust-portal/orders", labelKey: "nav.fustOrders", icon: RiBox3Line, roles: ["commercie", "admin", "finance"] },
   { href: "/fust-portal/pickups", labelKey: "fust.deliveries", icon: RiTruckLine, roles: ["transporteur", "admin", "finance"] },
   { href: "/fust-portal/vouchers", labelKey: "nav.fustVouchers", icon: RiFileTextLine, roles: ["finance", "admin"] },
@@ -71,7 +71,7 @@ const navItems: NavItem[] = [
 const adminItems: NavItem[] = [
   { href: "/fust-portal/emails", labelKey: "nav.fustEmails", icon: RiMailLine, roles: ["admin", "finance"] },
   { href: "/fust-portal/users", labelKey: "admin.users", icon: RiUserSettingsLine, roles: ["admin"] },
-  { href: "/fust-portal/settings?tab=growers", labelKey: "fust.growerAccess", icon: RiGroupLine, roles: ["admin"] },
+  { href: "/fust-portal/settings?tab=suppliers", labelKey: "fust.supplierAccess", icon: RiGroupLine, roles: ["admin"] },
   { href: "/fust-portal/settings?tab=types", labelKey: "fust.fustTypes", icon: RiPriceTag3Line, roles: ["admin"] },
   { href: "/fust-portal/settings?tab=transporters", labelKey: "fust.transporters", icon: RiTruckLine, roles: ["admin"] },
 ];
@@ -90,7 +90,7 @@ export function FustShell({ user, children }: FustShellProps) {
 
   const filteredNav = navItems.filter((item) => {
     if (!item.roles?.includes(userRole)) return false;
-    if (userRole === "grower" && !user.fustEnabled) return false;
+    if (userRole === "supplier" && !user.fustEnabled) return false;
     return true;
   });
 

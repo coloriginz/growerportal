@@ -75,7 +75,7 @@ interface SalesData {
 
 type Period = "today" | "yesterday" | "week" | "month" | "ytd" | "weeknr" | "custom";
 
-export function SalesContent({ growerId }: { growerId: string | null }) {
+export function SalesContent({ supplierId }: { supplierId: string | null }) {
   const [period, setPeriod] = useState<Period>("ytd");
   const currentWeek = getISOWeek(new Date());
   const currentYear = new Date().getFullYear();
@@ -91,9 +91,9 @@ export function SalesContent({ growerId }: { growerId: string | null }) {
   // Fetch available filter options
   const filtersUrl = useMemo(() => {
     const params = new URLSearchParams();
-    if (growerId) params.set("growerId", growerId);
+    if (supplierId) params.set("supplierId", supplierId);
     return `/api/sales/filters?${params}`;
-  }, [growerId]);
+  }, [supplierId]);
   const { data: filterOptions } = useFetch<FiltersData>(filtersUrl);
 
   const hasActiveFilters = filterProducts.length > 0 || filterSalesTypes.length > 0 || filterStemLengths.length > 0;
@@ -106,7 +106,7 @@ export function SalesContent({ growerId }: { growerId: string | null }) {
 
   const url = useMemo(() => {
     const params = new URLSearchParams({ period });
-    if (growerId) params.set("growerId", growerId);
+    if (supplierId) params.set("supplierId", supplierId);
     if (period === "weeknr") {
       params.set("week", String(selectedWeek));
       params.set("year", String(selectedYear));
@@ -119,17 +119,17 @@ export function SalesContent({ growerId }: { growerId: string | null }) {
     for (const s of filterSalesTypes) params.append("salesType", s);
     for (const l of filterStemLengths) params.append("stemLength", l.replace(" cm", ""));
     return `/api/sales?${params}`;
-  }, [growerId, period, selectedWeek, selectedYear, dateFrom, dateTo, filterProducts, filterSalesTypes, filterStemLengths]);
+  }, [supplierId, period, selectedWeek, selectedYear, dateFrom, dateTo, filterProducts, filterSalesTypes, filterStemLengths]);
   const { data, loading, error, lastUpdated, refetch } = useFetch<SalesData>(url);
 
   const trendsUrl = useMemo(() => {
     const params = new URLSearchParams();
-    if (growerId) params.set("growerId", growerId);
+    if (supplierId) params.set("supplierId", supplierId);
     for (const p of filterProducts) params.append("product", p);
     for (const s of filterSalesTypes) params.append("salesType", s);
     for (const l of filterStemLengths) params.append("stemLength", l.replace(" cm", ""));
     return `/api/sales/trends?${params}`;
-  }, [growerId, filterProducts, filterSalesTypes, filterStemLengths]);
+  }, [supplierId, filterProducts, filterSalesTypes, filterStemLengths]);
   const { data: trends } = useFetch<TrendsData>(trendsUrl);
 
   if (error) {

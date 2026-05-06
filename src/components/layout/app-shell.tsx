@@ -35,7 +35,7 @@ import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { useLanguage } from "@/components/providers/language-provider";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { ThemeSwitcher } from "@/components/theme-switcher";
-import { GrowerSelector } from "@/components/layout/grower-selector";
+import { SupplierSelector } from "@/components/layout/supplier-selector";
 import { TestBanner } from "@/components/layout/test-banner";
 import { OfflineIndicator } from "@/components/layout/offline-indicator";
 import { ChangePasswordDialog } from "@/components/layout/change-password-dialog";
@@ -50,7 +50,7 @@ interface AppShellProps {
     name: string;
     email: string;
     role: string;
-    growerId: string | null;
+    supplierId: string | null;
     fustEnabled?: boolean;
     companySlug?: string | null;
   };
@@ -77,9 +77,9 @@ const mainNavItems: NavItem[] = [
 
 const fustNavItems: NavItem[] = [
   { href: "/fust", labelKey: "nav.fustCatalogue", icon: RiPriceTag3Line, roles: ["commercie", "admin"] },
-  { href: "/fust", labelKey: "nav.fustOrder", icon: RiShoppingCartLine, roles: ["grower"] },
-  { href: "/fust/my-orders", labelKey: "nav.fustMyOrders", icon: RiBox3Line, roles: ["grower"] },
-  { href: "/fust/deliveries", labelKey: "nav.fustDeliveries", icon: RiTruckLine, roles: ["grower"] },
+  { href: "/fust", labelKey: "nav.fustOrder", icon: RiShoppingCartLine, roles: ["supplier"] },
+  { href: "/fust/my-orders", labelKey: "nav.fustMyOrders", icon: RiBox3Line, roles: ["supplier"] },
+  { href: "/fust/deliveries", labelKey: "nav.fustDeliveries", icon: RiTruckLine, roles: ["supplier"] },
   { href: "/fust/orders", labelKey: "nav.fustOrders", icon: RiBox3Line, roles: ["commercie", "admin", "finance"] },
   { href: "/fust/pickups", labelKey: "nav.fustPickups", icon: RiTruckLine, roles: ["transporteur", "finance"] },
   { href: "/fust/vouchers", labelKey: "nav.fustVouchers", icon: RiFileTextLine, roles: ["finance", "admin"] },
@@ -90,7 +90,7 @@ const fustNavItems: NavItem[] = [
   {
     href: "/fust/settings", labelKey: "nav.fustSettings", icon: RiSettings3Line, roles: ["admin"],
     children: [
-      { href: "/fust/settings?tab=growers", labelKey: "fust.growerAccess", icon: RiGroupLine },
+      { href: "/fust/settings?tab=suppliers", labelKey: "fust.supplierAccess", icon: RiGroupLine },
       { href: "/fust/settings?tab=types", labelKey: "fust.fustTypes", icon: RiPriceTag3Line },
       { href: "/fust/settings?tab=transporters", labelKey: "fust.transporters", icon: RiTruckLine },
     ],
@@ -99,8 +99,8 @@ const fustNavItems: NavItem[] = [
 
 const bottomNavItems: NavItem[] = [
   {
-    href: "/growers",
-    labelKey: "nav.growers",
+    href: "/suppliers",
+    labelKey: "nav.suppliers",
     icon: RiPlantLine,
     roles: ["admin", "commercie", "finance"],
   },
@@ -125,11 +125,11 @@ export function AppShell({ user, children }: AppShellProps) {
   const { t } = useLanguage();
   const hostBranding = useCompanyBranding();
   const company = user.companySlug ? getCompanyBranding(user.companySlug) : hostBranding;
-  const growerId = searchParams.get("growerId");
+  const supplierId = searchParams.get("supplierId");
   const userRole = user.role as Role;
-  const showGrowerSelector = userRole === "admin" || userRole === "commercie" || userRole === "finance";
+  const showSupplierSelector = userRole === "admin" || userRole === "commercie" || userRole === "finance";
 
-  const portalRoles: Role[] = ["grower", "commercie", "admin", "finance"];
+  const portalRoles: Role[] = ["supplier", "commercie", "admin", "finance"];
   const filteredMainNav = mainNavItems.filter(
     (item) => !item.roles || item.roles.includes(userRole)
   ).filter((item) => {
@@ -138,10 +138,10 @@ export function AppShell({ user, children }: AppShellProps) {
     return true;
   });
 
-  // Fust nav: growers only see it if fustEnabled, others see by role
+  // Fust nav: suppliers only see it if fustEnabled, others see by role
   const filteredFustNav = fustNavItems.filter((item) => {
     if (!item.roles?.includes(userRole)) return false;
-    if (userRole === "grower" && !user.fustEnabled) return false;
+    if (userRole === "supplier" && !user.fustEnabled) return false;
     return true;
   });
 
@@ -168,13 +168,13 @@ export function AppShell({ user, children }: AppShellProps) {
 
         <Separator className="bg-sidebar-border" />
 
-        {/* Grower Selector (admin/commercie only) */}
-        {showGrowerSelector && (
+        {/* Supplier Selector (admin/commercie only) */}
+        {showSupplierSelector && (
           <div className="px-4 py-3">
             <p className="text-sidebar-foreground/60 mb-1.5 px-1 text-xs font-semibold uppercase tracking-wider">
-              {t("nav.selectGrower")}
+              {t("nav.selectSupplier")}
             </p>
-            <GrowerSelector />
+            <SupplierSelector />
           </div>
         )}
 
@@ -186,7 +186,7 @@ export function AppShell({ user, children }: AppShellProps) {
             return (
               <Link
                 key={item.href}
-                href={growerId ? `${item.href}?growerId=${growerId}` : item.href}
+                href={supplierId ? `${item.href}?supplierId=${supplierId}` : item.href}
                 onClick={() => setMobileOpen(false)}
                 className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150 ${
                   isActive
@@ -273,7 +273,7 @@ export function AppShell({ user, children }: AppShellProps) {
                     return (
                       <Link
                         key={item.labelKey}
-                        href={growerId ? `${item.href}?growerId=${growerId}` : item.href}
+                        href={supplierId ? `${item.href}?supplierId=${supplierId}` : item.href}
                         onClick={() => setMobileOpen(false)}
                         className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150 ${
                           isActive

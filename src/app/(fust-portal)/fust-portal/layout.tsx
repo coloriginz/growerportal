@@ -30,16 +30,16 @@ export default async function FustPortalLayout({
     redirect(isStandalone ? "/login" : "/fust-login");
   }
 
-  // Check fustEnabled and company branding for grower users
+  // Check fustEnabled and company branding for supplier users
   let fustEnabled = false;
   let companySlug: string | null = null;
-  if (session.user.role === "grower" && session.user.growerId) {
-    const grower = await prisma.grower.findUnique({
-      where: { id: session.user.growerId },
+  if (session.user.role === "supplier" && session.user.supplierId) {
+    const supplier = await prisma.supplier.findUnique({
+      where: { id: session.user.supplierId },
       select: { fustEnabled: true, companyEntity: { select: { slug: true } } },
     });
-    fustEnabled = grower?.fustEnabled ?? false;
-    companySlug = grower?.companyEntity?.slug ?? null;
+    fustEnabled = supplier?.fustEnabled ?? false;
+    companySlug = supplier?.companyEntity?.slug ?? null;
   }
 
   return (

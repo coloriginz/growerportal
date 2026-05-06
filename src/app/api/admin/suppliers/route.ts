@@ -31,16 +31,16 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Email already exists" }, { status: 409 });
   }
 
-  const existingGrower = await prisma.grower.findUnique({ where: { code } });
-  if (existingGrower) {
-    return NextResponse.json({ error: "Grower code already exists" }, { status: 409 });
+  const existingSupplier = await prisma.supplier.findUnique({ where: { code } });
+  if (existingSupplier) {
+    return NextResponse.json({ error: "Supplier code already exists" }, { status: 409 });
   }
 
   const activationToken = uuidv4();
 
-  // Create grower and user in a transaction
+  // Create supplier and user in a transaction
   const result = await prisma.$transaction(async (tx) => {
-    const grower = await tx.grower.create({
+    const supplier = await tx.supplier.create({
       data: {
         code,
         name,
@@ -53,14 +53,14 @@ export async function POST(request: NextRequest) {
       data: {
         email,
         name,
-        role: "grower",
-        growerId: grower.id,
+        role: "supplier",
+        supplierId: supplier.id,
         activationToken,
         isActive: false,
       },
     });
 
-    return { grower, user };
+    return { supplier, user };
   });
 
   // TODO: Send activation email with token
@@ -71,7 +71,7 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json(
     {
-      grower: { id: result.grower.id, code: result.grower.code },
+      supplier: { id: result.supplier.id, code: result.supplier.code },
       user: { id: result.user.id, email: result.user.email },
       activationLink: `${process.env.APP_URL}/activate?token=${activationToken}`,
     },

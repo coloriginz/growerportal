@@ -1,15 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
-import { requireAuth, resolveGrowerId } from "@/lib/api-helpers";
+import { requireAuth, resolveSupplierId } from "@/lib/api-helpers";
 import { logFustEvent } from "@/lib/fust-audit";
 import { put } from "@vercel/blob";
 import { generateInvoicePdf } from "@/features/fust/lib/invoice-pdf";
 import { generateExactXml } from "@/features/fust/lib/invoice-xml";
-import { getGrowerEmailBranding } from "@/lib/company-helpers";
+import { getSupplierEmailBranding } from "@/lib/company-helpers";
 
 const createInvoiceSchema = z.object({
-  growerId: z.string().uuid(),
+  supplierId: z.string().uuid(),
   orderIds: z.array(z.string().uuid()).min(1),
   invoiceDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   notes: z.string().optional().nullable(),
@@ -31,12 +31,12 @@ async function generateInvoiceNumber(): Promise<string> {
 }
 
 export async function GET(request: NextRequest) {
-  const { error, session } = await requireAuth(["finance", "admin", "grower"]);
+  const { error, session } = await requireAuth(["finance", "admin", "supplier"]);
   if (error) return error;
 
   const params = request.nextUrl.searchParams;
   const role = session!.user.role;
-  const requestedGrowerId = params.get("growerId");
+  const requestedSupplierId = params.get("supplierId");
   const status = params.get("status");
   const dateFrom = params.get("dateFrom");
   const dateTo = params.get("dateTo");
@@ -44,11 +44,11 @@ export async function GET(request: NextRequest) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const where: any = {};
 
-  // Growers can only see their own invoices
-  if (role === "grower") {
-    where.growerId = session!.user.growerId;
-  } else if (requestedGrowerId) {
-    where.growerId = requestedGrowerId;
+  // Suppliers can only see their own invoices
+  if (role === "supplier") {
+    where.supplierId = session!.user.supplierId;
+  } else if (requestedSupplierId) {
+    where.supplierId = requestedSupplierId;
   }
 
   if (status && status !== "all") {
@@ -64,7 +64,7 @@ export async function GET(request: NextRequest) {
   const invoices = await prisma.fustGrowerInvoice.findMany({
     where,
     include: {
-      grower: {
+      supplier: {
         select: {
           id: true,
           code: true,
@@ -99,11 +99,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  const { growerId, orderIds, invoiceDate, notes } = parsed.data;
+  const { supplierId, orderIds, invoiceDate, notes } = parsed.data;
 
-  // 1. Validate grower exists
-  const grower = await prisma.grower.findUnique({
-    where: { id: growerId },
+  // 1. Validate supplier exists
+  const supplier = await prisma.supplier.findUnique({
+    where: { id: supplierId },
     select: {
       id: true,
       code: true,
@@ -115,15 +115,15 @@ export async function POST(request: NextRequest) {
       country: true,
     },
   });
-  if (!grower) {
-    return NextResponse.json({ error: "Grower not found" }, { status: 404 });
+  if (!supplier) {
+    return NextResponse.json({ error: "Supplier not found" }, { status: 404 });
   }
 
-  // 2. Validate all orders: delivered, belong to grower, not already invoiced, not deleted
+  // 2. Validate all orders: delivered, belong to supplier, not already invoiced, not deleted
   const orders = await prisma.fustOrder.findMany({
     where: {
       id: { in: orderIds },
-      growerId,
+      supplierId,
       status: "delivered",
       invoicedAt: null,
       deletedAt: null,
@@ -151,7 +151,7 @@ export async function POST(request: NextRequest) {
     const missing = orderIds.filter((id) => !foundIds.has(id));
     return NextResponse.json(
       {
-        error: "Some orders are invalid (not delivered, already invoiced, wrong grower, or deleted)",
+        error: "Some orders are invalid (not delivered, already invoiced, wrong supplier, or deleted)",
         invalidOrderIds: missing,
       },
       { status: 400 }
@@ -221,19 +221,19 @@ export async function POST(request: NextRequest) {
     year: "numeric",
   }).format(new Date(invoiceDate));
 
-  const branding = await getGrowerEmailBranding(growerId);
+  const branding = await getSupplierEmailBranding(supplierId);
 
   const pdfData = {
     invoiceNumber,
     invoiceDate: formattedDate,
-    grower: {
-      code: grower.code,
-      name: grower.name,
-      company: grower.company,
-      street: grower.street,
-      city: grower.city,
-      postalCode: grower.postalCode,
-      country: grower.country,
+    supplier: {
+      code: supplier.code,
+      name: supplier.name,
+      company: supplier.company,
+      street: supplier.street,
+      city: supplier.city,
+      postalCode: supplier.postalCode,
+      country: supplier.country,
     },
     items: invoiceItems.map((item) => ({
       articleCode: item.articleCode,
@@ -267,9 +267,9 @@ export async function POST(request: NextRequest) {
   const xmlContent = generateExactXml({
     invoiceNumber,
     invoiceDate, // ISO format for XML
-    grower: {
-      code: grower.code,
-      name: grower.company || grower.name,
+    supplier: {
+      code: supplier.code,
+      name: supplier.company || supplier.name,
     },
     items: invoiceItems.map((item) => ({
       articleCode: item.articleCode,
@@ -299,7 +299,7 @@ export async function POST(request: NextRequest) {
       data: {
         invoiceNumber,
         invoiceDate: new Date(invoiceDate),
-        growerId,
+        supplierId,
         subtotalExVat,
         vatRate,
         vatAmount,
@@ -329,7 +329,7 @@ export async function POST(request: NextRequest) {
             order: { select: { id: true, orderNumber: true } },
           },
         },
-        grower: {
+        supplier: {
           select: {
             id: true,
             code: true,
@@ -359,7 +359,7 @@ export async function POST(request: NextRequest) {
     actorName: session!.user.name,
     metadata: {
       invoiceNumber,
-      growerId,
+      supplierId,
       orderCount: orderIds.length,
       totalInclVat,
     },

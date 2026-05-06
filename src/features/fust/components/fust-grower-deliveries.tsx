@@ -72,17 +72,17 @@ function StatusBadge({ status }: { status: string }) {
   return <Badge variant={config.variant} className={config.className}>{t(config.key as Parameters<typeof t>[0])}</Badge>;
 }
 
-interface FustGrowerDeliveriesProps {
-  growerId: string | null;
+interface FustSupplierDeliveriesProps {
+  supplierId: string | null;
 }
 
-export function FustGrowerDeliveries({ growerId }: FustGrowerDeliveriesProps) {
+export function FustSupplierDeliveries({ supplierId }: FustSupplierDeliveriesProps) {
   const { t } = useLanguage();
 
   const ordersUrl = useMemo(() => {
-    if (growerId) return `/api/fust/orders?growerId=${growerId}`;
+    if (supplierId) return `/api/fust/orders?supplierId=${supplierId}`;
     return "/api/fust/orders";
-  }, [growerId]);
+  }, [supplierId]);
 
   const { data: orders, loading } = useFetch<FustOrder[]>(ordersUrl);
 

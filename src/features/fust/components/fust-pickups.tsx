@@ -42,7 +42,7 @@ interface FustOrderItem {
   fustType: FustType;
 }
 
-interface Grower {
+interface Supplier {
   id: string;
   code: string;
   name: string;
@@ -56,7 +56,7 @@ interface FustOrder {
   requestedDate: string | null;
   notes: string | null;
   items: FustOrderItem[];
-  grower: Grower;
+  supplier: Supplier;
 }
 
 interface FustDeliveryItem {
@@ -439,7 +439,7 @@ export function FustPickups() {
                       />
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-medium">
-                          {order.orderNumber} - {order.grower.name}
+                          {order.orderNumber} - {order.supplier.name}
                         </p>
                         <div className="mt-0.5 space-y-0.5">
                           {order.items.map((i) => (
@@ -484,9 +484,9 @@ export function FustPickups() {
           {activeDelivery && (
             <div className="space-y-4 py-4">
               <p className="text-sm text-muted-foreground">
-                {activeDelivery.order.grower.name}
-                {activeDelivery.order.grower.company &&
-                  ` (${activeDelivery.order.grower.company})`}
+                {activeDelivery.order.supplier.name}
+                {activeDelivery.order.supplier.company &&
+                  ` (${activeDelivery.order.supplier.company})`}
               </p>
               <div className="space-y-3">
                 {activeDelivery.order.items.map((item) => (
@@ -638,9 +638,9 @@ function PickupCard({
                       <StatusBadge status={delivery.status} />
                     </div>
                     <p className="text-sm text-muted-foreground">
-                      {delivery.order.grower.name}
-                      {delivery.order.grower.company &&
-                        ` - ${delivery.order.grower.company}`}
+                      {delivery.order.supplier.name}
+                      {delivery.order.supplier.company &&
+                        ` - ${delivery.order.supplier.company}`}
                     </p>
                     <div className="mt-2 space-y-1">
                       {delivery.order.items.map((item) => {

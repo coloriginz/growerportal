@@ -52,7 +52,7 @@ interface DocumentRow {
   createdAt: string;
 }
 
-export function DocumentsContent({ growerId }: { growerId: string | null }) {
+export function DocumentsContent({ supplierId }: { supplierId: string | null }) {
   const [documents, setDocuments] = useState<DocumentRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [typeFilter, setTypeFilter] = useState<string>("all");
@@ -75,7 +75,7 @@ export function DocumentsContent({ growerId }: { growerId: string | null }) {
   const fetchDocuments = useCallback(async () => {
     try {
       const params = new URLSearchParams();
-      if (growerId) params.set("growerId", growerId);
+      if (supplierId) params.set("supplierId", supplierId);
       const res = await fetch(`/api/documents?${params}`);
       if (res.ok) {
         setDocuments(await res.json());
@@ -83,7 +83,7 @@ export function DocumentsContent({ growerId }: { growerId: string | null }) {
     } finally {
       setLoading(false);
     }
-  }, [growerId]);
+  }, [supplierId]);
 
   useEffect(() => {
     fetchDocuments();
@@ -126,13 +126,13 @@ export function DocumentsContent({ growerId }: { growerId: string | null }) {
   }
 
   async function handleUpload() {
-    if (!selectedFile || !growerId || !docType || !docName) return;
+    if (!selectedFile || !supplierId || !docType || !docName) return;
 
     setUploading(true);
     try {
       const formData = new FormData();
       formData.append("file", selectedFile);
-      formData.append("growerId", growerId);
+      formData.append("supplierId", supplierId);
       formData.append("type", docType);
       formData.append("name", docName);
 
@@ -195,7 +195,7 @@ export function DocumentsContent({ growerId }: { growerId: string | null }) {
     <div className="page-content">
       <div className="page-header">
         <h1>{t("documents.title")}</h1>
-        {canManage && growerId && (
+        {canManage && supplierId && (
           <Button
             onClick={() => {
               resetUploadForm();

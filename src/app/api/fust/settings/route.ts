@@ -3,15 +3,15 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { requireAuth } from "@/lib/api-helpers";
 
-// GET: Fust settings overview (fust types, transporters, grower fust status)
+// GET: Fust settings overview (fust types, transporters, supplier fust status)
 export async function GET() {
   const { error } = await requireAuth(["admin"]);
   if (error) return error;
 
-  const [fustTypes, transporters, growers] = await Promise.all([
+  const [fustTypes, transporters, suppliers] = await Promise.all([
     prisma.fustType.findMany({ orderBy: [{ category: "asc" }, { sortOrder: "asc" }] }),
     prisma.transporter.findMany({ orderBy: { name: "asc" } }),
-    prisma.grower.findMany({
+    prisma.supplier.findMany({
       select: {
         id: true,
         code: true,
@@ -26,13 +26,13 @@ export async function GET() {
     }),
   ]);
 
-  return NextResponse.json({ fustTypes, transporters, growers });
+  return NextResponse.json({ fustTypes, transporters, suppliers });
 }
 
-// PATCH: Update or create grower fust settings, fust types, or transporters
-const updateGrowerSchema = z.object({
-  type: z.literal("grower"),
-  growerId: z.string().uuid(),
+// PATCH: Update or create supplier fust settings, fust types, or transporters
+const updateSupplierSchema = z.object({
+  type: z.literal("supplier"),
+  supplierId: z.string().uuid(),
   fustEnabled: z.boolean(),
   autoApproveOrders: z.boolean().optional(),
   defaultTransporterId: z.string().uuid().nullable(),
@@ -69,19 +69,19 @@ export async function PATCH(request: NextRequest) {
 
   const body = await request.json();
 
-  if (body.type === "grower") {
-    const parsed = updateGrowerSchema.safeParse(body);
+  if (body.type === "supplier") {
+    const parsed = updateSupplierSchema.safeParse(body);
     if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
 
-    const { growerId, fustEnabled, autoApproveOrders, defaultTransporterId, preferredLanguage } = parsed.data;
+    const { supplierId, fustEnabled, autoApproveOrders, defaultTransporterId, preferredLanguage } = parsed.data;
 
     // Cannot enable fust without a transporter
     if (fustEnabled && !defaultTransporterId) {
       return NextResponse.json({ error: "A default transporter is required when enabling fust" }, { status: 400 });
     }
 
-    await prisma.grower.update({
-      where: { id: growerId },
+    await prisma.supplier.update({
+      where: { id: supplierId },
       data: {
         fustEnabled,
         defaultTransporterId,
@@ -170,14 +170,14 @@ export async function DELETE(request: NextRequest) {
   }
 
   if (type === "transporter") {
-    // Check for existing pickups or growers using this transporter
-    const [pickupCount, growerCount] = await Promise.all([
+    // Check for existing pickups or suppliers using this transporter
+    const [pickupCount, supplierCount] = await Promise.all([
       prisma.fustPickup.count({ where: { transporterId: id } }),
-      prisma.grower.count({ where: { defaultTransporterId: id } }),
+      prisma.supplier.count({ where: { defaultTransporterId: id } }),
     ]);
-    if (pickupCount > 0 || growerCount > 0) {
+    if (pickupCount > 0 || supplierCount > 0) {
       return NextResponse.json(
-        { error: "Cannot delete: this transporter is linked to pickups or growers. Deactivate it instead." },
+        { error: "Cannot delete: this transporter is linked to pickups or suppliers. Deactivate it instead." },
         { status: 409 }
       );
     }

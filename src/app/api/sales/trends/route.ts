@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { requireAuth, resolveGrowerId } from "@/lib/api-helpers";
+import { requireAuth, resolveSupplierId } from "@/lib/api-helpers";
 import { startOfYear, format } from "date-fns";
 
 export async function GET(request: NextRequest) {
@@ -8,10 +8,10 @@ export async function GET(request: NextRequest) {
   if (error) return error;
 
   const params = request.nextUrl.searchParams;
-  const requestedGrowerId = params.get("growerId");
-  const growerId = resolveGrowerId(session!, requestedGrowerId);
+  const requestedSupplierId = params.get("supplierId");
+  const supplierId = resolveSupplierId(session!, requestedSupplierId);
 
-  if (!growerId) {
+  if (!supplierId) {
     return NextResponse.json({
       priceTrend: [],
       stemLengthBreakdown: [],
@@ -27,13 +27,12 @@ export async function GET(request: NextRequest) {
   const now = new Date();
   const yearStart = startOfYear(now);
 
-  const lotFilter: Record<string, unknown> = { growerId };
+  const lotFilter: Record<string, unknown> = { supplierId };
   if (filterProducts.length > 0) lotFilter.productName = { in: filterProducts };
   if (filterStemLengths.length > 0) lotFilter.stemLength = { in: filterStemLengths };
 
   const baseWhere: Record<string, unknown> = {
     lot: lotFilter,
-    isCorrection: false,
     date: { gte: yearStart },
   };
   if (filterSalesTypes.length > 0) baseWhere.salesType = { in: filterSalesTypes };

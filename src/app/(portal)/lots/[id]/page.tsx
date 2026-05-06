@@ -16,19 +16,18 @@ export default async function LotDetailPage({ params }: Props) {
     where: { id },
     include: {
       transactions: { orderBy: { date: "asc" } },
-      costs: true,
       qualityIssues: true,
       salesSheet: { select: { id: true, invoiceNumber: true, pdfDocumentId: true } },
-      grower: { select: { id: true, code: true, name: true } },
+      supplier: { select: { id: true, code: true, name: true } },
     },
   });
 
   if (!lot) return notFound();
 
-  // Access control: growers can only see their own lots
+  // Access control: suppliers can only see their own lots
   if (
-    session.user.role === "grower" &&
-    session.user.growerId !== lot.growerId
+    session.user.role === "supplier" &&
+    session.user.supplierId !== lot.supplierId
   ) {
     return notFound();
   }

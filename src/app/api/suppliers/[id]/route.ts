@@ -12,7 +12,7 @@ export async function GET(
 
   const { id } = await params;
 
-  const grower = await prisma.grower.findUnique({
+  const supplier = await prisma.supplier.findUnique({
     where: { id },
     include: {
       certificates: {
@@ -36,36 +36,36 @@ export async function GET(
     },
   });
 
-  if (!grower) {
-    return NextResponse.json({ error: "Grower not found" }, { status: 404 });
+  if (!supplier) {
+    return NextResponse.json({ error: "Supplier not found" }, { status: 404 });
   }
 
   return NextResponse.json({
-    id: grower.id,
-    code: grower.code,
-    name: grower.name,
-    company: grower.company,
-    street: grower.street,
-    city: grower.city,
-    postalCode: grower.postalCode,
-    country: grower.country,
-    phone: grower.phone,
-    vatNumber: grower.vatNumber,
-    ggn: grower.ggn,
-    preferredLanguage: grower.preferredLanguage,
-    commercie: grower.commercie,
-    commercieId: grower.commercieId,
-    companyId: grower.companyId,
-    companyEntity: grower.companyEntity,
-    seasonStartMonth: grower.seasonStartMonth,
-    certificates: grower.certificates.map((c) => ({
+    id: supplier.id,
+    code: supplier.code,
+    name: supplier.name,
+    company: supplier.company,
+    street: supplier.street,
+    city: supplier.city,
+    postalCode: supplier.postalCode,
+    country: supplier.country,
+    phone: supplier.phone,
+    vatNumber: supplier.vatNumber,
+    ggn: supplier.ggn,
+    preferredLanguage: supplier.preferredLanguage,
+    commercie: supplier.commercie,
+    commercieId: supplier.commercieId,
+    companyId: supplier.companyId,
+    companyEntity: supplier.companyEntity,
+    seasonStartMonth: supplier.seasonStartMonth,
+    certificates: supplier.certificates.map((c) => ({
       id: c.id,
       type: c.type,
       number: c.number,
       validFrom: c.validFrom,
       validUntil: c.validUntil,
     })),
-    users: grower.users.map((u) => ({
+    users: supplier.users.map((u) => ({
       id: u.id,
       name: u.name,
       email: u.email,
@@ -74,7 +74,7 @@ export async function GET(
   });
 }
 
-const updateGrowerSchema = z.object({
+const updateSupplierSchema = z.object({
   name: z.string().min(1).optional(),
   company: z.string().nullable().optional(),
   street: z.string().nullable().optional(),
@@ -99,21 +99,21 @@ export async function PUT(
 
   const { id } = await params;
   const body = await request.json();
-  const parsed = updateGrowerSchema.safeParse(body);
+  const parsed = updateSupplierSchema.safeParse(body);
 
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  const existing = await prisma.grower.findUnique({ where: { id } });
+  const existing = await prisma.supplier.findUnique({ where: { id } });
   if (!existing) {
-    return NextResponse.json({ error: "Grower not found" }, { status: 404 });
+    return NextResponse.json({ error: "Supplier not found" }, { status: 404 });
   }
 
-  const grower = await prisma.grower.update({
+  const supplier = await prisma.supplier.update({
     where: { id },
     data: parsed.data,
   });
 
-  return NextResponse.json(grower);
+  return NextResponse.json(supplier);
 }

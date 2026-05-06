@@ -12,12 +12,12 @@ export interface EmailBranding {
 }
 
 /**
- * Get email branding for a grower based on their company.
- * Falls back to default (Coloriginz) if grower has no company.
+ * Get email branding for a supplier based on their company.
+ * Falls back to default (Coloriginz) if supplier has no company.
  */
-export async function getGrowerEmailBranding(growerId: string): Promise<EmailBranding> {
-  const grower = await prisma.grower.findUnique({
-    where: { id: growerId },
+export async function getSupplierEmailBranding(supplierId: string): Promise<EmailBranding> {
+  const supplier = await prisma.supplier.findUnique({
+    where: { id: supplierId },
     select: {
       companyEntity: {
         select: { slug: true, emailFrom: true, emailName: true },
@@ -25,7 +25,7 @@ export async function getGrowerEmailBranding(growerId: string): Promise<EmailBra
     },
   });
 
-  const slug = grower?.companyEntity?.slug || DEFAULT_SLUG;
+  const slug = supplier?.companyEntity?.slug || DEFAULT_SLUG;
   const branding = getCompanyBranding(slug);
 
   return {
@@ -33,14 +33,14 @@ export async function getGrowerEmailBranding(growerId: string): Promise<EmailBra
     portalName: branding.portalName,
     footerText: branding.footerText,
     logoBase64: getCompanyLogoBase64(slug),
-    emailFrom: grower?.companyEntity?.emailFrom || undefined,
-    emailName: grower?.companyEntity?.emailName || undefined,
+    emailFrom: supplier?.companyEntity?.emailFrom || undefined,
+    emailName: supplier?.companyEntity?.emailName || undefined,
   };
 }
 
 /**
  * Get default email branding (Coloriginz).
- * Used for internal users who have no grower/company link.
+ * Used for internal users who have no supplier/company link.
  */
 export function getDefaultEmailBranding(): EmailBranding {
   const branding = getCompanyBranding(DEFAULT_SLUG);

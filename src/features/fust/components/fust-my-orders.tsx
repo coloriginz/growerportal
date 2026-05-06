@@ -69,17 +69,17 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 interface FustMyOrdersProps {
-  growerId: string | null;
+  supplierId: string | null;
 }
 
-export function FustMyOrders({ growerId }: FustMyOrdersProps) {
+export function FustMyOrders({ supplierId }: FustMyOrdersProps) {
   const { t } = useLanguage();
   const [timelineOrder, setTimelineOrder] = useState<FustOrder | null>(null);
 
   const ordersUrl = useMemo(() => {
-    if (growerId) return `/api/fust/orders?growerId=${growerId}`;
+    if (supplierId) return `/api/fust/orders?supplierId=${supplierId}`;
     return "/api/fust/orders";
-  }, [growerId]);
+  }, [supplierId]);
 
   const { data: orders, loading } = useFetch<FustOrder[]>(ordersUrl);
 

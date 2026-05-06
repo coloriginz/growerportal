@@ -4,7 +4,7 @@ import { z } from "zod";
 import { v4 as uuidv4 } from "uuid";
 import { sendEmail } from "@/lib/email";
 import { resetPasswordEmailHtml } from "@/lib/email-templates";
-import { getGrowerEmailBranding, getDefaultEmailBranding } from "@/lib/company-helpers";
+import { getSupplierEmailBranding, getDefaultEmailBranding } from "@/lib/company-helpers";
 
 const schema = z.object({
   email: z.string().email(),
@@ -45,9 +45,9 @@ export async function POST(request: NextRequest) {
     },
   });
 
-  // Get company branding based on user's grower link (or default for internal users)
-  const branding = user.growerId
-    ? await getGrowerEmailBranding(user.growerId)
+  // Get company branding based on user's supplier link (or default for internal users)
+  const branding = user.supplierId
+    ? await getSupplierEmailBranding(user.supplierId)
     : getDefaultEmailBranding();
 
   // Send reset email

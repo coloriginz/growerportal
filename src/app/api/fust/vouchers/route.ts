@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
         include: {
           order: {
             include: {
-              grower: {
+              supplier: {
                 select: { id: true, code: true, name: true, company: true },
               },
               items: {

@@ -8,7 +8,7 @@
 export interface InvoiceXmlData {
   invoiceNumber: string;
   invoiceDate: string; // ISO date "2026-04-08"
-  grower: {
+  supplier: {
     code: string; // debtor code e.g. "PCFUP"
     name: string;
   };
@@ -80,10 +80,10 @@ export function generateExactXml(data: InvoiceXmlData): string {
       <InvoiceNumber>${escapeXml(data.invoiceNumber)}</InvoiceNumber>
       <InvoiceDate>${escapeXml(data.invoiceDate)}</InvoiceDate>
       <OrderedBy>
-        <Debtor code="${escapeXml(data.grower.code)}" name="${escapeXml(data.grower.name)}"/>
+        <Debtor code="${escapeXml(data.supplier.code)}" name="${escapeXml(data.supplier.name)}"/>
       </OrderedBy>
       <InvoiceTo>
-        <Debtor code="${escapeXml(data.grower.code)}" name="${escapeXml(data.grower.name)}"/>
+        <Debtor code="${escapeXml(data.supplier.code)}" name="${escapeXml(data.supplier.name)}"/>
       </InvoiceTo>
 ${invoiceLines}
     </Invoice>

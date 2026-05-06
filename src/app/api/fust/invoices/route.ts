@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
       },
       charges: {
         include: {
-          grower: { select: { id: true, code: true, name: true, company: true } },
+          supplier: { select: { id: true, code: true, name: true, company: true } },
         },
       },
     },

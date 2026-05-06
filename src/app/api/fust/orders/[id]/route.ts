@@ -30,7 +30,7 @@ export async function GET(
     where: { id, deletedAt: null },
     include: {
       items: { include: { fustType: true } },
-      grower: { select: { id: true, code: true, name: true, company: true } },
+      supplier: { select: { id: true, code: true, name: true, company: true } },
       delivery: {
         include: {
           items: { include: { fustType: true } },
@@ -44,8 +44,8 @@ export async function GET(
     return NextResponse.json({ error: "Order not found" }, { status: 404 });
   }
 
-  // Growers can only see their own orders
-  if (session!.user.role === "grower" && order.growerId !== session!.user.growerId) {
+  // Suppliers can only see their own orders
+  if (session!.user.role === "supplier" && order.supplierId !== session!.user.supplierId) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -130,7 +130,7 @@ export async function PATCH(
     data: updateData,
     include: {
       items: { include: { fustType: true } },
-      grower: { select: { id: true, code: true, name: true } },
+      supplier: { select: { id: true, code: true, name: true } },
     },
   });
 
@@ -173,7 +173,7 @@ export async function PATCH(
     }
   }
 
-  // Send grower notification on delivery
+  // Send supplier notification on delivery
   if (status === "delivered") {
     if (isTest) {
       try {
@@ -198,7 +198,7 @@ export async function DELETE(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { error, session } = await requireAuth(["grower", "admin"]);
+  const { error, session } = await requireAuth(["supplier", "admin"]);
   if (error) return error;
 
   const { id } = await params;
@@ -212,8 +212,8 @@ export async function DELETE(
     return NextResponse.json({ error: "Only pending orders can be deleted" }, { status: 400 });
   }
 
-  // Growers can only delete their own orders
-  if (session!.user.role === "grower" && order.growerId !== session!.user.growerId) {
+  // Suppliers can only delete their own orders
+  if (session!.user.role === "supplier" && order.supplierId !== session!.user.supplierId) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

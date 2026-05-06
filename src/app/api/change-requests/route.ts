@@ -4,7 +4,7 @@ import { requireAuth } from "@/lib/api-helpers";
 import { z } from "zod";
 
 const schema = z.object({
-  growerId: z.string().uuid(),
+  supplierId: z.string().uuid(),
   message: z.string().min(1).max(2000),
 });
 
@@ -21,15 +21,15 @@ export async function POST(request: NextRequest) {
 
   // Access check
   if (
-    session!.user.role === "grower" &&
-    session!.user.growerId !== parsed.data.growerId
+    session!.user.role === "supplier" &&
+    session!.user.supplierId !== parsed.data.supplierId
   ) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   const changeRequest = await prisma.changeRequest.create({
     data: {
-      growerId: parsed.data.growerId,
+      supplierId: parsed.data.supplierId,
       message: parsed.data.message,
     },
   });

@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const rolesParam = searchParams.get("roles");
 
-  // Filter by roles if provided, otherwise return all non-grower users
+  // Filter by roles if provided, otherwise return all non-supplier users
   const roleFilter = rolesParam
     ? rolesParam.split(",")
     : ["admin", "commercie", "transporteur", "finance"];

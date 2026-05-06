@@ -37,7 +37,7 @@ pdfmake.setUrlAccessPolicy(() => false);
 export interface InvoicePdfData {
   invoiceNumber: string;
   invoiceDate: string; // formatted as "dd-mm-yyyy"
-  grower: {
+  supplier: {
     code: string;
     name: string;
     company: string | null;
@@ -119,15 +119,15 @@ export async function generateInvoicePdf(data: InvoicePdfData): Promise<Buffer> 
 // ---------------------------------------------------------------------------
 
 function buildDocDefinition(data: InvoicePdfData): TDocumentDefinitions {
-  const { grower, branding, items } = data;
+  const { supplier, branding, items } = data;
 
-  // Grower address lines (skip null values)
-  const growerAddressLines: string[] = [grower.name];
-  if (grower.company) growerAddressLines.push(grower.company);
-  if (grower.street) growerAddressLines.push(grower.street);
-  const cityLine = [grower.postalCode, grower.city].filter(Boolean).join("  ");
-  if (cityLine) growerAddressLines.push(cityLine);
-  if (grower.country) growerAddressLines.push(grower.country);
+  // Supplier address lines (skip null values)
+  const supplierAddressLines: string[] = [supplier.name];
+  if (supplier.company) supplierAddressLines.push(supplier.company);
+  if (supplier.street) supplierAddressLines.push(supplier.street);
+  const cityLine = [supplier.postalCode, supplier.city].filter(Boolean).join("  ");
+  if (cityLine) supplierAddressLines.push(cityLine);
+  if (supplier.country) supplierAddressLines.push(supplier.country);
 
   // Logo as data-URI for pdfmake
   const logoDataUri = `data:image/png;base64,${branding.logoBase64}`;
@@ -223,8 +223,8 @@ function buildDocDefinition(data: InvoicePdfData): TDocumentDefinitions {
           width: "auto",
           stack: [
             { text: "Debiteur", style: "sectionLabel" },
-            { text: `Code: ${grower.code}`, style: "debtorDetail", margin: [0, 4, 0, 0] },
-            ...growerAddressLines.map((line) => ({
+            { text: `Code: ${supplier.code}`, style: "debtorDetail", margin: [0, 4, 0, 0] },
+            ...supplierAddressLines.map((line) => ({
               text: line,
               style: "debtorDetail" as const,
             })),
