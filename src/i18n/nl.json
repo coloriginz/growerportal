@@ -81,7 +81,8 @@
     "fustInvoices": "Facturen",
     "fustSettings": "Fust Instellingen",
     "fustActivity": "Activiteit",
-    "fustEmails": "Email Log"
+    "fustEmails": "Email Log",
+    "fust": "Fust"
   },
   "dashboard": {
     "title": "Dashboard",

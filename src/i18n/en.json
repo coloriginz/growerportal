@@ -81,7 +81,8 @@
     "fustInvoices": "Invoices",
     "fustSettings": "Fust Settings",
     "fustActivity": "Activity",
-    "fustEmails": "Email Log"
+    "fustEmails": "Email Log",
+    "fust": "Fust"
   },
   "dashboard": {
     "title": "Dashboard",
