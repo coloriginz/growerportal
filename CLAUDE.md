@@ -1,10 +1,50 @@
 # Grower Portal - Project Documentation
 
+> **Document purpose:** Single source of truth for project context, architecture, design decisions, and operational rules. Intended audience: developers, product owners, and AI coding assistants working on this codebase.
+>
+> **How to maintain:** Update this file when you add a major feature, change architecture, or discover a new business rule. Keep it factual and concise. Do not duplicate what is already expressed in code (schema, route files, type definitions) — instead, reference the relevant files. Remove outdated information rather than accumulating historical notes.
+
+---
+
 ## Overview
 
-Multi-tenant web portal for **Coloriginz**, a Dutch flower trading company that works on consignment with growers worldwide. Growers (kwekers) use this portal to track sales, lots, quality issues, documents, and shipment forecasts. Internal users (commercie/admin) manage growers and view aggregate insights. Transporteurs manage fust pickups and deliveries. Finance handles fust invoicing and voucher matching.
+Multi-tenant web portal for **Coloriginz** (OZ Import BV), a Dutch flower trading company based in Aalsmeer that works on consignment with growers worldwide. Growers (kwekers) use this portal to track sales, lots, quality issues, documents, and shipment forecasts. Internal users (commercie/admin) manage growers and view aggregate insights. Transporteurs manage fust pickups and deliveries. Finance handles fust invoicing and voucher matching.
 
-**Domain:** Cut flower trade (consignment model). Growers ship flowers, Coloriginz sells at Dutch flower auctions (VBA, VPL) and direct sales, then settles via salessheets. Fust (containers/crates) is tracked separately: growers order fust, transporteurs pick up and deliver, finance reconciles via invoices and issuance vouchers.
+**Domain:** Cut flower trade (consignment model). Growers ship flowers to the Netherlands, Coloriginz sells at Dutch flower auctions (VBA, VPL) and via direct sales, then settles via salessheets. Fust (containers/crates) is tracked separately: growers order fust, transporteurs pick up and deliver, finance reconciles via invoices and issuance vouchers.
+
+**Replaces:** Legacy Qlik dashboard that gave growers limited visibility into their sales performance.
+
+---
+
+## Goals and Scope
+
+### Goals
+1. Give consignment growers worldwide self-service visibility into sales, costs, and net yield per stem
+2. Replace WhatsApp/Excel workflows for shipment forecasting with structured weekly grids
+3. Digitize the full fust (container) lifecycle: ordering, pickup, delivery, invoicing, voucher reconciliation
+4. Support multi-company branding (Coloriginz, OZ Import, MyPeony) from a single codebase
+5. Enable internal users (commercie, finance) to manage grower relationships and fust operations efficiently
+
+### In scope
+- Grower-facing: dashboard, sales analytics, lot tracking, quality issues, documents, forecasts, fust ordering
+- Internal: grower management, user management, fust operations (pickups, deliveries, invoicing, voucher matching), audit trail
+- Two portals: main portal (all roles) and standalone fust portal (transporteurs)
+- Email notifications in grower/transporter preferred language (EN/NL)
+- Multi-company branding (logos, email from-addresses, footer text per company entity)
+
+### Out of scope
+- Data import from source systems (ERP/auction) — planned but not yet built
+- Financial reporting or accounting integration (e.g., Exact Globe export is partial: XML invoice only)
+- SSO / Azure AD — currently credentials-only authentication
+- Mobile app — responsive web only
+- Real-time data / websockets — polling via `useFetch` with manual refresh
+- Languages beyond EN/NL (Spanish, Portuguese planned but not yet implemented)
+
+### Success criteria
+- Growers can independently check their sales data without contacting commercie
+- Forecasts are submitted digitally instead of via WhatsApp/Excel
+- Fust orders flow from request to delivery to invoice without manual coordination
+- Internal users have a single dashboard instead of switching between Qlik, email, and spreadsheets
 
 ---
 
@@ -312,6 +352,9 @@ Type-safe: `t()` accepts only keys that exist in the JSON files.
 - **Password reset**: Reset link email
 - **Fust order approved**: Email to transporter when order is approved (includes items, requested date)
 - **Fust delivery confirmed**: Email to grower when transporter confirms delivery (includes ordered vs delivered quantities)
+- **Fust grower invoice**: Invoice PDF attached, sent to grower with amount summary
+
+All fust emails (order approved, delivery confirmed, invoice) respect the recipient's `preferredLanguage` setting (EN/NL). Subjects, body text, button labels, and date formatting adapt accordingly. Activation and password reset emails are English-only (out of scope).
 
 ---
 
@@ -372,3 +415,154 @@ Finance:      finance@coloriginz.com       / Finance#2026
 - UI components: kebab-case (`multi-select-filter.tsx`)
 - Lib files: kebab-case (`api-helpers.ts`)
 - Translation keys: dot-notation (`forecasts.copyWeek`)
+
+---
+
+## Key Design Decisions
+
+| Decision | Chosen | Why | Alternatives considered |
+|----------|--------|-----|------------------------|
+| **ORM** | Prisma 6 (not 7) | Stable, mature driver adapter support for Neon serverless. Prisma 7 has breaking changes and required driver adapters that are unstable. | Drizzle (less mature ecosystem at time of decision) |
+| **Auth** | NextAuth v5 + JWT + Credentials | Simple, no external auth provider dependency. Growers are invited by admin, not self-registering. JWT avoids DB session lookups. | Azure AD SSO (deferred — would add complexity for growers who don't have Microsoft accounts) |
+| **Database** | Neon serverless PostgreSQL | No Docker available on dev workstation. Neon gives Postgres without local install. Two separate Neon projects for test/prod (not branches). | Supabase (more opinionated, auth overlap), local PostgreSQL (Docker not available) |
+| **Deployment** | Vercel via `git push` only | CLI deploy (`vercel deploy`) leaks `.env` files to the build. Git push is the only safe method. | Vercel CLI (rejected due to env leak risk) |
+| **Schema migrations** | `prisma db push` (not `migrate dev`) | Simpler for a small team. No migration history to manage. Both environments are pushed separately. | Prisma Migrate (overhead not justified yet) |
+| **Multi-tenancy** | URL param `?growerId=` + role check | Growers see only own data (enforced by `resolveGrowerId`). Admin/commercie pass growerId as query param. No subdomain routing for grower tenancy. | Subdomain-per-grower (overkill), database-per-tenant (overkill) |
+| **Multi-company branding** | Company entity in DB + base64 logos in code | Logos embedded as base64 in `company-logos.ts` for CID email attachments. Company determines email from-address, footer text, portal name. | External logo URLs (don't work in Ethereal, fragile in email clients) |
+| **Fust portal isolation** | Separate route group `(fust-portal)` with FustShell layout + middleware URL rewrite for `fust.*` domains | Transporteurs get a standalone portal with its own nav, login page, and layout. Middleware rewrites `fust.domain.com/*` to `/fust-portal/*`. Shares the same API routes. | Separate Next.js app (deployment overhead), iframe embedding (poor UX) |
+| **Email templates** | Inline HTML with VML for Outlook + language parameter | VML `<v:roundrect>` in `<!--[if mso]>` conditionals for Outlook button rendering. Inline translation maps per template function (not i18n JSON — email text is not UI text). | React Email (added dependency), MJML (build step) |
+| **Fust soft delete** | `deletedAt` + `deletedById` on FustOrder | Orders are never truly deleted — audit trail and voucher links must persist. All queries filter `deletedAt IS NULL` by default. | Hard delete + cascade (loses audit history) |
+| **Audit trail** | Denormalized `FustAuditLog` with `orderId` column | `orderId` is denormalized from the entity for fast per-order timeline queries without joins. 19 action types cover the full fust lifecycle. | Generic audit table without orderId (slow timeline queries), event sourcing (overkill) |
+| **PDF parsing** | `pdfjs-dist` v4 legacy build | Works on Vercel serverless with `serverExternalPackages` + `outputFileTracingIncludes` config. v5 lacks type declarations for legacy build. | pdf-parse (wrapper, less control), unpdf (same underlying lib) |
+| **i18n** | Custom JSON system with type-safe keys | No build step, full TypeScript inference via `NestedKeyOf` utility type. Only EN/NL for now. Email templates use separate inline translation maps. | next-intl (heavier), i18next (runtime overhead) |
+
+---
+
+## Business Domain and Operational Rules
+
+### Consignment Model
+- Growers ship flowers to Coloriginz in the Netherlands
+- Coloriginz sells on behalf of growers at auction (VBA, VPL) or via direct sales
+- After sale, Coloriginz creates a **salessheet** — an invoice grouping all lots from a shipment
+- Salessheet shows: total turnover, itemized costs (commission, handling, logistics), net result
+- The grower receives the net result minus costs
+- **Key grower metric:** net yield per stem (netto opbrengst/steel) — what the grower keeps after all deductions
+
+### Sales Data Hierarchy
+```
+SalesSheet (invoice) → Lot (batch of flowers) → Transaction (individual sale)
+```
+- One salessheet groups multiple lots from the same delivery
+- One lot can have multiple transactions (sold at different prices/channels/dates)
+- Transactions can be **corrections** (handling shortages, stock check adjustments) — flagged via `isCorrection`
+- Lot costs are calculated from the lot's `refNumber` linking to salessheet cost lines
+
+### Sales Channels
+- **Direct sales**: Sold directly to buyers, typically higher margin
+- **VBA**: Flora Holland auction (Aalsmeer)
+- **VPL**: Flora Holland auction (Naaldwijk)
+- **Production**: Internal/production use
+
+### Quality Codes
+Standard auction quality codes (110, 120, 130, 154, 160, 170) with descriptions. Mapped in `quality-codes.ts`. Quality rate = percentage of stems without quality issues.
+
+### Season Calculation
+- Each grower has a configurable `seasonStartMonth` (default: January)
+- "Season to Date" (STD) calculations use this month as the start of the current season
+- Relevant for Southern hemisphere growers whose season doesn't align with the calendar year
+
+### Fust Lifecycle
+```
+Grower places order → [auto-approve or manual approve] → Transporter picks up from auction →
+Transporter delivers to grower → Finance matches vouchers → Finance creates grower invoice → Payment
+```
+
+**Order statuses:** pending → approved → scheduled → in_transit → delivered (or rejected/cancelled at any point)
+
+**Key rules:**
+- Fust must be enabled per grower by admin (requires a default transporter)
+- Auto-approve: if enabled for a grower, orders are approved instantly without commercie review
+- Delivery confirmation captures actual quantities (may differ from ordered)
+- Issuance vouchers (uitgiftebonnen) from the auction are PDF-parsed and matched to orders for reconciliation
+- Grower invoices include deposit (statiegeld) and rental (fusthuur) line items per fust type
+- Article codes (2907 for deposit, 2908 for rental) are configurable per fust type for Exact Globe compatibility
+
+### Multi-Company Branding
+- Growers belong to a Company entity (Coloriginz, OZ Import, MyPeony, etc.)
+- Company determines: logo, email from-address, email sender name, footer text
+- Default company branding is used when grower has no company assigned
+- Logos are stored as base64 in code for CID email attachment (works across all email clients)
+
+---
+
+## Security Considerations
+
+### Authentication
+- Credentials-based auth via NextAuth v5 with JWT strategy
+- Passwords hashed with bcryptjs (no plain text storage)
+- Users are created by admin and receive activation link — no self-registration
+- Activation tokens are single-use (`activationToken` column, cleared after use)
+- Password reset tokens expire after 1 hour (`resetTokenExpiry`)
+- JWT contains: user ID, role, growerId, transporterId — verified server-side on every API call
+
+### Authorization
+- Every API route starts with `requireAuth(allowedRoles?)` — returns 401/403 before any data access
+- `resolveGrowerId()` ensures growers can only access their own data (role-based enforcement, not just frontend hiding)
+- Admin/commercie/finance can view any grower's data by specifying `?growerId=`
+- Transporteur users are scoped to their linked Transporter entity
+
+### Data Isolation
+- Grower data isolation is enforced at the API layer, not the database layer (no row-level security)
+- All grower-scoped queries include `growerId` in the WHERE clause
+- Fust audit log captures actor identity for all actions
+
+### Sensitive Data
+- No credit card or payment data stored
+- Passwords: bcrypt hashed, never logged or returned in API responses
+- Activation/reset tokens: UUID-based, single-use, stored hashed equivalent (unique column)
+- Demo account passwords are in CLAUDE.md — acceptable for test environment only
+
+### Email Security
+- Test environment: Ethereal (emails never reach real inboxes) or redirect mode (all emails go to one configurable address)
+- Production: Resend SMTP — real emails only in production
+- Email mode controlled by `NEXT_PUBLIC_APP_ENV` and admin-configurable settings
+
+### Known Security Limitations
+- No rate limiting on login attempts (acceptable for invite-only user base, but should be added if public registration is ever introduced)
+- No CSRF protection beyond NextAuth defaults (JWT-based, so not vulnerable to traditional CSRF)
+- No Content Security Policy headers configured
+- API routes do not validate `growerId` format beyond Zod UUID check (no ownership verification beyond role check)
+
+---
+
+## Known Issues and Technical Debt
+
+### Known Issues
+- **Next.js 16 Turbopack on Windows**: Crashes with `0xc0000142`. Workaround: use `npx next dev --webpack` as fallback.
+- **Prisma generate on Windows**: DLL lock when dev server is running. Must stop dev server first.
+- **Test mode role switching**: JWT-based, so original role is only restored on re-login. Edge cases when switching between grower and transporter roles.
+
+### Technical Debt
+- **No automated tests**: No unit tests, integration tests, or E2E tests. Manual testing only. Critical for a portal handling financial data.
+- **No data import pipeline**: Sales data (lots, transactions, salessheets) is currently seeded. No API or ETL pipeline for importing from the source system (ERP/Qlik).
+- **Activation flow not E2E tested**: Code exists but has not been tested with real email delivery in production.
+- **Hardcoded Exact Globe article codes**: Deposit (2907) and rental (2908) article codes are defaults per fust type but the mapping is not validated against Exact Globe.
+- **No pagination on several endpoints**: Dashboard, quality, and some fust endpoints return all records. Acceptable at current scale but will need pagination as data grows.
+- **`tAny` casts in fust-settings.tsx**: Some translation keys are cast via `t as unknown as (key: string) => string` to bypass type checking for dynamic keys. Should be properly typed.
+
+### Workarounds
+- **Vercel serverless + public/ folder**: Serverless functions cannot access `public/` at runtime. Logos and images needed in emails are embedded as base64 strings in code (`company-logos.ts`).
+- **pdfjs-dist on Vercel**: Requires legacy build import path (`pdfjs-dist/legacy/build/pdf.mjs`), `serverExternalPackages`, and `outputFileTracingIncludes` in next.config.
+
+---
+
+## Open Questions and Missing Information
+
+- **Data import strategy**: How will production data (salessheets, lots, transactions) be imported? Flat file upload, API push from ERP, or database sync? This is the biggest gap before the portal can go live for real grower usage.
+- **Exact Globe integration**: How far should the XML invoice export go? Currently generates basic XML. Does it need specific field mappings, validation, or direct API push?
+- **Grower onboarding flow**: Who creates grower accounts in production? Is there a bulk import from ERP, or one-by-one via admin UI?
+- **Audit data retention**: How long should fust audit logs be kept? Currently no cleanup policy.
+- **Scalability**: At what grower/transaction volume will the current architecture need optimization? (No pagination on some endpoints, no caching layer, no CDN for static assets beyond Vercel defaults.)
+- **Spanish/Portuguese i18n**: Planned for Colombia/Ecuador/Brazil growers. When is this needed? Requires extending both UI translations and email templates.
+- **Claim management workflow**: Growers should be able to dispute quality issues. Designed but not yet built. Priority unclear.
+- **Notification preferences**: Beyond `preferredLanguage`, should growers be able to opt out of specific email notifications?
