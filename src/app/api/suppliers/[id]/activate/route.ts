@@ -5,7 +5,7 @@ import { z } from "zod";
 import { v4 as uuidv4 } from "uuid";
 import { sendEmail } from "@/lib/email";
 import { activationEmailHtml } from "@/lib/email-templates";
-import { getGrowerEmailBranding } from "@/lib/company-helpers";
+import { getSupplierEmailBranding } from "@/lib/company-helpers";
 
 const schema = z.object({
   email: z.string().email(),
@@ -17,9 +17,9 @@ async function sendActivationEmail(
   email: string,
   name: string,
   activationToken: string,
-  growerId: string,
+  supplierId: string,
 ): Promise<string | false> {
-  const branding = await getGrowerEmailBranding(growerId);
+  const branding = await getSupplierEmailBranding(supplierId);
   const activationUrl = `${process.env.APP_URL}/activate?token=${activationToken}`;
 
   const html = activationEmailHtml({
@@ -70,19 +70,19 @@ export async function POST(
 
   const { email, name, userId } = parsed.data;
 
-  // Check grower exists
-  const grower = await prisma.grower.findUnique({
+  // Check supplier exists
+  const supplier = await prisma.supplier.findUnique({
     where: { id },
   });
 
-  if (!grower) {
-    return NextResponse.json({ error: "Grower not found" }, { status: 404 });
+  if (!supplier) {
+    return NextResponse.json({ error: "Supplier not found" }, { status: 404 });
   }
 
   // Resend activation for existing user
   if (userId) {
     const existingUser = await prisma.user.findUnique({ where: { id: userId } });
-    if (!existingUser || existingUser.growerId !== id) {
+    if (!existingUser || existingUser.supplierId !== id) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
@@ -110,21 +110,21 @@ export async function POST(
     return NextResponse.json({ error: "Email already exists" }, { status: 409 });
   }
 
-  // Create new user linked to grower
+  // Create new user linked to supplier
   const activationToken = uuidv4();
   const user = await prisma.user.create({
     data: {
       email,
       name,
-      role: "grower",
-      growerId: grower.id,
+      role: "supplier",
+      supplierId: supplier.id,
       activationToken,
       isActive: false,
     },
   });
 
   // Send activation email
-  const previewUrl = await sendActivationEmail(email, name, activationToken, grower.id);
+  const previewUrl = await sendActivationEmail(email, name, activationToken, supplier.id);
 
   return NextResponse.json({
     userId: user.id,

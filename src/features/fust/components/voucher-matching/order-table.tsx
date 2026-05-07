@@ -31,10 +31,10 @@ export function OrderTable({ data, loading, selection }: OrderTableProps) {
   const { t } = useLanguage();
   const tAny = t as unknown as (key: string) => string;
 
-  // Sort by grower code for grouping
+  // Sort by supplier code for grouping
   const sortedData = useMemo(() => {
     return [...data].sort((a, b) =>
-      a.grower.code.localeCompare(b.grower.code)
+      a.supplier.code.localeCompare(b.supplier.code)
     );
   }, [data]);
 
@@ -56,7 +56,7 @@ export function OrderTable({ data, loading, selection }: OrderTableProps) {
     const starts = new Map<number, { code: string; label: string }>();
     let lastCode = "";
     rows.forEach((row, idx) => {
-      const g = row.original.grower;
+      const g = row.original.supplier;
       if (g.code !== lastCode) {
         starts.set(idx, {
           code: g.code,

@@ -49,7 +49,7 @@ interface OrderRef {
   orderNumber: string;
   status: string;
   deliveredAt: string | null;
-  grower: { id: string; code: string; name: string; company: string | null };
+  supplier: { id: string; code: string; name: string; company: string | null };
   items: Array<{
     id: string;
     quantity: number;
@@ -409,7 +409,7 @@ function VoucherCard({
               <div>
                 <span className="font-medium">{link.order.orderNumber}</span>
                 <span className="ml-2 text-muted-foreground">
-                  {link.order.grower.code} — {link.order.grower.company || link.order.grower.name}
+                  {link.order.supplier.code} — {link.order.supplier.company || link.order.supplier.name}
                 </span>
                 {link.order.deliveredAt && (
                   <span className="ml-2 text-xs text-muted-foreground">
@@ -549,7 +549,7 @@ function MatchDialog({
                     <div className="flex items-center gap-2">
                       <span className="font-medium">{order.orderNumber}</span>
                       <span className="text-muted-foreground">
-                        {order.grower.code} — {order.grower.company || order.grower.name}
+                        {order.supplier.code} — {order.supplier.company || order.supplier.name}
                       </span>
                     </div>
                     <div className="text-muted-foreground">

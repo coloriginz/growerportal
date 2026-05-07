@@ -27,7 +27,7 @@ const VISIBLE_WEEKS = 6;
 
 interface Forecast {
   id: string;
-  growerId: string;
+  supplierId: string;
   productName: string;
   articleGroup: string | null;
   year: number;
@@ -54,7 +54,7 @@ interface WeekKey {
 
 type CellStatus = "idle" | "saving" | "saved" | "error";
 
-export function ForecastsContent({ growerId }: { growerId: string | null }) {
+export function ForecastsContent({ supplierId }: { supplierId: string | null }) {
   const { t } = useLanguage();
   const now = new Date();
   const currentISOWeek = getISOWeek(now);
@@ -92,31 +92,31 @@ export function ForecastsContent({ growerId }: { growerId: string | null }) {
 
   // Build fetch URL
   const url = useMemo(() => {
-    if (!growerId) return null;
+    if (!supplierId) return null;
     const params = new URLSearchParams({
-      growerId,
+      supplierId,
       yearFrom: String(startYear),
       weekFrom: String(startWeek),
       yearTo: String(lastWeek.year),
       weekTo: String(lastWeek.week),
     });
     return `/api/forecasts?${params}`;
-  }, [growerId, startYear, startWeek, lastWeek]);
+  }, [supplierId, startYear, startWeek, lastWeek]);
 
   const { data, loading, error, refetch } = useFetch<ForecastsData>(url);
 
   // Fetch full year data for the chart
   const yearUrl = useMemo(() => {
-    if (!growerId) return null;
+    if (!supplierId) return null;
     const params = new URLSearchParams({
-      growerId,
+      supplierId,
       yearFrom: String(currentISOYear),
       weekFrom: "1",
       yearTo: String(currentISOYear),
       weekTo: "52",
     });
     return `/api/forecasts?${params}`;
-  }, [growerId, currentISOYear]);
+  }, [supplierId, currentISOYear]);
 
   const { data: yearData, refetch: refetchYear } = useFetch<ForecastsData>(yearUrl);
 
@@ -193,7 +193,7 @@ export function ForecastsContent({ growerId }: { growerId: string | null }) {
       trolleys: number | null,
       colli: number | null
     ) => {
-      if (!growerId) return;
+      if (!supplierId) return;
       const cellKey = `${productName}-${year}-${week}`;
       setCellStatuses((prev) => ({ ...prev, [cellKey]: "saving" }));
 
@@ -202,7 +202,7 @@ export function ForecastsContent({ growerId }: { growerId: string | null }) {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            growerId,
+            supplierId,
             forecasts: [{ productName, articleGroup, year, week, stems, trolleys, colli }],
           }),
         });
@@ -222,7 +222,7 @@ export function ForecastsContent({ growerId }: { growerId: string | null }) {
         }, 3000);
       }
     },
-    [growerId, refetch, refetchYear, t]
+    [supplierId, refetch, refetchYear, t]
   );
 
   const handleCellBlur = useCallback(
@@ -322,14 +322,14 @@ export function ForecastsContent({ growerId }: { growerId: string | null }) {
 
   const removeProduct = useCallback(
     async (productName: string) => {
-      if (!growerId) return;
+      if (!supplierId) return;
       if (!confirm(t("forecasts.removeProductConfirm"))) return;
 
       try {
         await fetch("/api/forecasts", {
           method: "DELETE",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ growerId, productName }),
+          body: JSON.stringify({ supplierId, productName }),
         });
       } catch {
         // Ignore errors on delete
@@ -339,7 +339,7 @@ export function ForecastsContent({ growerId }: { growerId: string | null }) {
       refetch();
       refetchYear();
     },
-    [growerId, t, refetch, refetchYear]
+    [supplierId, t, refetch, refetchYear]
   );
 
   const exportCSV = useCallback(() => {
@@ -685,7 +685,7 @@ export function ForecastsContent({ growerId }: { growerId: string | null }) {
         open={showCopyDialog}
         onOpenChange={setShowCopyDialog}
         weeksWithData={weeksWithData}
-        growerId={growerId}
+        supplierId={supplierId}
         onCopied={() => { refetch(); refetchYear(); }}
       />
     </div>

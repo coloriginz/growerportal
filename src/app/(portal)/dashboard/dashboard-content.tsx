@@ -48,8 +48,8 @@ interface DashboardData {
   topProducts: { name: string; stems: number; turnover: number }[];
   seasonStartMonth?: number;
   recentLots?: { id: string; lotNumber: string; productName: string; totalStems: number; avgPrice: number; deliveryDate: string; status: string }[];
-  topGrowers?: { id: string; code: string; name: string; stems: number; turnover: number }[];
-  upcomingForecasts?: { week: string; year: number; stems: number; growers: number }[];
+  topSuppliers?: { id: string; code: string; name: string; stems: number; turnover: number }[];
+  upcomingForecasts?: { week: string; year: number; stems: number; suppliers: number }[];
 }
 
 function KpiCard({
@@ -127,12 +127,12 @@ function DashboardSkeleton() {
   );
 }
 
-export function DashboardContent({ growerId }: { growerId: string | null }) {
+export function DashboardContent({ supplierId }: { supplierId: string | null }) {
   const { t } = useLanguage();
   const url = useMemo(() => {
-    const params = growerId ? `?growerId=${growerId}` : "";
+    const params = supplierId ? `?supplierId=${supplierId}` : "";
     return `/api/dashboard${params}`;
-  }, [growerId]);
+  }, [supplierId]);
   const { data, loading, error, lastUpdated, refetch } = useFetch<DashboardData>(url);
 
   if (error) {
@@ -154,21 +154,21 @@ export function DashboardContent({ growerId }: { growerId: string | null }) {
           <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted">
             <RiArrowUpDownLine className="h-8 w-8 text-muted-foreground" />
           </div>
-          <h2 className="mt-6 text-lg font-semibold">{t("dashboard.selectGrowerTitle")}</h2>
+          <h2 className="mt-6 text-lg font-semibold">{t("dashboard.selectSupplierTitle")}</h2>
           <p className="mt-2 max-w-sm text-sm text-muted-foreground">
-            {t("dashboard.selectGrowerDescription")}
+            {t("dashboard.selectSupplierDescription")}
           </p>
         </div>
       </div>
     );
   }
 
-  return <GrowerDashboard data={data} lastUpdated={lastUpdated} refetch={refetch} />;
+  return <SupplierDashboard data={data} lastUpdated={lastUpdated} refetch={refetch} />;
 }
 
-// ─── GROWER DASHBOARD (existing) ────────────────────
+// ─── SUPPLIER DASHBOARD (existing) ────────────────────
 
-function GrowerDashboard({ data, lastUpdated, refetch }: { data: DashboardData; lastUpdated: Date | null; refetch: () => void }) {
+function SupplierDashboard({ data, lastUpdated, refetch }: { data: DashboardData; lastUpdated: Date | null; refetch: () => void }) {
   const { t } = useLanguage();
   const seasonMonth = data.seasonStartMonth ?? 1;
   const seasonLabel = getSeasonLabel(seasonMonth);

@@ -54,14 +54,14 @@ interface QualityData {
   issues: QualityRow[];
 }
 
-export function QualityContent({ growerId }: { growerId: string | null }) {
+export function QualityContent({ supplierId }: { supplierId: string | null }) {
   const { t } = useLanguage();
 
   const url = useMemo(() => {
     const params = new URLSearchParams();
-    if (growerId) params.set("growerId", growerId);
+    if (supplierId) params.set("supplierId", supplierId);
     return `/api/quality?${params}`;
-  }, [growerId]);
+  }, [supplierId]);
   const { data, loading, error, lastUpdated, refetch } = useFetch<QualityData>(url);
   const issues = data?.issues || [];
   const summary = data?.summary || null;

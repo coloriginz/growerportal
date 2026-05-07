@@ -109,9 +109,9 @@ export async function sendEmail({
 }: SendEmailOptions): Promise<SendEmailResult> {
   const { transport, useEthereal, redirectTo } = await getTransport();
 
-  const defaultFrom = `"Coloriginz Grower Portal" <${process.env.EMAIL_FROM || "noreply@coloriginz.com"}>`;
+  const defaultFrom = `"Coloriginz Portal" <${process.env.EMAIL_FROM || "noreply@coloriginz.com"}>`;
   const from = useEthereal
-    ? '"Coloriginz Grower Portal" <test@ethereal.email>'
+    ? '"Coloriginz Portal" <test@ethereal.email>'
     : fromOverride || defaultFrom;
 
   // In redirect mode, override the recipient

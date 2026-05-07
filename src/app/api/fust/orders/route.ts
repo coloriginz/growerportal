@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
-import { requireAuth, resolveGrowerId } from "@/lib/api-helpers";
+import { requireAuth, resolveSupplierId } from "@/lib/api-helpers";
 import { sendOrderApprovedNotification } from "@/lib/fust-notifications";
 import { logFustEvent } from "@/lib/fust-audit";
 import { isTest } from "@/lib/env";
@@ -12,7 +12,7 @@ const orderItemSchema = z.object({
 });
 
 const createOrderSchema = z.object({
-  growerId: z.string().uuid().optional(),
+  supplierId: z.string().uuid().optional(),
   requestedDate: z.string().optional().nullable(),
   notes: z.string().optional().nullable(),
   items: z.array(orderItemSchema).min(1),
@@ -42,32 +42,32 @@ export async function GET(request: NextRequest) {
 
   const params = request.nextUrl.searchParams;
   const role = session!.user.role;
-  const requestedGrowerId = params.get("growerId");
+  const requestedSupplierId = params.get("supplierId");
   const status = params.get("status");
 
   // Build where clause based on role
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const where: any = { deletedAt: null };
 
-  if (role === "grower") {
-    where.growerId = session!.user.growerId;
+  if (role === "supplier") {
+    where.supplierId = session!.user.supplierId;
   } else if (role === "transporteur") {
-    // Transporteur sees only orders for growers assigned to them
+    // Transporteur sees only orders for suppliers assigned to them
     const transporterId = session!.user.transporterId;
     if (transporterId) {
-      where.grower = { defaultTransporterId: transporterId };
+      where.supplier = { defaultTransporterId: transporterId };
     }
     where.status = { in: ["approved", "delivered"] };
   } else if (role === "finance") {
     // Finance sees only delivered orders
     where.status = "delivered";
-    if (requestedGrowerId) {
-      where.growerId = requestedGrowerId;
+    if (requestedSupplierId) {
+      where.supplierId = requestedSupplierId;
     }
   } else {
-    // commercie/admin - can filter by grower
-    if (requestedGrowerId) {
-      where.growerId = requestedGrowerId;
+    // commercie/admin - can filter by supplier
+    if (requestedSupplierId) {
+      where.supplierId = requestedSupplierId;
     }
   }
 
@@ -81,7 +81,7 @@ export async function GET(request: NextRequest) {
       items: {
         include: { fustType: true },
       },
-      grower: { select: { id: true, code: true, name: true, company: true } },
+      supplier: { select: { id: true, code: true, name: true, company: true } },
       delivery: {
         select: {
           id: true,
@@ -105,7 +105,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const { error, session } = await requireAuth(["grower", "commercie", "admin"]);
+  const { error, session } = await requireAuth(["supplier", "commercie", "admin"]);
   if (error) return error;
 
   const body = await request.json();
@@ -115,20 +115,20 @@ export async function POST(request: NextRequest) {
   }
 
   const { requestedDate, notes, items } = parsed.data;
-  const growerId = resolveGrowerId(session!, parsed.data.growerId || null);
+  const supplierId = resolveSupplierId(session!, parsed.data.supplierId || null);
 
-  if (!growerId) {
-    return NextResponse.json({ error: "growerId is required" }, { status: 400 });
+  if (!supplierId) {
+    return NextResponse.json({ error: "supplierId is required" }, { status: 400 });
   }
 
-  // Verify grower has fust enabled and check auto-approve
-  const grower = await prisma.grower.findUnique({
-    where: { id: growerId },
+  // Verify supplier has fust enabled and check auto-approve
+  const supplier = await prisma.supplier.findUnique({
+    where: { id: supplierId },
     select: { fustEnabled: true, autoApproveOrders: true },
   });
 
-  if (!grower?.fustEnabled) {
-    return NextResponse.json({ error: "Fust ordering is not enabled for this grower" }, { status: 403 });
+  if (!supplier?.fustEnabled) {
+    return NextResponse.json({ error: "Fust ordering is not enabled for this supplier" }, { status: 403 });
   }
 
   const orderNumber = await generateOrderNumber();
@@ -136,12 +136,12 @@ export async function POST(request: NextRequest) {
   const order = await prisma.fustOrder.create({
     data: {
       orderNumber,
-      growerId,
+      supplierId,
       requestedDate: requestedDate ? new Date(requestedDate) : null,
       notes,
       createdById: session!.user.id,
-      // Auto-approve if grower setting is enabled
-      ...(grower.autoApproveOrders
+      // Auto-approve if supplier setting is enabled
+      ...(supplier.autoApproveOrders
         ? { status: "approved", approvedAt: new Date(), approvedById: session!.user.id }
         : {}),
       items: {
@@ -153,7 +153,7 @@ export async function POST(request: NextRequest) {
     },
     include: {
       items: { include: { fustType: true } },
-      grower: { select: { id: true, code: true, name: true } },
+      supplier: { select: { id: true, code: true, name: true } },
     },
   });
 
@@ -165,11 +165,11 @@ export async function POST(request: NextRequest) {
     action: "order_created",
     actorId: session!.user.id,
     actorName: session!.user.name,
-    metadata: { orderNumber: order.orderNumber, growerId, itemCount: items.length },
+    metadata: { orderNumber: order.orderNumber, supplierId, itemCount: items.length },
   });
 
   // Audit: auto-approved
-  if (grower.autoApproveOrders) {
+  if (supplier.autoApproveOrders) {
     await logFustEvent({
       entityType: "order",
       entityId: order.id,
@@ -183,7 +183,7 @@ export async function POST(request: NextRequest) {
 
   // Send transporter notification if auto-approved
   let previewUrl: string | false = false;
-  if (grower.autoApproveOrders) {
+  if (supplier.autoApproveOrders) {
     if (isTest) {
       try {
         previewUrl = await sendOrderApprovedNotification(order.id);

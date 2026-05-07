@@ -39,7 +39,7 @@ interface CompanyOption {
   slug: string;
 }
 
-interface GrowerRow {
+interface SupplierRow {
   id: string;
   code: string;
   name: string;
@@ -51,8 +51,8 @@ interface GrowerRow {
   userCount: number;
 }
 
-export function GrowersContent() {
-  const [growers, setGrowers] = useState<GrowerRow[]>([]);
+export function SuppliersContent() {
+  const [suppliers, setSuppliers] = useState<SupplierRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -69,7 +69,7 @@ export function GrowersContent() {
   });
 
   useEffect(() => {
-    fetchGrowers();
+    fetchSuppliers();
     fetchCompanies();
   }, []);
 
@@ -80,21 +80,21 @@ export function GrowersContent() {
     } catch { /* ignore */ }
   }
 
-  async function fetchGrowers() {
+  async function fetchSuppliers() {
     try {
-      const res = await fetch("/api/growers?full=1");
+      const res = await fetch("/api/suppliers?full=1");
       if (res.ok) {
-        setGrowers(await res.json());
+        setSuppliers(await res.json());
       }
     } finally {
       setLoading(false);
     }
   }
 
-  async function handleCreateGrower(e: React.FormEvent) {
+  async function handleCreateSupplier(e: React.FormEvent) {
     e.preventDefault();
     try {
-      const res = await fetch("/api/growers", {
+      const res = await fetch("/api/suppliers", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -103,20 +103,20 @@ export function GrowersContent() {
         }),
       });
       if (res.ok) {
-        toast.success(t("growers.created"));
+        toast.success(t("suppliers.created"));
         setDialogOpen(false);
         setFormData({ code: "", name: "", company: "", country: "", companyId: "" });
-        fetchGrowers();
+        fetchSuppliers();
       } else {
         const data = await res.json();
-        toast.error(data.error || "Error creating grower");
+        toast.error(data.error || "Error creating supplier");
       }
     } catch {
-      toast.error("Error creating grower");
+      toast.error("Error creating supplier");
     }
   }
 
-  const filtered = growers.filter((g) => {
+  const filtered = suppliers.filter((g) => {
     if (!search) return true;
     const q = search.toLowerCase();
     return (
@@ -127,34 +127,34 @@ export function GrowersContent() {
     );
   });
 
-  function statusBadge(grower: GrowerRow) {
-    const countSuffix = grower.userCount > 1 ? ` (${grower.userCount})` : "";
-    switch (grower.loginStatus) {
+  function statusBadge(supplier: SupplierRow) {
+    const countSuffix = supplier.userCount > 1 ? ` (${supplier.userCount})` : "";
+    switch (supplier.loginStatus) {
       case "active":
-        return <Badge variant="default">{t("growers.active")}{countSuffix}</Badge>;
+        return <Badge variant="default">{t("suppliers.active")}{countSuffix}</Badge>;
       case "pending":
-        return <Badge variant="secondary">{t("growers.activationPending")}{countSuffix}</Badge>;
+        return <Badge variant="secondary">{t("suppliers.activationPending")}{countSuffix}</Badge>;
       case "none":
-        return <Badge variant="outline">{t("growers.noLogin")}</Badge>;
+        return <Badge variant="outline">{t("suppliers.noLogin")}</Badge>;
     }
   }
 
   return (
     <div className="page-content">
       <div className="page-header">
-        <h1>{t("growers.title")}</h1>
+        <h1>{t("suppliers.title")}</h1>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger render={<Button />}>
             <RiAddLine className="mr-2 h-4 w-4" />
-            {t("growers.newGrower")}
+            {t("suppliers.newSupplier")}
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>{t("growers.newGrower")}</DialogTitle>
+              <DialogTitle>{t("suppliers.newSupplier")}</DialogTitle>
             </DialogHeader>
-            <form onSubmit={handleCreateGrower} className="space-y-4">
+            <form onSubmit={handleCreateSupplier} className="space-y-4">
               <div className="space-y-2">
-                <Label>{t("growers.code")}</Label>
+                <Label>{t("suppliers.code")}</Label>
                 <Input
                   value={formData.code}
                   onChange={(e) => setFormData({ ...formData, code: e.target.value })}
@@ -163,7 +163,7 @@ export function GrowersContent() {
                 />
               </div>
               <div className="space-y-2">
-                <Label>{t("growers.name")}</Label>
+                <Label>{t("suppliers.name")}</Label>
                 <Input
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
@@ -171,14 +171,14 @@ export function GrowersContent() {
                 />
               </div>
               <div className="space-y-2">
-                <Label>{t("growers.company")}</Label>
+                <Label>{t("suppliers.company")}</Label>
                 <Input
                   value={formData.company}
                   onChange={(e) => setFormData({ ...formData, company: e.target.value })}
                 />
               </div>
               <div className="space-y-2">
-                <Label>{t("growers.country")}</Label>
+                <Label>{t("suppliers.country")}</Label>
                 <Input
                   value={formData.country}
                   onChange={(e) => setFormData({ ...formData, country: e.target.value })}
@@ -204,7 +204,7 @@ export function GrowersContent() {
                 </div>
               )}
               <Button type="submit" className="w-full">
-                {t("growers.newGrower")}
+                {t("suppliers.newSupplier")}
               </Button>
             </form>
           </DialogContent>
@@ -216,7 +216,7 @@ export function GrowersContent() {
         <div className="relative flex-1 min-w-[200px]">
           <RiSearchLine className="text-muted-foreground absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2" />
           <Input
-            placeholder={t("growers.searchPlaceholder")}
+            placeholder={t("suppliers.searchPlaceholder")}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-10"
@@ -230,37 +230,37 @@ export function GrowersContent() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>{t("growers.code")}</TableHead>
-                <TableHead>{t("growers.name")}</TableHead>
-                <TableHead>{t("growers.company")}</TableHead>
+                <TableHead>{t("suppliers.code")}</TableHead>
+                <TableHead>{t("suppliers.name")}</TableHead>
+                <TableHead>{t("suppliers.company")}</TableHead>
                 <TableHead>Brand</TableHead>
-                <TableHead>{t("growers.country")}</TableHead>
-                <TableHead>{t("growers.accountManager")}</TableHead>
+                <TableHead>{t("suppliers.country")}</TableHead>
+                <TableHead>{t("suppliers.accountManager")}</TableHead>
                 <TableHead>{t("common.status")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.map((grower) => (
+              {filtered.map((supplier) => (
                 <TableRow
-                  key={grower.id}
+                  key={supplier.id}
                   className="cursor-pointer"
-                  onClick={() => router.push(`/growers/${grower.id}`)}
+                  onClick={() => router.push(`/suppliers/${supplier.id}`)}
                 >
-                  <TableCell className="font-medium">{grower.code}</TableCell>
-                  <TableCell>{grower.name}</TableCell>
+                  <TableCell className="font-medium">{supplier.code}</TableCell>
+                  <TableCell>{supplier.name}</TableCell>
                   <TableCell className="text-muted-foreground">
-                    {grower.company || "-"}
+                    {supplier.company || "-"}
                   </TableCell>
                   <TableCell className="text-muted-foreground">
-                    {grower.companyEntity?.name || "-"}
+                    {supplier.companyEntity?.name || "-"}
                   </TableCell>
                   <TableCell className="text-muted-foreground">
-                    {grower.country || "-"}
+                    {supplier.country || "-"}
                   </TableCell>
                   <TableCell className="text-muted-foreground">
-                    {grower.commercie ? grower.commercie.name : "-"}
+                    {supplier.commercie ? supplier.commercie.name : "-"}
                   </TableCell>
-                  <TableCell>{statusBadge(grower)}</TableCell>
+                  <TableCell>{statusBadge(supplier)}</TableCell>
                 </TableRow>
               ))}
               {filtered.length === 0 && !loading && (

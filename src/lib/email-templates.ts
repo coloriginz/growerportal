@@ -262,8 +262,8 @@ export function resetPasswordEmailHtml({
 
 interface FustOrderApprovedEmailOptions {
   orderNumber: string;
-  growerName: string;
-  growerCode: string;
+  supplierName: string;
+  supplierCode: string;
   items: Array<{ fustTypeName: string; quantity: number }>;
   requestedDate: string | null;
   notes: string | null;
@@ -274,8 +274,8 @@ interface FustOrderApprovedEmailOptions {
 
 export function fustOrderApprovedEmailHtml({
   orderNumber,
-  growerName,
-  growerCode,
+  supplierName,
+  supplierCode,
   items,
   requestedDate,
   notes,
@@ -290,7 +290,7 @@ export function fustOrderApprovedEmailHtml({
       title: "Fust Order Approved",
       intro: "A fust order has been approved and is ready for pickup.",
       order: "Order",
-      grower: "Grower",
+      supplier: "Supplier",
       requestedDate: "Requested delivery date",
       notes: "Notes",
       item: "Item",
@@ -303,7 +303,7 @@ export function fustOrderApprovedEmailHtml({
       title: "Fust Bestelling Goedgekeurd",
       intro: "Een fust bestelling is goedgekeurd en klaar voor ophalen.",
       order: "Bestelling",
-      grower: "Kweker",
+      supplier: "Leverancier",
       requestedDate: "Gewenste leverdatum",
       notes: "Opmerkingen",
       item: "Artikel",
@@ -383,7 +383,7 @@ export function fustOrderApprovedEmailHtml({
                 <strong>${t.order}:</strong> ${escapeHtml(orderNumber)}
               </p>
               <p style="margin: 0 0 8px 0; font-size: 15px; line-height: 1.6; color: #444444;">
-                <strong>${t.grower}:</strong> ${escapeHtml(growerName)} (${escapeHtml(growerCode)})
+                <strong>${t.supplier}:</strong> ${escapeHtml(supplierName)} (${escapeHtml(supplierCode)})
               </p>
               ${dateRow}
               ${notesRow}
@@ -465,7 +465,7 @@ export function fustOrderApprovedEmailHtml({
 
 interface FustDeliveryConfirmedEmailOptions {
   orderNumber: string;
-  growerName: string;
+  supplierName: string;
   items: Array<{ fustTypeName: string; ordered: number; delivered: number }>;
   deliveredDate: string;
   portalUrl: string;
@@ -475,7 +475,7 @@ interface FustDeliveryConfirmedEmailOptions {
 
 export function fustDeliveryConfirmedEmailHtml({
   orderNumber,
-  growerName,
+  supplierName,
   items,
   deliveredDate,
   portalUrl,
@@ -569,7 +569,7 @@ export function fustDeliveryConfirmedEmailHtml({
                 ${t.title}
               </h1>
               <p style="margin: 0 0 12px 0; font-size: 15px; line-height: 1.6; color: #444444;">
-                ${t.dear} ${escapeHtml(growerName)},
+                ${t.dear} ${escapeHtml(supplierName)},
               </p>
               <p style="margin: 0 0 12px 0; font-size: 15px; line-height: 1.6; color: #444444;">
                 ${t.delivered(orderNumber, deliveredDate)}
@@ -656,7 +656,7 @@ export function fustDeliveryConfirmedEmailHtml({
 
 interface FustInvoiceEmailOptions {
   invoiceNumber: string;
-  growerName: string;
+  supplierName: string;
   invoiceDate: string; // formatted as "dd-mm-yyyy"
   totalAmount: string; // formatted like "€ 199,65"
   portalUrl: string;
@@ -666,7 +666,7 @@ interface FustInvoiceEmailOptions {
 
 export function fustInvoiceEmailHtml({
   invoiceNumber,
-  growerName,
+  supplierName,
   invoiceDate,
   totalAmount,
   portalUrl,
@@ -746,7 +746,7 @@ export function fustInvoiceEmailHtml({
                 ${t.title}
               </h1>
               <p style="margin: 0 0 12px 0; font-size: 15px; line-height: 1.6; color: #444444;">
-                ${t.intro(growerName, invoiceNumber)}
+                ${t.intro(supplierName, invoiceNumber)}
               </p>
               <p style="margin: 0 0 8px 0; font-size: 15px; line-height: 1.6; color: #444444;">
                 <strong>${t.invoiceNumber}:</strong> ${escapeHtml(invoiceNumber)}

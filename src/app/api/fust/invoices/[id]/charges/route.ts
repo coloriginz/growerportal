@@ -5,7 +5,7 @@ import { requireAuth } from "@/lib/api-helpers";
 import { logFustEvent } from "@/lib/fust-audit";
 
 const chargeSchema = z.object({
-  growerId: z.string().uuid(),
+  supplierId: z.string().uuid(),
   amount: z.number().positive(),
   description: z.string().optional().nullable(),
 });
@@ -27,7 +27,7 @@ export async function GET(
   const charges = await prisma.fustGrowerCharge.findMany({
     where: { invoiceId: id },
     include: {
-      grower: { select: { id: true, code: true, name: true, company: true } },
+      supplier: { select: { id: true, code: true, name: true, company: true } },
     },
     orderBy: { createdAt: "desc" },
   });
@@ -56,17 +56,17 @@ export async function POST(
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  // Verify all growers exist
-  const growerIds = parsed.data.charges.map((c) => c.growerId);
-  const growers = await prisma.grower.findMany({
-    where: { id: { in: growerIds } },
+  // Verify all suppliers exist
+  const supplierIds = parsed.data.charges.map((c) => c.supplierId);
+  const suppliers = await prisma.supplier.findMany({
+    where: { id: { in: supplierIds } },
     select: { id: true },
   });
-  const existingIds = new Set(growers.map((g) => g.id));
-  const missingIds = growerIds.filter((id) => !existingIds.has(id));
+  const existingIds = new Set(suppliers.map((g) => g.id));
+  const missingIds = supplierIds.filter((id) => !existingIds.has(id));
   if (missingIds.length > 0) {
     return NextResponse.json(
-      { error: `Grower(s) not found: ${missingIds.join(", ")}` },
+      { error: `Supplier(s) not found: ${missingIds.join(", ")}` },
       { status: 400 }
     );
   }
@@ -78,12 +78,12 @@ export async function POST(
         tx.fustGrowerCharge.create({
           data: {
             invoiceId: id,
-            growerId: charge.growerId,
+            supplierId: charge.supplierId,
             amount: charge.amount,
             description: charge.description ?? null,
           },
           include: {
-            grower: { select: { id: true, code: true, name: true, company: true } },
+            supplier: { select: { id: true, code: true, name: true, company: true } },
           },
         })
       )
@@ -108,7 +108,7 @@ export async function POST(
     metadata: {
       chargeCount: result.length,
       totalAmount: parsed.data.charges.reduce((sum, c) => sum + c.amount, 0),
-      growerIds: growerIds,
+      supplierIds: supplierIds,
     },
   });
 

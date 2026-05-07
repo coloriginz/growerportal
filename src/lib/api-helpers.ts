@@ -17,15 +17,15 @@ export async function requireAuth(allowedRoles?: Role[]) {
 }
 
 /**
- * Returns the growerId to use for queries based on user role.
- * Growers always see their own data. Admin/commercie can specify a growerId.
+ * Returns the supplierId to use for queries based on user role.
+ * Suppliers always see their own data. Admin/commercie can specify a supplierId.
  */
-export function resolveGrowerId(
-  session: { user: { role: string; growerId: string | null } },
-  requestedGrowerId: string | null
+export function resolveSupplierId(
+  session: { user: { role: string; supplierId: string | null } },
+  requestedSupplierId: string | null
 ): string | null {
-  if (session.user.role === "grower") {
-    return session.user.growerId;
+  if (session.user.role === "supplier") {
+    return session.user.supplierId;
   }
-  return requestedGrowerId;
+  return requestedSupplierId;
 }

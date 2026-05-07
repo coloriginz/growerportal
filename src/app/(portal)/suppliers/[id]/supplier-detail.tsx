@@ -37,7 +37,7 @@ interface CompanyOption {
   slug: string;
 }
 
-interface GrowerData {
+interface SupplierData {
   id: string;
   code: string;
   name: string;
@@ -76,8 +76,8 @@ interface CommercieUser {
   email: string;
 }
 
-export function GrowerDetail({ growerId }: { growerId: string }) {
-  const [grower, setGrower] = useState<GrowerData | null>(null);
+export function SupplierDetail({ supplierId }: { supplierId: string }) {
+  const [supplier, setSupplier] = useState<SupplierData | null>(null);
   const [commercieUsers, setCommercieUsers] = useState<CommercieUser[] | null>(null);
   const [companies, setCompanies] = useState<CompanyOption[] | null>(null);
   const [loading, setLoading] = useState(true);
@@ -107,18 +107,18 @@ export function GrowerDetail({ growerId }: { growerId: string }) {
   });
 
   useEffect(() => {
-    fetchGrower();
+    fetchSupplier();
     fetchCommercieUsers();
     fetchCompanies();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [growerId]);
+  }, [supplierId]);
 
-  async function fetchGrower() {
+  async function fetchSupplier() {
     try {
-      const res = await fetch(`/api/growers/${growerId}`);
+      const res = await fetch(`/api/suppliers/${supplierId}`);
       if (res.ok) {
-        const data: GrowerData = await res.json();
-        setGrower(data);
+        const data: SupplierData = await res.json();
+        setSupplier(data);
         setForm({
           name: data.name || "",
           company: data.company || "",
@@ -135,7 +135,7 @@ export function GrowerDetail({ growerId }: { growerId: string }) {
           seasonStartMonth: String(data.seasonStartMonth ?? 1),
         });
       } else {
-        router.push("/growers");
+        router.push("/suppliers");
       }
     } finally {
       setLoading(false);
@@ -164,7 +164,7 @@ export function GrowerDetail({ growerId }: { growerId: string }) {
     e.preventDefault();
     setSaving(true);
     try {
-      const res = await fetch(`/api/growers/${growerId}`, {
+      const res = await fetch(`/api/suppliers/${supplierId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -184,8 +184,8 @@ export function GrowerDetail({ growerId }: { growerId: string }) {
         }),
       });
       if (res.ok) {
-        toast.success(t("growers.saved"));
-        fetchGrower();
+        toast.success(t("suppliers.saved"));
+        fetchSupplier();
       } else {
         const data = await res.json();
         toast.error(data.error || "Error saving");
@@ -201,7 +201,7 @@ export function GrowerDetail({ growerId }: { growerId: string }) {
     if (!newUserName || !newUserEmail) return;
     setSendingActivation(true);
     try {
-      const res = await fetch(`/api/growers/${growerId}/activate`, {
+      const res = await fetch(`/api/suppliers/${supplierId}/activate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: newUserName, email: newUserEmail }),
@@ -209,7 +209,7 @@ export function GrowerDetail({ growerId }: { growerId: string }) {
       if (res.ok) {
         const data = await res.json();
         if (data.previewUrl) {
-          toast.success(t("growers.userAdded"), {
+          toast.success(t("suppliers.userAdded"), {
             description: "Ethereal preview available",
             action: {
               label: "Open",
@@ -218,11 +218,11 @@ export function GrowerDetail({ growerId }: { growerId: string }) {
             duration: 15000,
           });
         } else {
-          toast.success(t("growers.userAdded"));
+          toast.success(t("suppliers.userAdded"));
         }
         setNewUserName("");
         setNewUserEmail("");
-        fetchGrower();
+        fetchSupplier();
       } else {
         const data = await res.json();
         toast.error(data.error || "Error adding user");
@@ -234,10 +234,10 @@ export function GrowerDetail({ growerId }: { growerId: string }) {
     }
   }
 
-  async function handleResendActivation(user: GrowerData["users"][number]) {
+  async function handleResendActivation(user: SupplierData["users"][number]) {
     setResendingUserId(user.id);
     try {
-      const res = await fetch(`/api/growers/${growerId}/activate`, {
+      const res = await fetch(`/api/suppliers/${supplierId}/activate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: user.name, email: user.email, userId: user.id }),
@@ -245,7 +245,7 @@ export function GrowerDetail({ growerId }: { growerId: string }) {
       if (res.ok) {
         const data = await res.json();
         if (data.previewUrl) {
-          toast.success(t("growers.activationSent"), {
+          toast.success(t("suppliers.activationSent"), {
             description: "Ethereal preview available",
             action: {
               label: "Open",
@@ -254,9 +254,9 @@ export function GrowerDetail({ growerId }: { growerId: string }) {
             duration: 15000,
           });
         } else {
-          toast.success(t("growers.activationSent"));
+          toast.success(t("suppliers.activationSent"));
         }
-        fetchGrower();
+        fetchSupplier();
       } else {
         const data = await res.json();
         toast.error(data.error || "Error resending activation");
@@ -275,11 +275,11 @@ export function GrowerDetail({ growerId }: { growerId: string }) {
       body: JSON.stringify({ isActive: false }),
     });
     if (res.ok) {
-      fetchGrower();
+      fetchSupplier();
     }
   }
 
-  if (loading || !grower) {
+  if (loading || !supplier) {
     return (
       <div className="page-content">
         <div className="page-header">
@@ -296,13 +296,13 @@ export function GrowerDetail({ growerId }: { growerId: string }) {
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => router.push("/growers")}
+            onClick={() => router.push("/suppliers")}
           >
             <RiArrowLeftLine className="h-5 w-5" />
           </Button>
           <div>
             <h1>
-              {grower.code} - {grower.company || grower.name}
+              {supplier.code} - {supplier.company || supplier.name}
             </h1>
           </div>
         </div>
@@ -312,37 +312,37 @@ export function GrowerDetail({ growerId }: { growerId: string }) {
         {/* Profile Section */}
         <Card>
           <CardHeader>
-            <CardTitle>{t("growers.growerProfile")}</CardTitle>
+            <CardTitle>{t("suppliers.supplierProfile")}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
-                <Label>{t("growers.code")}</Label>
-                <Input value={grower.code} disabled />
+                <Label>{t("suppliers.code")}</Label>
+                <Input value={supplier.code} disabled />
               </div>
               <div className="space-y-2">
-                <Label>{t("growers.company")}</Label>
+                <Label>{t("suppliers.company")}</Label>
                 <Input
                   value={form.company}
                   onChange={(e) => setForm({ ...form, company: e.target.value })}
                 />
               </div>
               <div className="space-y-2">
-                <Label>{t("growers.street")}</Label>
+                <Label>{t("suppliers.street")}</Label>
                 <Input
                   value={form.street}
                   onChange={(e) => setForm({ ...form, street: e.target.value })}
                 />
               </div>
               <div className="space-y-2">
-                <Label>{t("growers.city")}</Label>
+                <Label>{t("suppliers.city")}</Label>
                 <Input
                   value={form.city}
                   onChange={(e) => setForm({ ...form, city: e.target.value })}
                 />
               </div>
               <div className="space-y-2">
-                <Label>{t("growers.postalCode")}</Label>
+                <Label>{t("suppliers.postalCode")}</Label>
                 <Input
                   value={form.postalCode}
                   onChange={(e) =>
@@ -351,7 +351,7 @@ export function GrowerDetail({ growerId }: { growerId: string }) {
                 />
               </div>
               <div className="space-y-2">
-                <Label>{t("growers.country")}</Label>
+                <Label>{t("suppliers.country")}</Label>
                 <Input
                   value={form.country}
                   onChange={(e) =>
@@ -360,14 +360,14 @@ export function GrowerDetail({ growerId }: { growerId: string }) {
                 />
               </div>
               <div className="space-y-2">
-                <Label>{t("growers.phone")}</Label>
+                <Label>{t("suppliers.phone")}</Label>
                 <Input
                   value={form.phone}
                   onChange={(e) => setForm({ ...form, phone: e.target.value })}
                 />
               </div>
               <div className="space-y-2">
-                <Label>{t("growers.vatNumber")}</Label>
+                <Label>{t("suppliers.vatNumber")}</Label>
                 <Input
                   value={form.vatNumber}
                   onChange={(e) =>
@@ -376,7 +376,7 @@ export function GrowerDetail({ growerId }: { growerId: string }) {
                 />
               </div>
               <div className="space-y-2">
-                <Label>{t("growers.ggn")}</Label>
+                <Label>{t("suppliers.ggn")}</Label>
                 <Input
                   value={form.ggn}
                   onChange={(e) => setForm({ ...form, ggn: e.target.value })}
@@ -389,11 +389,11 @@ export function GrowerDetail({ growerId }: { growerId: string }) {
         {/* Account Manager Section */}
         <Card>
           <CardHeader>
-            <CardTitle>{t("growers.accountManager")}</CardTitle>
+            <CardTitle>{t("suppliers.accountManager")}</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="max-w-sm space-y-2">
-              <Label>{t("growers.accountManager")}</Label>
+              <Label>{t("suppliers.accountManager")}</Label>
               {commercieUsers !== null ? (
                 <Select
                   key={`cm-${commercieUsers.length}`}
@@ -403,11 +403,11 @@ export function GrowerDetail({ growerId }: { growerId: string }) {
                   }}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder={t("growers.selectCommercie")} />
+                    <SelectValue placeholder={t("suppliers.selectCommercie")} />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">
-                      {t("growers.noCommercieAssigned")}
+                      {t("suppliers.noCommercieAssigned")}
                     </SelectItem>
                     {commercieUsers.map((u) => (
                       <SelectItem key={u.id} value={u.id}>
@@ -415,9 +415,9 @@ export function GrowerDetail({ growerId }: { growerId: string }) {
                       </SelectItem>
                     ))}
                     {/* Show assigned user if not in the active list */}
-                    {grower.commercie && !commercieUsers.some((u) => u.id === grower.commercie!.id) && (
-                      <SelectItem value={grower.commercie.id}>
-                        {grower.commercie.name} (inactive)
+                    {supplier.commercie && !commercieUsers.some((u) => u.id === supplier.commercie!.id) && (
+                      <SelectItem value={supplier.commercie.id}>
+                        {supplier.commercie.name} (inactive)
                       </SelectItem>
                     )}
                   </SelectContent>
@@ -456,9 +456,9 @@ export function GrowerDetail({ growerId }: { growerId: string }) {
                       </SelectItem>
                     ))}
                     {/* Show assigned company if not in the list */}
-                    {grower.companyEntity && !companies.some((c) => c.id === grower.companyEntity!.id) && (
-                      <SelectItem value={grower.companyEntity.id}>
-                        {grower.companyEntity.name}
+                    {supplier.companyEntity && !companies.some((c) => c.id === supplier.companyEntity!.id) && (
+                      <SelectItem value={supplier.companyEntity.id}>
+                        {supplier.companyEntity.name}
                       </SelectItem>
                     )}
                   </SelectContent>
@@ -467,7 +467,7 @@ export function GrowerDetail({ growerId }: { growerId: string }) {
                 <div className="bg-muted h-10 animate-pulse rounded-md" />
               )}
               <p className="text-xs text-muted-foreground">
-                Determines the branding (logo, emails) for this grower.
+                Determines the branding (logo, emails) for this supplier.
               </p>
             </div>
           </CardContent>
@@ -503,11 +503,11 @@ export function GrowerDetail({ growerId }: { growerId: string }) {
         {/* Season Settings */}
         <Card>
           <CardHeader>
-            <CardTitle>{t("growers.seasonSettings")}</CardTitle>
+            <CardTitle>{t("suppliers.seasonSettings")}</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="max-w-sm space-y-2">
-              <Label>{t("growers.seasonStartMonth")}</Label>
+              <Label>{t("suppliers.seasonStartMonth")}</Label>
               <Select
                 value={form.seasonStartMonth}
                 onValueChange={(v) => { if (v) setForm({ ...form, seasonStartMonth: v }); }}
@@ -527,7 +527,7 @@ export function GrowerDetail({ growerId }: { growerId: string }) {
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground">
-                {t("growers.seasonStartMonthDescription")}
+                {t("suppliers.seasonStartMonthDescription")}
               </p>
             </div>
           </CardContent>
@@ -547,20 +547,20 @@ export function GrowerDetail({ growerId }: { growerId: string }) {
       {/* Certificates Section */}
       <Card>
         <CardHeader>
-          <CardTitle>{t("growers.certificates")}</CardTitle>
+          <CardTitle>{t("suppliers.certificates")}</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>{t("growers.certificateType")}</TableHead>
-                <TableHead>{t("growers.certificateNumber")}</TableHead>
-                <TableHead>{t("growers.validFrom")}</TableHead>
-                <TableHead>{t("growers.validUntil")}</TableHead>
+                <TableHead>{t("suppliers.certificateType")}</TableHead>
+                <TableHead>{t("suppliers.certificateNumber")}</TableHead>
+                <TableHead>{t("suppliers.validFrom")}</TableHead>
+                <TableHead>{t("suppliers.validUntil")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {grower.certificates.map((cert) => (
+              {supplier.certificates.map((cert) => (
                 <TableRow key={cert.id}>
                   <TableCell className="font-medium">{cert.type}</TableCell>
                   <TableCell>{cert.number}</TableCell>
@@ -576,7 +576,7 @@ export function GrowerDetail({ growerId }: { growerId: string }) {
                   </TableCell>
                 </TableRow>
               ))}
-              {grower.certificates.length === 0 && (
+              {supplier.certificates.length === 0 && (
                 <TableRow className="hover:bg-transparent">
                   <TableCell
                     colSpan={4}
@@ -594,30 +594,30 @@ export function GrowerDetail({ growerId }: { growerId: string }) {
       {/* Users Section */}
       <Card>
         <CardHeader>
-          <CardTitle>{t("growers.users")}</CardTitle>
+          <CardTitle>{t("suppliers.users")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          {grower.users.length > 0 ? (
+          {supplier.users.length > 0 ? (
             <div className="p-0">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>{t("growers.userName")}</TableHead>
-                    <TableHead>{t("growers.email")}</TableHead>
+                    <TableHead>{t("suppliers.userName")}</TableHead>
+                    <TableHead>{t("suppliers.email")}</TableHead>
                     <TableHead>{t("common.status")}</TableHead>
                     <TableHead>{t("common.actions")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {grower.users.map((user) => (
+                  {supplier.users.map((user) => (
                     <TableRow key={user.id}>
                       <TableCell className="font-medium">{user.name}</TableCell>
                       <TableCell className="text-muted-foreground">{user.email}</TableCell>
                       <TableCell>
                         {user.isActive ? (
-                          <Badge variant="default">{t("growers.active")}</Badge>
+                          <Badge variant="default">{t("suppliers.active")}</Badge>
                         ) : (
-                          <Badge variant="secondary">{t("growers.activationPending")}</Badge>
+                          <Badge variant="secondary">{t("suppliers.activationPending")}</Badge>
                         )}
                       </TableCell>
                       <TableCell>
@@ -627,7 +627,7 @@ export function GrowerDetail({ growerId }: { growerId: string }) {
                             size="sm"
                             onClick={() => handleDeactivateUser(user.id)}
                           >
-                            {t("growers.deactivate")}
+                            {t("suppliers.deactivate")}
                           </Button>
                         ) : (
                           <Button
@@ -637,7 +637,7 @@ export function GrowerDetail({ growerId }: { growerId: string }) {
                             disabled={resendingUserId === user.id}
                           >
                             <RiMailSendLine className="mr-2 h-4 w-4" />
-                            {t("growers.resendActivation")}
+                            {t("suppliers.resendActivation")}
                           </Button>
                         )}
                       </TableCell>
@@ -648,17 +648,17 @@ export function GrowerDetail({ growerId }: { growerId: string }) {
             </div>
           ) : (
             <p className="text-muted-foreground text-sm">
-              {t("growers.noUsers")}
+              {t("suppliers.noUsers")}
             </p>
           )}
 
           <Separator />
 
           <div className="space-y-2">
-            <Label className="text-sm font-medium">{t("growers.addUser")}</Label>
+            <Label className="text-sm font-medium">{t("suppliers.addUser")}</Label>
             <div className="flex max-w-2xl items-end gap-3">
               <div className="flex-1 space-y-2">
-                <Label className="text-xs text-muted-foreground">{t("growers.userName")}</Label>
+                <Label className="text-xs text-muted-foreground">{t("suppliers.userName")}</Label>
                 <Input
                   value={newUserName}
                   onChange={(e) => setNewUserName(e.target.value)}
@@ -666,7 +666,7 @@ export function GrowerDetail({ growerId }: { growerId: string }) {
                 />
               </div>
               <div className="flex-1 space-y-2">
-                <Label className="text-xs text-muted-foreground">{t("growers.email")}</Label>
+                <Label className="text-xs text-muted-foreground">{t("suppliers.email")}</Label>
                 <Input
                   type="email"
                   value={newUserEmail}
@@ -679,7 +679,7 @@ export function GrowerDetail({ growerId }: { growerId: string }) {
                 disabled={!newUserName || !newUserEmail || sendingActivation}
               >
                 <RiMailSendLine className="mr-2 h-4 w-4" />
-                {t("growers.addUser")}
+                {t("suppliers.addUser")}
               </Button>
             </div>
           </div>

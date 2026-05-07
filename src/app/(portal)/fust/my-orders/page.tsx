@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
-import { getActiveGrowerId } from "@/lib/grower-context";
+import { getActiveSupplierId } from "@/lib/supplier-context";
 import { FustMyOrders } from "@/features/fust/components";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -14,11 +14,11 @@ export default async function FustMyOrdersPage({ searchParams }: Props) {
   if (!session) redirect("/login");
 
   const params = await searchParams;
-  const growerId = await getActiveGrowerId(params);
+  const supplierId = await getActiveSupplierId(params);
 
   return (
     <Suspense fallback={<Skeleton className="h-96" />}>
-      <FustMyOrders growerId={growerId} />
+      <FustMyOrders supplierId={supplierId} />
     </Suspense>
   );
 }

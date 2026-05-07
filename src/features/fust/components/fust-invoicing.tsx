@@ -54,7 +54,7 @@ interface OrderRef {
   status: string;
   deliveredAt: string | null;
   invoicedAt: string | null;
-  grower: { id: string; code: string; name: string; company: string | null };
+  supplier: { id: string; code: string; name: string; company: string | null };
   items: Array<{ id: string; quantity: number; fustType: FustTypeRef }>;
   voucherLinks?: Array<{
     id: string;
@@ -67,12 +67,12 @@ interface OrderRef {
   }>;
 }
 
-interface GrowerInvoice {
+interface SupplierInvoice {
   id: string;
   invoiceNumber: string;
   invoiceDate: string;
-  growerId: string;
-  grower: { code: string; name: string; company: string | null };
+  supplierId: string;
+  supplier: { code: string; name: string; company: string | null };
   subtotalExVat: string;
   vatAmount: string;
   totalInclVat: string;
@@ -149,7 +149,7 @@ export function FustInvoicing() {
     data: invoices,
     loading: invoicesLoading,
     refetch: refetchInvoices,
-  } = useFetch<GrowerInvoice[]>("/api/fust/grower-invoices");
+  } = useFetch<SupplierInvoice[]>("/api/fust/grower-invoices");
 
   // Selection state
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -178,14 +178,14 @@ export function FustInvoicing() {
     [readyOrders, selectedIds]
   );
 
-  // Check if all selected orders belong to the same grower
-  const selectedGrowerIds = useMemo(() => {
-    const ids = new Set(selectedOrders.map((o) => o.grower.id));
+  // Check if all selected orders belong to the same supplier
+  const selectedSupplierIds = useMemo(() => {
+    const ids = new Set(selectedOrders.map((o) => o.supplier.id));
     return ids;
   }, [selectedOrders]);
 
-  const allSameGrower = selectedGrowerIds.size <= 1;
-  const canGenerate = selectedIds.size > 0 && allSameGrower;
+  const allSameSupplier = selectedSupplierIds.size <= 1;
+  const canGenerate = selectedIds.size > 0 && allSameSupplier;
 
   // Invoice preview lines
   const previewLines = useMemo(
@@ -242,12 +242,12 @@ export function FustInvoicing() {
     if (!canGenerate) return;
     setGenerating(true);
     try {
-      const growerId = selectedOrders[0].grower.id;
+      const supplierId = selectedOrders[0].supplier.id;
       const res = await fetch("/api/fust/grower-invoices", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          growerId,
+          supplierId,
           orderIds: selectedOrders.map((o) => o.id),
           invoiceDate,
           notes: notes.trim() || undefined,
@@ -274,12 +274,12 @@ export function FustInvoicing() {
     if (!canGenerate) return;
     setPreviewing(true);
     try {
-      const growerId = selectedOrders[0].grower.id;
+      const supplierId = selectedOrders[0].supplier.id;
       const res = await fetch("/api/fust/grower-invoices/preview", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          growerId,
+          supplierId,
           orderIds: selectedOrders.map((o) => o.id),
           invoiceDate,
           notes: notes.trim() || undefined,
@@ -302,7 +302,7 @@ export function FustInvoicing() {
 
   // ─── Invoice actions ──────────────────────────────────
 
-  const handleSendInvoice = async (invoice: GrowerInvoice) => {
+  const handleSendInvoice = async (invoice: SupplierInvoice) => {
     setActionLoading(invoice.id);
     try {
       const res = await fetch(`/api/fust/grower-invoices/${invoice.id}/send`, {
@@ -322,7 +322,7 @@ export function FustInvoicing() {
     }
   };
 
-  const handleMarkPaid = async (invoice: GrowerInvoice) => {
+  const handleMarkPaid = async (invoice: SupplierInvoice) => {
     setActionLoading(invoice.id);
     try {
       const res = await fetch(`/api/fust/grower-invoices/${invoice.id}`, {
@@ -389,9 +389,9 @@ export function FustInvoicing() {
               <RiFileTextLine className="mr-1.5 h-4 w-4" />
               {tAny("fust.generateInvoice")}
             </Button>
-            {selectedIds.size > 0 && !allSameGrower && (
+            {selectedIds.size > 0 && !allSameSupplier && (
               <p className="text-sm text-destructive">
-                {tAny("fust.selectSameGrowerWarning")}
+                {tAny("fust.selectSameSupplierWarning")}
               </p>
             )}
           </div>
@@ -427,7 +427,7 @@ export function FustInvoicing() {
                       </div>
                     </TableHead>
                     <TableHead>{tAny("fust.orderNumber")}</TableHead>
-                    <TableHead>{tAny("fust.grower")}</TableHead>
+                    <TableHead>{tAny("fust.supplier")}</TableHead>
                     <TableHead>{tAny("fust.delivered")}</TableHead>
                     <TableHead>{tAny("fust.items")}</TableHead>
                     <TableHead>{tAny("fust.linkedVouchers")}</TableHead>
@@ -465,10 +465,10 @@ export function FustInvoicing() {
                         </TableCell>
                         <TableCell>
                           <span className="font-medium">
-                            {order.grower.code}
+                            {order.supplier.code}
                           </span>
                           <span className="ml-1.5 text-muted-foreground">
-                            {order.grower.company || order.grower.name}
+                            {order.supplier.company || order.supplier.name}
                           </span>
                         </TableCell>
                         <TableCell>
@@ -524,7 +524,7 @@ export function FustInvoicing() {
                   <TableRow>
                     <TableHead>{tAny("fust.invoiceNumber")}</TableHead>
                     <TableHead>{tAny("fust.date")}</TableHead>
-                    <TableHead>{tAny("fust.grower")}</TableHead>
+                    <TableHead>{tAny("fust.supplier")}</TableHead>
                     <TableHead className="text-right">
                       {tAny("fust.amount")}
                     </TableHead>
@@ -543,10 +543,10 @@ export function FustInvoicing() {
                       </TableCell>
                       <TableCell>
                         <span className="font-medium">
-                          {invoice.grower.code}
+                          {invoice.supplier.code}
                         </span>
                         <span className="ml-1.5 text-muted-foreground">
-                          {invoice.grower.company || invoice.grower.name}
+                          {invoice.supplier.company || invoice.supplier.name}
                         </span>
                       </TableCell>
                       <TableCell className="text-right font-medium">
@@ -625,9 +625,9 @@ export function FustInvoicing() {
             <DialogDescription>
               {selectedOrders.length > 0 && (
                 <>
-                  {selectedOrders[0].grower.code} &mdash;{" "}
-                  {selectedOrders[0].grower.company ||
-                    selectedOrders[0].grower.name}{" "}
+                  {selectedOrders[0].supplier.code} &mdash;{" "}
+                  {selectedOrders[0].supplier.company ||
+                    selectedOrders[0].supplier.name}{" "}
                   ({selectedOrders.length}{" "}
                   {selectedOrders.length === 1 ? "order" : "orders"})
                 </>

@@ -18,7 +18,7 @@ export function VoucherMatching() {
 
   // ─── State ───────────────────────────────────────────
   const [viewMode, setViewMode] = useState<ViewMode>("unmatched");
-  const [growerFilter, setGrowerFilter] = useState<string[]>([]);
+  const [supplierFilter, setSupplierFilter] = useState<string[]>([]);
   const [transporterFilter, setTransporterFilter] = useState<string[]>([]);
   const [linking, setLinking] = useState(false);
   const [unlinking, setUnlinking] = useState(false);
@@ -47,9 +47,9 @@ export function VoucherMatching() {
     return Array.from(names).sort();
   }, [allVouchers]);
 
-  const growerOptions = useMemo(() => {
+  const supplierOptions = useMemo(() => {
     if (!allOrders) return [];
-    const codes = new Set(allOrders.map((o) => o.grower.code));
+    const codes = new Set(allOrders.map((o) => o.supplier.code));
     return Array.from(codes).sort();
   }, [allOrders]);
 
@@ -68,29 +68,29 @@ export function VoucherMatching() {
       );
     }
 
-    if (growerFilter.length > 0) {
+    if (supplierFilter.length > 0) {
       result = result.filter(
         (v) =>
           v.customerName &&
-          growerFilter.some((code) =>
+          supplierFilter.some((code) =>
             v.customerName!.toLowerCase().includes(code.toLowerCase())
           )
       );
     }
 
     return result;
-  }, [allVouchers, viewMode, transporterFilter, growerFilter]);
+  }, [allVouchers, viewMode, transporterFilter, supplierFilter]);
 
   const filteredOrders = useMemo(() => {
     if (!allOrders) return [];
     let result = allOrders;
 
-    if (growerFilter.length > 0) {
-      result = result.filter((o) => growerFilter.includes(o.grower.code));
+    if (supplierFilter.length > 0) {
+      result = result.filter((o) => supplierFilter.includes(o.supplier.code));
     }
 
     return result;
-  }, [allOrders, growerFilter]);
+  }, [allOrders, supplierFilter]);
 
   // ─── Selection ───────────────────────────────────────
   const voucherSelection = useRangeSelection({
@@ -223,12 +223,12 @@ export function VoucherMatching() {
           </button>
         </div>
 
-        {growerOptions.length > 0 && (
+        {supplierOptions.length > 0 && (
           <MultiSelectFilter
-            label={tAny("fust.growerFilter")}
-            options={growerOptions}
-            selected={growerFilter}
-            onChange={setGrowerFilter}
+            label={tAny("fust.supplierFilter")}
+            options={supplierOptions}
+            selected={supplierFilter}
+            onChange={setSupplierFilter}
           />
         )}
         {transporterOptions.length > 0 && (

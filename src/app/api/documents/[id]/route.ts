@@ -20,10 +20,10 @@ export async function GET(
     return NextResponse.json({ error: "Document not found" }, { status: 404 });
   }
 
-  // Growers can only access their own documents
+  // Suppliers can only access their own documents
   if (
-    session!.user.role === "grower" &&
-    document.growerId !== session!.user.growerId
+    session!.user.role === "supplier" &&
+    document.supplierId !== session!.user.supplierId
   ) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }

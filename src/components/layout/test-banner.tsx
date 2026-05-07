@@ -9,7 +9,7 @@ import type { Role } from "@/types";
 import { isFustDomainClient } from "@/lib/fust-hostname";
 
 const ROLE_LABELS: Record<Role, string> = {
-  grower: "Grower",
+  supplier: "Supplier",
   commercie: "Commercie",
   admin: "Admin",
   transporteur: "Transporteur",
@@ -58,7 +58,7 @@ function getRoleHomeUrl(role: string, isFustPortal: boolean): string {
 
 // ─── Role Switcher with Entity Selection ──────────────────
 
-interface GrowerOption {
+interface SupplierOption {
   id: string;
   code: string;
   name: string;
@@ -78,17 +78,17 @@ function RoleSwitcher({ currentRole, fustOnly }: { currentRole: string; fustOnly
   const { data: session, update } = useSession();
 
   // Entity lists — cached in sessionStorage so they survive role-switch reloads.
-  // The APIs require admin/commercie, so after switching to grower/transporteur
+  // The APIs require admin/commercie, so after switching to supplier/transporteur
   // the fetch would fail. The cache ensures the lists remain available.
-  const [growers, setGrowers] = useState<GrowerOption[]>([]);
+  const [suppliers, setSuppliers] = useState<SupplierOption[]>([]);
   const [transporters, setTransporters] = useState<TransporterOption[]>([]);
   const [entityOpen, setEntityOpen] = useState(false);
   const entityRef = useRef<HTMLDivElement>(null);
 
   // Track current entity display name
   const currentEntityName = (() => {
-    if (currentRole === "grower" && session?.user?.growerId) {
-      const g = growers.find((g) => g.id === session.user.growerId);
+    if (currentRole === "supplier" && session?.user?.supplierId) {
+      const g = suppliers.find((g) => g.id === session.user.supplierId);
       return g ? `${g.code}` : null;
     }
     if (currentRole === "transporteur" && session?.user?.transporterId) {
@@ -100,26 +100,26 @@ function RoleSwitcher({ currentRole, fustOnly }: { currentRole: string; fustOnly
 
   // Load entity lists: try sessionStorage first, then fetch from API
   useEffect(() => {
-    const GROWERS_KEY = fustOnly ? "test_banner_growers_fust" : "test_banner_growers";
+    const SUPPLIERS_KEY = fustOnly ? "test_banner_suppliers_fust" : "test_banner_suppliers";
     const TRANSPORTERS_KEY = "test_banner_transporters";
 
     // Restore from cache immediately
     try {
-      const cachedG = sessionStorage.getItem(GROWERS_KEY);
+      const cachedG = sessionStorage.getItem(SUPPLIERS_KEY);
       const cachedT = sessionStorage.getItem(TRANSPORTERS_KEY);
-      if (cachedG) setGrowers(JSON.parse(cachedG));
+      if (cachedG) setSuppliers(JSON.parse(cachedG));
       if (cachedT) setTransporters(JSON.parse(cachedT));
     } catch {}
 
     // Attempt fresh fetch (succeeds when admin/commercie, 403 otherwise)
     Promise.all([
-      fetch(`/api/growers${fustOnly ? "?fustOnly=true" : ""}`).then((r) => r.ok ? r.json() : null),
+      fetch(`/api/suppliers${fustOnly ? "?fustOnly=true" : ""}`).then((r) => r.ok ? r.json() : null),
       fetch("/api/transporters").then((r) => r.ok ? r.json() : null),
     ]).then(([g, t]) => {
       if (g) {
-        const growerList: GrowerOption[] = Array.isArray(g) ? g : g.growers || [];
-        setGrowers(growerList);
-        try { sessionStorage.setItem(GROWERS_KEY, JSON.stringify(growerList)); } catch {}
+        const supplierList: SupplierOption[] = Array.isArray(g) ? g : g.suppliers || [];
+        setSuppliers(supplierList);
+        try { sessionStorage.setItem(SUPPLIERS_KEY, JSON.stringify(supplierList)); } catch {}
       }
       if (t) {
         const transporterList: TransporterOption[] = Array.isArray(t) ? t : [];
@@ -159,15 +159,15 @@ function RoleSwitcher({ currentRole, fustOnly }: { currentRole: string; fustOnly
     }
   }, [currentRole, switching, update]);
 
-  const handleEntitySwitch = useCallback(async (entityId: string, entityType: "grower" | "transporter") => {
+  const handleEntitySwitch = useCallback(async (entityId: string, entityType: "supplier" | "transporter") => {
     if (switching) return;
     setSwitching(true);
     try {
-      if (entityType === "grower") {
-        const grower = growers.find((g) => g.id === entityId);
+      if (entityType === "supplier") {
+        const supplier = suppliers.find((g) => g.id === entityId);
         await update({
-          switchGrowerId: entityId,
-          switchGrowerCode: grower?.code || null,
+          switchSupplierId: entityId,
+          switchSupplierCode: supplier?.code || null,
         });
       } else {
         await update({ switchTransporterId: entityId });
@@ -178,10 +178,10 @@ function RoleSwitcher({ currentRole, fustOnly }: { currentRole: string; fustOnly
       setSwitching(false);
       setEntityOpen(false);
     }
-  }, [switching, growers, update, router]);
+  }, [switching, suppliers, update, router]);
 
-  const showEntitySelector = currentRole === "grower" || currentRole === "transporteur";
-  const entityList = currentRole === "grower" ? growers : transporters;
+  const showEntitySelector = currentRole === "supplier" || currentRole === "transporteur";
+  const entityList = currentRole === "supplier" ? suppliers : transporters;
 
   return (
     <div className="flex items-center gap-1.5">
@@ -217,7 +217,7 @@ function RoleSwitcher({ currentRole, fustOnly }: { currentRole: string; fustOnly
         )}
       </div>
 
-      {/* Entity selector (shown for grower/transporteur roles) */}
+      {/* Entity selector (shown for supplier/transporteur roles) */}
       {showEntitySelector && entityList.length > 0 && (
         <div className="relative" ref={entityRef}>
           <button
@@ -233,15 +233,15 @@ function RoleSwitcher({ currentRole, fustOnly }: { currentRole: string; fustOnly
           {entityOpen && (
             <div className="absolute right-0 top-full z-50 mt-2 max-h-64 w-56 overflow-y-auto rounded-lg border border-gray-200 bg-white py-1 text-gray-900 shadow-xl">
               <p className="px-3 py-1.5 text-xs font-semibold text-gray-500">
-                {currentRole === "grower" ? "Select grower" : "Select transporter"}
+                {currentRole === "supplier" ? "Select supplier" : "Select transporter"}
               </p>
-              {currentRole === "grower"
-                ? (growers as GrowerOption[]).map((g) => {
-                    const isSelected = session?.user?.growerId === g.id;
+              {currentRole === "supplier"
+                ? (suppliers as SupplierOption[]).map((g) => {
+                    const isSelected = session?.user?.supplierId === g.id;
                     return (
                       <button
                         key={g.id}
-                        onClick={() => handleEntitySwitch(g.id, "grower")}
+                        onClick={() => handleEntitySwitch(g.id, "supplier")}
                         disabled={switching}
                         className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm transition hover:bg-gray-50 disabled:opacity-50 ${
                           isSelected ? "bg-red-50 font-medium text-red-700" : "text-gray-700"

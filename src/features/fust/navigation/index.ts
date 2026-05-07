@@ -14,7 +14,7 @@ export interface FustNavItem {
 }
 
 export const fustNavItems: FustNavItem[] = [
-  { href: "/fust", labelKey: "nav.fustOrders", icon: RiBox3Line, roles: ["grower"] },
+  { href: "/fust", labelKey: "nav.fustOrders", icon: RiBox3Line, roles: ["supplier"] },
   { href: "/fust/orders", labelKey: "nav.fustOrders", icon: RiBox3Line, roles: ["commercie", "admin"] },
   { href: "/fust/pickups", labelKey: "nav.fustPickups", icon: RiTruckLine, roles: ["transporteur"] },
   { href: "/fust/invoices", labelKey: "nav.fustInvoices", icon: RiReceiptLine, roles: ["finance"] },

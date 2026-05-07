@@ -47,7 +47,7 @@ interface OrderRef {
   orderNumber: string;
   status: string;
   deliveredAt: string | null;
-  grower: { id: string; code: string; name: string; company: string | null };
+  supplier: { id: string; code: string; name: string; company: string | null };
   items: Array<{ id: string; quantity: number; fustType: FustTypeRef }>;
 }
 
@@ -359,7 +359,7 @@ export function FustReceivedVouchers() {
                         <div className="space-y-0.5">
                           {voucher.orderLinks.map((link) => (
                             <div key={link.id} className="text-xs text-muted-foreground">
-                              {link.order.orderNumber} — {link.order.grower.code}
+                              {link.order.orderNumber} — {link.order.supplier.code}
                             </div>
                           ))}
                         </div>

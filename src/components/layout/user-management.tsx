@@ -65,7 +65,7 @@ interface UserManagementProps {
 }
 
 const ROLE_LABELS: Record<Role, string> = {
-  grower: "Grower",
+  supplier: "Supplier",
   commercie: "Commercie",
   admin: "Admin",
   transporteur: "Transporteur",

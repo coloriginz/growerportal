@@ -20,7 +20,7 @@ export interface OrderRef {
   orderNumber: string;
   status: string;
   deliveredAt: string | null;
-  grower: { id: string; code: string; name: string; company: string | null };
+  supplier: { id: string; code: string; name: string; company: string | null };
   items: Array<{
     id: string;
     quantity: number;

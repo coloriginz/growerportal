@@ -1,6 +1,6 @@
 // ─── ROLES ───────────────────────────────────────────────
 
-export const ROLES = ["grower", "commercie", "admin", "transporteur", "finance"] as const;
+export const ROLES = ["supplier", "commercie", "admin", "transporteur", "finance"] as const;
 export type Role = (typeof ROLES)[number];
 
 // ─── LOT STATUS ──────────────────────────────────────────
@@ -17,10 +17,10 @@ export const LOT_STATUS_LABELS: Record<LotStatus, string> = {
 // ─── SALES TYPES ─────────────────────────────────────────
 
 export const SALES_TYPES = [
-  "Direct sales",
-  "VBA",
-  "VPL",
-  "Production",
+  "VMP",
+  "Aurora",
+  "Veilen",
+  "Persoonlijk",
 ] as const;
 export type SalesType = (typeof SALES_TYPES)[number];
 

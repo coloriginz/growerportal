@@ -131,7 +131,7 @@ export function LoginContent() {
                 {[
                   { label: "Admin", email: "admin@coloriginz.com", password: "Colori2026!" },
                   { label: "Commercie", email: "iris.inkoper@coloriginz.com", password: "FloraDesk#24" },
-                  { label: "Grower", email: "pcfup@example.com", password: "GreenField99" },
+                  { label: "Supplier", email: "pcfup@example.com", password: "GreenField99" },
                   { label: "Transporteur", email: "chauffeur@flowertrans.nl", password: "Transport#2026" },
                   { label: "Finance", email: "finance@coloriginz.com", password: "Finance#2026" },
                 ].map((account) => (

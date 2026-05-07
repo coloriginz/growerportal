@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { requireAuth, resolveGrowerId } from "@/lib/api-helpers";
+import { requireAuth, resolveSupplierId } from "@/lib/api-helpers";
 import {
   startOfDay,
   subDays,
@@ -16,15 +16,15 @@ export async function GET(request: NextRequest) {
   const { error, session } = await requireAuth();
   if (error) return error;
 
-  const requestedGrowerId = request.nextUrl.searchParams.get("growerId");
-  const growerId = resolveGrowerId(session!, requestedGrowerId);
+  const requestedSupplierId = request.nextUrl.searchParams.get("supplierId");
+  const supplierId = resolveSupplierId(session!, requestedSupplierId);
 
-  // Aggregate dashboard for admin/commercie without grower selected
-  if (!growerId && session!.user.role !== "grower") {
+  // Aggregate dashboard for admin/commercie without supplier selected
+  if (!supplierId && session!.user.role !== "supplier") {
     return getAggregateDashboard();
   }
 
-  if (!growerId) {
+  if (!supplierId) {
     return NextResponse.json({
       stemsToday: 0,
       stemsYesterday: 0,
@@ -43,12 +43,12 @@ export async function GET(request: NextRequest) {
     });
   }
 
-  // Fetch grower's season start month
-  const growerRecord = await prisma.grower.findUnique({
-    where: { id: growerId },
+  // Fetch supplier's season start month
+  const supplierRecord = await prisma.supplier.findUnique({
+    where: { id: supplierId },
     select: { seasonStartMonth: true },
   });
-  const seasonStartMonth = growerRecord?.seasonStartMonth ?? 1;
+  const seasonStartMonth = supplierRecord?.seasonStartMonth ?? 1;
 
   const now = new Date();
   const todayStart = startOfDay(now);
@@ -57,8 +57,7 @@ export async function GET(request: NextRequest) {
   const { seasonStart: lastYearYtdStart, sameDate: lastYearSameDate } =
     getPreviousSeasonDates(now, seasonStartMonth);
 
-  const growerFilter = { lot: { growerId } };
-  const notCorrection = { isCorrection: false };
+  const supplierFilter = { lot: { supplierId } };
 
   // ── Parallel batch 1: all KPIs + costs + quality + recent lots + top products ──
   const [
@@ -72,36 +71,36 @@ export async function GET(request: NextRequest) {
     recentLots,
   ] = await Promise.all([
     prisma.transaction.aggregate({
-      where: { ...growerFilter, ...notCorrection, date: { gte: todayStart } },
+      where: { ...supplierFilter, date: { gte: todayStart } },
       _sum: { stems: true, amount: true },
     }),
     prisma.transaction.aggregate({
-      where: { ...growerFilter, ...notCorrection, date: { gte: yesterdayStart, lt: todayStart } },
+      where: { ...supplierFilter, date: { gte: yesterdayStart, lt: todayStart } },
       _sum: { stems: true },
     }),
     prisma.transaction.aggregate({
-      where: { ...growerFilter, ...notCorrection, date: { gte: ytdStart } },
+      where: { ...supplierFilter, date: { gte: ytdStart } },
       _sum: { stems: true, amount: true },
     }),
     prisma.transaction.aggregate({
-      where: { ...growerFilter, ...notCorrection, date: { gte: lastYearYtdStart, lte: lastYearSameDate } },
+      where: { ...supplierFilter, date: { gte: lastYearYtdStart, lte: lastYearSameDate } },
       _sum: { stems: true, amount: true },
     }),
     prisma.transaction.groupBy({
       by: ["lotId"],
-      where: { ...growerFilter, ...notCorrection, date: { gte: ytdStart } },
+      where: { ...supplierFilter, date: { gte: ytdStart } },
       _sum: { stems: true, amount: true },
     }),
     prisma.salesSheet.aggregate({
-      where: { growerId, invoiceDate: { gte: ytdStart } },
+      where: { supplierId, invoiceDate: { gte: ytdStart } },
       _sum: { totalCosts: true },
     }),
     prisma.qualityIssue.aggregate({
-      where: { growerId, date: { gte: ytdStart } },
+      where: { supplierId, date: { gte: ytdStart } },
       _sum: { stems: true },
     }),
     prisma.lot.findMany({
-      where: { growerId },
+      where: { supplierId },
       orderBy: { deliveryDate: "desc" },
       take: 5,
       select: {
@@ -136,11 +135,11 @@ export async function GET(request: NextRequest) {
     monthQueries.push(
       Promise.all([
         prisma.transaction.aggregate({
-          where: { ...growerFilter, ...notCorrection, date: { gte: monthStart, lt: monthEnd } },
+          where: { ...supplierFilter, date: { gte: monthStart, lt: monthEnd } },
           _sum: { stems: true, amount: true },
         }),
         prisma.transaction.aggregate({
-          where: { ...growerFilter, ...notCorrection, date: { gte: lastYearMonthStart, lt: lastYearMonthEnd } },
+          where: { ...supplierFilter, date: { gte: lastYearMonthStart, lt: lastYearMonthEnd } },
           _sum: { stems: true, amount: true },
         }),
       ]).then(([current, lastYear]) => ({
@@ -196,7 +195,7 @@ export async function GET(request: NextRequest) {
   });
 }
 
-// ─── AGGREGATE DASHBOARD (no grower selected) ─────────
+// ─── AGGREGATE DASHBOARD (no supplier selected) ─────────
 
 async function getAggregateDashboard() {
   const now = new Date();
@@ -205,30 +204,28 @@ async function getAggregateDashboard() {
   const ytdStart = startOfYear(now);
   const lastYearYtdStart = startOfYear(subYears(now, 1));
   const lastYearSameDate = subYears(now, 1);
-  const notCorrection = { isCorrection: false };
-
-  // ── Parallel batch 1: KPIs + top products (single groupBy, reused for growers) + forecasts ──
+  // ── Parallel batch 1: KPIs + top products (single groupBy, reused for suppliers) + forecasts ──
   const [todayAgg, yesterdayAgg, ytdAgg, lastYearYtdAgg, transactionsByLot, upcomingForecasts] = await Promise.all([
     prisma.transaction.aggregate({
-      where: { ...notCorrection, date: { gte: todayStart } },
+      where: { date: { gte: todayStart } },
       _sum: { stems: true, amount: true },
     }),
     prisma.transaction.aggregate({
-      where: { ...notCorrection, date: { gte: yesterdayStart, lt: todayStart } },
+      where: { date: { gte: yesterdayStart, lt: todayStart } },
       _sum: { stems: true },
     }),
     prisma.transaction.aggregate({
-      where: { ...notCorrection, date: { gte: ytdStart } },
+      where: { date: { gte: ytdStart } },
       _sum: { stems: true, amount: true },
     }),
     prisma.transaction.aggregate({
-      where: { ...notCorrection, date: { gte: lastYearYtdStart, lte: lastYearSameDate } },
+      where: { date: { gte: lastYearYtdStart, lte: lastYearSameDate } },
       _sum: { stems: true, amount: true },
     }),
-    // Single groupBy reused for both top products AND top growers
+    // Single groupBy reused for both top products AND top suppliers
     prisma.transaction.groupBy({
       by: ["lotId"],
-      where: { ...notCorrection, date: { gte: ytdStart } },
+      where: { date: { gte: ytdStart } },
       _sum: { stems: true, amount: true },
     }),
     // Upcoming forecasts
@@ -247,7 +244,7 @@ async function getAggregateDashboard() {
         by: ["year", "week"],
         where: { OR: forecastWeeks.map((w) => ({ year: w.year, week: w.week })) },
         _sum: { stems: true },
-        _count: { growerId: true },
+        _count: { supplierId: true },
       }).then((results) => ({ results, forecastWeeks }));
     })(),
   ]);
@@ -257,7 +254,7 @@ async function getAggregateDashboard() {
   const stemsYTDLastYear = lastYearYtdAgg._sum.stems || 0;
   const turnoverYTDLastYear = Number(lastYearYtdAgg._sum.amount) || 0;
 
-  // ── Parallel batch 2: monthly sales (all months at once) + lot details for top products/growers ──
+  // ── Parallel batch 2: monthly sales (all months at once) + lot details for top products/suppliers ──
   const monthQueries: Promise<{ month: string; stems: number; turnover: number; lastYearStems: number; lastYearTurnover: number }>[] = [];
   for (let month = 0; month < 12; month++) {
     const monthStart = new Date(now.getFullYear(), month, 1);
@@ -271,11 +268,11 @@ async function getAggregateDashboard() {
     monthQueries.push(
       Promise.all([
         prisma.transaction.aggregate({
-          where: { ...notCorrection, date: { gte: monthStart, lt: monthEnd } },
+          where: { date: { gte: monthStart, lt: monthEnd } },
           _sum: { stems: true, amount: true },
         }),
         prisma.transaction.aggregate({
-          where: { ...notCorrection, date: { gte: lastYearMonthStart, lt: lastYearMonthEnd } },
+          where: { date: { gte: lastYearMonthStart, lt: lastYearMonthEnd } },
           _sum: { stems: true, amount: true },
         }),
       ]).then(([current, lastYear]) => ({
@@ -288,13 +285,13 @@ async function getAggregateDashboard() {
     );
   }
 
-  // Single lot fetch with both articleGroup and growerId (reused for products + growers)
+  // Single lot fetch with both articleGroup and supplierId (reused for products + suppliers)
   const lotIds = transactionsByLot.map((tp) => tp.lotId);
   const [monthlySales, allLots] = await Promise.all([
     Promise.all(monthQueries),
     prisma.lot.findMany({
       where: { id: { in: lotIds } },
-      select: { id: true, articleGroup: true, growerId: true },
+      select: { id: true, articleGroup: true, supplierId: true },
     }),
   ]);
 
@@ -313,27 +310,27 @@ async function getAggregateDashboard() {
     .sort((a, b) => b.stems - a.stems)
     .slice(0, 8);
 
-  // Build top growers from shared data (no duplicate query!)
-  const lotGrowerMap = new Map(allLots.map((l) => [l.id, l.growerId]));
-  const growerMap = new Map<string, { stems: number; turnover: number }>();
+  // Build top suppliers from shared data (no duplicate query!)
+  const lotSupplierMap = new Map(allLots.map((l) => [l.id, l.supplierId]));
+  const supplierMap = new Map<string, { stems: number; turnover: number }>();
   for (const tp of transactionsByLot) {
-    const gId = lotGrowerMap.get(tp.lotId);
-    if (!gId) continue;
-    const existing = growerMap.get(gId) || { stems: 0, turnover: 0 };
+    const sId = lotSupplierMap.get(tp.lotId);
+    if (!sId) continue;
+    const existing = supplierMap.get(sId) || { stems: 0, turnover: 0 };
     existing.stems += tp._sum.stems || 0;
     existing.turnover += Number(tp._sum.amount) || 0;
-    growerMap.set(gId, existing);
+    supplierMap.set(sId, existing);
   }
 
-  const growers = await prisma.grower.findMany({
-    where: { id: { in: Array.from(growerMap.keys()) } },
+  const suppliers = await prisma.supplier.findMany({
+    where: { id: { in: Array.from(supplierMap.keys()) } },
     select: { id: true, code: true, name: true },
   });
-  const growerInfoMap = new Map(growers.map((g) => [g.id, g]));
+  const supplierInfoMap = new Map(suppliers.map((g) => [g.id, g]));
 
-  const topGrowers = Array.from(growerMap.entries())
+  const topSuppliers = Array.from(supplierMap.entries())
     .map(([id, d]) => {
-      const info = growerInfoMap.get(id);
+      const info = supplierInfoMap.get(id);
       return { id, code: info?.code || "", name: info?.name || "", ...d };
     })
     .sort((a, b) => b.stems - a.stems)
@@ -346,7 +343,7 @@ async function getAggregateDashboard() {
       week: `W${w.week}`,
       year: w.year,
       stems: match?._sum.stems || 0,
-      growers: match?._count.growerId || 0,
+      suppliers: match?._count.supplierId || 0,
     };
   });
 
@@ -362,7 +359,7 @@ async function getAggregateDashboard() {
     avgPriceYTDLastYear: stemsYTDLastYear > 0 ? turnoverYTDLastYear / stemsYTDLastYear : 0,
     monthlySales,
     topProducts,
-    topGrowers,
+    topSuppliers,
     upcomingForecasts: forecastData,
   });
 }

@@ -18,14 +18,14 @@ export async function GET(request: NextRequest) {
 
   const role = session!.user.role;
 
-  // Growers can only view audit logs for their own orders
-  if (role === "grower") {
+  // Suppliers can only view audit logs for their own orders
+  if (role === "supplier") {
     if (!orderId) {
-      return NextResponse.json({ error: "orderId is required for growers" }, { status: 400 });
+      return NextResponse.json({ error: "orderId is required for suppliers" }, { status: 400 });
     }
-    // Verify order belongs to grower
+    // Verify order belongs to supplier
     const order = await prisma.fustOrder.findFirst({
-      where: { id: orderId, growerId: session!.user.growerId! },
+      where: { id: orderId, supplierId: session!.user.supplierId! },
       select: { id: true },
     });
     if (!order) {

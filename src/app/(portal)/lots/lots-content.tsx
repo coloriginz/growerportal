@@ -59,16 +59,16 @@ const statusVariant: Record<LotStatus, "default" | "secondary" | "destructive" |
   sold: "default",
 };
 
-export function LotsContent({ growerId }: { growerId: string | null }) {
+export function LotsContent({ supplierId }: { supplierId: string | null }) {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const { t } = useLanguage();
 
   const url = useMemo(() => {
     const params = new URLSearchParams();
-    if (growerId) params.set("growerId", growerId);
+    if (supplierId) params.set("supplierId", supplierId);
     return `/api/lots?${params}`;
-  }, [growerId]);
+  }, [supplierId]);
   const { data: lots, loading, error, lastUpdated, refetch } = useFetch<LotRow[]>(url);
 
   if (error) {

@@ -48,15 +48,15 @@ interface CartItem {
 }
 
 interface FustWebshopProps {
-  growerId: string | null;
+  supplierId: string | null;
   userRole?: string;
 }
 
 const CATEGORY_ORDER = ["emmers", "opzetrekken", "karren", "kratten", "dozen", "overig"];
 
-export function FustWebshop({ growerId, userRole }: FustWebshopProps) {
+export function FustWebshop({ supplierId, userRole }: FustWebshopProps) {
   const { t } = useLanguage();
-  const canOrder = userRole === "grower";
+  const canOrder = userRole === "supplier";
   const [cart, setCart] = useState<Map<string, CartItem>>(new Map());
   const [requestedDate, setRequestedDate] = useState("");
   const [notes, setNotes] = useState("");
@@ -130,7 +130,7 @@ export function FustWebshop({ growerId, userRole }: FustWebshopProps) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          growerId: growerId || undefined,
+          supplierId: supplierId || undefined,
           requestedDate: requestedDate || null,
           notes: notes || null,
           items,

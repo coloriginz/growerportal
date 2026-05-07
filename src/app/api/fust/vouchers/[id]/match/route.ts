@@ -73,7 +73,7 @@ export async function POST(
         include: {
           order: {
             include: {
-              grower: {
+              supplier: {
                 select: { id: true, code: true, name: true, company: true },
               },
               items: {

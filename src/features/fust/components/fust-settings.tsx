@@ -65,7 +65,7 @@ interface Transporter {
   isActive: boolean;
 }
 
-interface GrowerSetting {
+interface SupplierSetting {
   id: string;
   code: string;
   name: string;
@@ -79,7 +79,7 @@ interface GrowerSetting {
 interface SettingsData {
   fustTypes: FustType[];
   transporters: Transporter[];
-  growers: GrowerSetting[];
+  suppliers: SupplierSetting[];
 }
 
 const CATEGORIES = ["emmers", "karren", "kratten", "dozen", "opzetrekken", "overig"] as const;
@@ -91,16 +91,16 @@ export function FustSettings() {
   const [saving, setSaving] = useState(false);
 
   // Dialog states
-  const [growerDialog, setGrowerDialog] = useState<GrowerSetting | null>(null);
+  const [supplierDialog, setSupplierDialog] = useState<SupplierSetting | null>(null);
   const [transporterDialog, setTransporterDialog] = useState<Transporter | "new" | null>(null);
   const [fustTypeDialog, setFustTypeDialog] = useState<FustType | "new" | null>(null);
   const [deleteDialog, setDeleteDialog] = useState<{ type: "transporter" | "fustType"; id: string; name: string } | null>(null);
 
-  // Grower edit form state
-  const [growerEnabled, setGrowerEnabled] = useState(false);
-  const [growerAutoApprove, setGrowerAutoApprove] = useState(false);
-  const [growerTransporterId, setGrowerTransporterId] = useState<string | null>(null);
-  const [growerLanguage, setGrowerLanguage] = useState("en");
+  // Supplier edit form state
+  const [supplierEnabled, setSupplierEnabled] = useState(false);
+  const [supplierAutoApprove, setSupplierAutoApprove] = useState(false);
+  const [supplierTransporterId, setSupplierTransporterId] = useState<string | null>(null);
+  const [supplierLanguage, setSupplierLanguage] = useState("en");
 
   // Transporter form state
   const [trName, setTrName] = useState("");
@@ -121,7 +121,7 @@ export function FustSettings() {
   const [ftSortOrder, setFtSortOrder] = useState("0");
 
   const searchParams = useSearchParams();
-  const defaultTab = searchParams.get("tab") || "growers";
+  const defaultTab = searchParams.get("tab") || "suppliers";
 
   const apiCall = async (method: string, body: Record<string, unknown>) => {
     setSaving(true);
@@ -147,32 +147,32 @@ export function FustSettings() {
     }
   };
 
-  // --- Grower dialog handlers ---
-  const openGrowerDialog = (grower: GrowerSetting) => {
-    setGrowerEnabled(grower.fustEnabled);
-    setGrowerAutoApprove(grower.autoApproveOrders);
-    setGrowerTransporterId(grower.defaultTransporterId);
-    setGrowerLanguage(grower.preferredLanguage || "en");
-    setGrowerDialog(grower);
+  // --- Supplier dialog handlers ---
+  const openSupplierDialog = (supplier: SupplierSetting) => {
+    setSupplierEnabled(supplier.fustEnabled);
+    setSupplierAutoApprove(supplier.autoApproveOrders);
+    setSupplierTransporterId(supplier.defaultTransporterId);
+    setSupplierLanguage(supplier.preferredLanguage || "en");
+    setSupplierDialog(supplier);
   };
 
-  const saveGrower = async () => {
-    if (!growerDialog) return;
-    if (growerEnabled && !growerTransporterId) {
+  const saveSupplier = async () => {
+    if (!supplierDialog) return;
+    if (supplierEnabled && !supplierTransporterId) {
       toast.error(t("fust.transporterRequired"));
       return;
     }
     const ok = await apiCall("PATCH", {
-      type: "grower",
-      growerId: growerDialog.id,
-      fustEnabled: growerEnabled,
-      autoApproveOrders: growerAutoApprove,
-      defaultTransporterId: growerTransporterId,
-      preferredLanguage: growerLanguage,
+      type: "supplier",
+      supplierId: supplierDialog.id,
+      fustEnabled: supplierEnabled,
+      autoApproveOrders: supplierAutoApprove,
+      defaultTransporterId: supplierTransporterId,
+      preferredLanguage: supplierLanguage,
     });
     if (ok) {
       toast.success(t("fust.settingsSaved"));
-      setGrowerDialog(null);
+      setSupplierDialog(null);
       refetch();
     }
   };
@@ -288,13 +288,13 @@ export function FustSettings() {
 
       <Tabs defaultValue={defaultTab} key={defaultTab}>
         <TabsList>
-          <TabsTrigger value="growers">{t("fust.growerAccess")}</TabsTrigger>
+          <TabsTrigger value="suppliers">{t("fust.supplierAccess")}</TabsTrigger>
           <TabsTrigger value="types">{t("fust.fustTypes")}</TabsTrigger>
           <TabsTrigger value="transporters">{t("fust.transporters")}</TabsTrigger>
         </TabsList>
 
-        {/* Grower Access */}
-        <TabsContent value="growers">
+        {/* Supplier Access */}
+        <TabsContent value="suppliers">
           <div className="mt-4 overflow-x-auto rounded-lg border">
             <Table>
               <TableHeader>
@@ -308,26 +308,26 @@ export function FustSettings() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {data.growers.map((grower) => {
+                {data.suppliers.map((supplier) => {
                   const transporter = data.transporters.find(
-                    (tr) => tr.id === grower.defaultTransporterId
+                    (tr) => tr.id === supplier.defaultTransporterId
                   );
                   return (
                     <TableRow
-                      key={grower.id}
+                      key={supplier.id}
                       className="cursor-pointer"
-                      onClick={() => openGrowerDialog(grower)}
+                      onClick={() => openSupplierDialog(supplier)}
                     >
-                      <TableCell className="font-medium">{grower.code}</TableCell>
-                      <TableCell>{grower.company || grower.name}</TableCell>
+                      <TableCell className="font-medium">{supplier.code}</TableCell>
+                      <TableCell>{supplier.company || supplier.name}</TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1.5">
-                          {grower.fustEnabled ? (
+                          {supplier.fustEnabled ? (
                             <Badge variant="default">{t("fust.enabled")}</Badge>
                           ) : (
                             <Badge variant="outline">{t("fust.disabled")}</Badge>
                           )}
-                          {grower.fustEnabled && grower.autoApproveOrders && (
+                          {supplier.fustEnabled && supplier.autoApproveOrders && (
                             <Badge variant="secondary">{t("fust.autoApproved")}</Badge>
                           )}
                         </div>
@@ -335,7 +335,7 @@ export function FustSettings() {
                       <TableCell>{transporter?.name || "-"}</TableCell>
                       <TableCell>
                         <Badge variant="outline">
-                          {grower.preferredLanguage === "nl" ? "NL" : "EN"}
+                          {supplier.preferredLanguage === "nl" ? "NL" : "EN"}
                         </Badge>
                       </TableCell>
                       <TableCell>
@@ -345,7 +345,7 @@ export function FustSettings() {
                           className="h-7 w-7"
                           onClick={(e) => {
                             e.stopPropagation();
-                            openGrowerDialog(grower);
+                            openSupplierDialog(supplier);
                           }}
                         >
                           <RiEditLine className="h-4 w-4" />
@@ -512,13 +512,13 @@ export function FustSettings() {
         </TabsContent>
       </Tabs>
 
-      {/* ---- Grower Edit Dialog ---- */}
-      <Dialog open={growerDialog !== null} onOpenChange={(open) => !open && setGrowerDialog(null)}>
+      {/* ---- Supplier Edit Dialog ---- */}
+      <Dialog open={supplierDialog !== null} onOpenChange={(open) => !open && setSupplierDialog(null)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>{t("fust.editGrower")}</DialogTitle>
+            <DialogTitle>{t("fust.editSupplier")}</DialogTitle>
             <DialogDescription>
-              {growerDialog?.company || growerDialog?.name} ({growerDialog?.code})
+              {supplierDialog?.company || supplierDialog?.name} ({supplierDialog?.code})
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
@@ -527,19 +527,19 @@ export function FustSettings() {
               <div className="flex gap-2">
                 <Button
                   type="button"
-                  variant={growerEnabled ? "default" : "outline"}
+                  variant={supplierEnabled ? "default" : "outline"}
                   size="sm"
-                  onClick={() => setGrowerEnabled(true)}
+                  onClick={() => setSupplierEnabled(true)}
                 >
                   {t("fust.enabled")}
                 </Button>
                 <Button
                   type="button"
-                  variant={!growerEnabled ? "default" : "outline"}
+                  variant={!supplierEnabled ? "default" : "outline"}
                   size="sm"
                   onClick={() => {
-                    setGrowerEnabled(false);
-                    setGrowerTransporterId(null);
+                    setSupplierEnabled(false);
+                    setSupplierTransporterId(null);
                   }}
                 >
                   {t("fust.disabled")}
@@ -549,12 +549,12 @@ export function FustSettings() {
             <div className="space-y-2">
               <Label>
                 {t("fust.defaultTransporter")}
-                {growerEnabled && <span className="ml-1 text-destructive">*</span>}
+                {supplierEnabled && <span className="ml-1 text-destructive">*</span>}
               </Label>
               <Select
                 key={`tr-${data.transporters.length}`}
-                value={growerTransporterId || "none"}
-                onValueChange={(v) => setGrowerTransporterId(v === "none" ? null : v)}
+                value={supplierTransporterId || "none"}
+                onValueChange={(v) => setSupplierTransporterId(v === "none" ? null : v)}
               >
                 <SelectTrigger>
                   <SelectValue />
@@ -568,17 +568,17 @@ export function FustSettings() {
                   ))}
                 </SelectContent>
               </Select>
-              {growerEnabled && !growerTransporterId && (
+              {supplierEnabled && !supplierTransporterId && (
                 <p className="text-xs text-destructive">{t("fust.transporterRequired")}</p>
               )}
             </div>
-            {growerEnabled && (
+            {supplierEnabled && (
               <div className="space-y-2">
                 <label className="flex items-start gap-3 cursor-pointer">
                   <input
                     type="checkbox"
-                    checked={growerAutoApprove}
-                    onChange={(e) => setGrowerAutoApprove(e.target.checked)}
+                    checked={supplierAutoApprove}
+                    onChange={(e) => setSupplierAutoApprove(e.target.checked)}
                     className="mt-0.5 h-4 w-4 rounded border-gray-300 accent-primary"
                   />
                   <div>
@@ -591,8 +591,8 @@ export function FustSettings() {
             <div className="space-y-2">
               <Label>{t("common.preferredLanguage")}</Label>
               <Select
-                value={growerLanguage}
-                onValueChange={(v) => v && setGrowerLanguage(v)}
+                value={supplierLanguage}
+                onValueChange={(v) => v && setSupplierLanguage(v)}
               >
                 <SelectTrigger>
                   <SelectValue />
@@ -605,10 +605,10 @@ export function FustSettings() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setGrowerDialog(null)}>
+            <Button variant="outline" onClick={() => setSupplierDialog(null)}>
               {t("fust.cancel")}
             </Button>
-            <Button onClick={saveGrower} disabled={saving}>
+            <Button onClick={saveSupplier} disabled={saving}>
               {t("fust.save")}
             </Button>
           </DialogFooter>

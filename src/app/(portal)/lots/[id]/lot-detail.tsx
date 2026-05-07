@@ -27,7 +27,6 @@ interface LotDetailProps {
     id: string;
     lotNumber: string;
     refNumber: string;
-    productCode: string;
     productName: string;
     articleGroup: string;
     colli: number;
@@ -38,7 +37,7 @@ interface LotDetailProps {
     containerType: string;
     deliveryDate: string;
     status: string;
-    grower: { id: string; code: string; name: string };
+    supplier: { id: string; code: string; name: string };
     salesSheet: { id: string; invoiceNumber: string; pdfDocumentId: string | null } | null;
     transactions: {
       id: string;
@@ -55,7 +54,6 @@ interface LotDetailProps {
       isCorrection: boolean;
       correctionType: string | null;
     }[];
-    costs: { id: string; description: string; amount: string }[];
     qualityIssues: {
       id: string;
       code: string;
@@ -68,8 +66,6 @@ interface LotDetailProps {
 
 export function LotDetail({ lot }: LotDetailProps) {
   const { t } = useLanguage();
-  const totalCosts = lot.costs.reduce((sum, c) => sum + parseFloat(c.amount), 0);
-
   return (
     <div className="page-content">
       {/* Header */}
@@ -193,37 +189,6 @@ export function LotDetail({ lot }: LotDetailProps) {
           </Table>
         </CardContent>
       </Card>
-
-      {/* Costs */}
-      {lot.costs.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>{t("lots.costs")}</CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>{t("common.description")}</TableHead>
-                  <TableHead className="text-right">{t("lots.totalAmount")}</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {lot.costs.map((cost) => (
-                  <TableRow key={cost.id}>
-                    <TableCell>{cost.description}</TableCell>
-                    <TableCell className="text-right tabular-nums">{formatCurrencyDetailed(parseFloat(cost.amount))}</TableCell>
-                  </TableRow>
-                ))}
-                <TableRow className="font-semibold bg-muted/30">
-                  <TableCell>{t("common.total")}</TableCell>
-                  <TableCell className="text-right tabular-nums">{formatCurrencyDetailed(totalCosts)}</TableCell>
-                </TableRow>
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-      )}
 
       {/* Quality Issues */}
       {lot.qualityIssues.length > 0 && (

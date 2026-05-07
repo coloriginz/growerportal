@@ -4,7 +4,7 @@ import { requireAuth } from "@/lib/api-helpers";
 import { logFustEvent } from "@/lib/fust-audit";
 import { sendEmail } from "@/lib/email";
 import { fustInvoiceEmailHtml } from "@/lib/email-templates";
-import { getGrowerEmailBranding } from "@/lib/company-helpers";
+import { getSupplierEmailBranding } from "@/lib/company-helpers";
 
 export async function POST(
   _request: NextRequest,
@@ -15,11 +15,11 @@ export async function POST(
 
   const { id } = await params;
 
-  // 1. Load invoice with grower and grower users
+  // 1. Load invoice with supplier and supplier users
   const invoice = await prisma.fustGrowerInvoice.findUnique({
     where: { id },
     include: {
-      grower: {
+      supplier: {
         select: {
           id: true,
           code: true,
@@ -27,7 +27,7 @@ export async function POST(
           company: true,
           preferredLanguage: true,
           users: {
-            where: { isActive: true, role: "grower" },
+            where: { isActive: true, role: "supplier" },
             select: { email: true, name: true },
           },
         },
@@ -47,11 +47,11 @@ export async function POST(
     );
   }
 
-  // 3. Check grower has active users with email
-  const growerUsers = invoice.grower.users;
-  if (growerUsers.length === 0) {
+  // 3. Check supplier has active users with email
+  const supplierUsers = invoice.supplier.users;
+  if (supplierUsers.length === 0) {
     return NextResponse.json(
-      { error: "No active grower users found to send the invoice to" },
+      { error: "No active supplier users found to send the invoice to" },
       { status: 400 }
     );
   }
@@ -65,10 +65,10 @@ export async function POST(
   }
 
   // 5. Get branding + language
-  const branding = await getGrowerEmailBranding(invoice.growerId);
+  const branding = await getSupplierEmailBranding(invoice.supplierId);
   const portalUrl = process.env.APP_URL || process.env.NEXTAUTH_URL || "http://localhost:3000";
-  const growerName = invoice.grower.company || invoice.grower.name;
-  const language = (invoice.grower.preferredLanguage === "nl" ? "nl" : "en") as "en" | "nl";
+  const supplierName = invoice.supplier.company || invoice.supplier.name;
+  const language = (invoice.supplier.preferredLanguage === "nl" ? "nl" : "en") as "en" | "nl";
   const dateLocale = language === "nl" ? "nl-NL" : "en-GB";
 
   // 6. Format invoice date and total for email
@@ -86,7 +86,7 @@ export async function POST(
   // 7. Build email HTML
   const html = fustInvoiceEmailHtml({
     invoiceNumber: invoice.invoiceNumber,
-    growerName,
+    supplierName: supplierName,
     invoiceDate: formattedDate,
     totalAmount: formattedTotal,
     portalUrl,
@@ -107,7 +107,7 @@ export async function POST(
     ? `"${branding.emailName}" <${branding.emailFrom}>`
     : undefined;
 
-  const toAddresses = growerUsers.map((u) => u.email);
+  const toAddresses = supplierUsers.map((u) => u.email);
 
   // 10. Send email
   const result = await sendEmail({
@@ -150,7 +150,7 @@ export async function POST(
     metadata: {
       invoiceNumber: invoice.invoiceNumber,
       sentTo: toAddresses,
-      growerId: invoice.growerId,
+      supplierId: invoice.supplierId,
     },
   });
 

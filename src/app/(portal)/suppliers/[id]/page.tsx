@@ -1,19 +1,19 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
-import { GrowerDetail } from "./grower-detail";
+import { SupplierDetail } from "./supplier-detail";
 
 interface Props {
   params: Promise<{ id: string }>;
 }
 
-export default async function GrowerDetailPage({ params }: Props) {
+export default async function SupplierDetailPage({ params }: Props) {
   const session = await auth();
 
-  if (!session?.user || session.user.role === "grower") {
+  if (!session?.user || session.user.role === "supplier") {
     redirect("/dashboard");
   }
 
   const { id } = await params;
 
-  return <GrowerDetail growerId={id} />;
+  return <SupplierDetail supplierId={id} />;
 }

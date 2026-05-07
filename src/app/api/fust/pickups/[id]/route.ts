@@ -29,7 +29,7 @@ export async function GET(
           order: {
             include: {
               items: { include: { fustType: true } },
-              grower: { select: { id: true, code: true, name: true, company: true } },
+              supplier: { select: { id: true, code: true, name: true, company: true } },
             },
           },
           items: { include: { fustType: true } },
@@ -204,7 +204,7 @@ export async function PATCH(
           order: {
             include: {
               items: { include: { fustType: true } },
-              grower: { select: { id: true, code: true, name: true, company: true } },
+              supplier: { select: { id: true, code: true, name: true, company: true } },
             },
           },
           items: { include: { fustType: true } },

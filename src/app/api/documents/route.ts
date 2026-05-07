@@ -1,22 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import { put } from "@vercel/blob";
 import { prisma } from "@/lib/db";
-import { requireAuth, resolveGrowerId } from "@/lib/api-helpers";
+import { requireAuth, resolveSupplierId } from "@/lib/api-helpers";
 import { DOCUMENT_TYPES } from "@/types";
 
 export async function GET(request: NextRequest) {
   const { error, session } = await requireAuth();
   if (error) return error;
 
-  const requestedGrowerId = request.nextUrl.searchParams.get("growerId");
-  const growerId = resolveGrowerId(session!, requestedGrowerId);
+  const requestedSupplierId = request.nextUrl.searchParams.get("supplierId");
+  const supplierId = resolveSupplierId(session!, requestedSupplierId);
 
-  if (!growerId) {
+  if (!supplierId) {
     return NextResponse.json([]);
   }
 
   const documents = await prisma.document.findMany({
-    where: { growerId },
+    where: { supplierId },
     orderBy: { createdAt: "desc" },
   });
 
@@ -40,13 +40,13 @@ export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData();
     const file = formData.get("file") as File | null;
-    const growerId = formData.get("growerId") as string | null;
+    const supplierId = formData.get("supplierId") as string | null;
     const type = formData.get("type") as string | null;
     const name = formData.get("name") as string | null;
 
-    if (!file || !growerId || !type || !name) {
+    if (!file || !supplierId || !type || !name) {
       return NextResponse.json(
-        { error: "Missing required fields: file, growerId, type, name" },
+        { error: "Missing required fields: file, supplierId, type, name" },
         { status: 400 }
       );
     }
@@ -58,17 +58,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Verify grower exists
-    const grower = await prisma.grower.findUnique({ where: { id: growerId } });
-    if (!grower) {
+    // Verify supplier exists
+    const supplier = await prisma.supplier.findUnique({ where: { id: supplierId } });
+    if (!supplier) {
       return NextResponse.json(
-        { error: "Grower not found" },
+        { error: "Supplier not found" },
         { status: 404 }
       );
     }
 
     // Upload to Vercel Blob
-    const blob = await put(`documents/${growerId}/${file.name}`, file, {
+    const blob = await put(`documents/${supplierId}/${file.name}`, file, {
       access: "public",
       addRandomSuffix: true,
     });
@@ -76,7 +76,7 @@ export async function POST(request: NextRequest) {
     // Create document record
     const document = await prisma.document.create({
       data: {
-        growerId,
+        supplierId,
         type,
         name,
         fileName: file.name,

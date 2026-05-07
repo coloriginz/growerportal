@@ -6,45 +6,45 @@ export async function GET(request: NextRequest) {
   const { error, session } = await requireAuth();
   if (error) return error;
 
-  const growerId = request.nextUrl.searchParams.get("growerId");
-  if (!growerId) {
-    return NextResponse.json({ error: "growerId required" }, { status: 400 });
+  const supplierId = request.nextUrl.searchParams.get("supplierId");
+  if (!supplierId) {
+    return NextResponse.json({ error: "supplierId required" }, { status: 400 });
   }
 
-  // Access check: growers can only view their own profile
+  // Access check: suppliers can only view their own profile
   if (
-    session!.user.role === "grower" &&
-    session!.user.growerId !== growerId
+    session!.user.role === "supplier" &&
+    session!.user.supplierId !== supplierId
   ) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const grower = await prisma.grower.findUnique({
-    where: { id: growerId },
+  const supplier = await prisma.supplier.findUnique({
+    where: { id: supplierId },
     include: {
       certificates: true,
       commercie: { select: { name: true, email: true } },
     },
   });
 
-  if (!grower) {
+  if (!supplier) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
   return NextResponse.json({
-    id: grower.id,
-    code: grower.code,
-    name: grower.name,
-    company: grower.company,
-    street: grower.street,
-    city: grower.city,
-    postalCode: grower.postalCode,
-    country: grower.country,
-    phone: grower.phone,
-    vatNumber: grower.vatNumber,
-    ggn: grower.ggn,
-    commercie: grower.commercie,
-    certificates: grower.certificates,
-    seasonStartMonth: grower.seasonStartMonth,
+    id: supplier.id,
+    code: supplier.code,
+    name: supplier.name,
+    company: supplier.company,
+    street: supplier.street,
+    city: supplier.city,
+    postalCode: supplier.postalCode,
+    country: supplier.country,
+    phone: supplier.phone,
+    vatNumber: supplier.vatNumber,
+    ggn: supplier.ggn,
+    commercie: supplier.commercie,
+    certificates: supplier.certificates,
+    seasonStartMonth: supplier.seasonStartMonth,
   });
 }

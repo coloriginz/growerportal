@@ -42,7 +42,7 @@ interface FustOrderItem {
   fustType: FustType;
 }
 
-interface Grower {
+interface Supplier {
   id: string;
   code: string;
   name: string;
@@ -57,7 +57,7 @@ interface FustOrder {
   notes: string | null;
   deliveredAt: string | null;
   items: FustOrderItem[];
-  grower: Grower;
+  supplier: Supplier;
 }
 
 // ─── Status Badge ───
@@ -225,8 +225,8 @@ export function FustDeliveries() {
           {activeOrder && (
             <div className="space-y-4 py-4">
               <p className="text-sm text-muted-foreground">
-                {activeOrder.grower.name}
-                {activeOrder.grower.company && ` (${activeOrder.grower.company})`}
+                {activeOrder.supplier.name}
+                {activeOrder.supplier.company && ` (${activeOrder.supplier.company})`}
               </p>
               <div className="space-y-3">
                 {activeOrder.items.map((item) => (
@@ -299,8 +299,8 @@ function OrderCard({ order, onConfirm, t }: OrderCardProps) {
             <StatusBadge status={order.status} />
           </div>
           <p className="text-sm text-muted-foreground">
-            {order.grower.name}
-            {order.grower.company && ` — ${order.grower.company}`}
+            {order.supplier.name}
+            {order.supplier.company && ` — ${order.supplier.company}`}
           </p>
           {order.requestedDate && (
             <p className="text-xs text-muted-foreground">

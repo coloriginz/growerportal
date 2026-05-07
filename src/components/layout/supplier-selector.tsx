@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { useLanguage } from "@/components/providers/language-provider";
 import { Suspense } from "react";
 
-interface GrowerOption {
+interface SupplierOption {
   id: string;
   code: string;
   name: string;
@@ -16,8 +16,8 @@ interface GrowerOption {
   companyEntity?: { id: string; name: string; slug: string } | null;
 }
 
-function GrowerSelectorInner() {
-  const [growers, setGrowers] = useState<GrowerOption[]>([]);
+function SupplierSelectorInner() {
+  const [suppliers, setSuppliers] = useState<SupplierOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -26,48 +26,48 @@ function GrowerSelectorInner() {
   const searchParams = useSearchParams();
   const { t } = useLanguage();
 
-  // Read growerId only from URL (no persistence between sessions)
-  const selectedGrowerId = searchParams.get("growerId") || "";
+  // Read supplierId only from URL (no persistence between sessions)
+  const selectedSupplierId = searchParams.get("supplierId") || "";
 
   useEffect(() => {
-    async function fetchGrowers() {
+    async function fetchSuppliers() {
       try {
-        const res = await fetch("/api/growers");
+        const res = await fetch("/api/suppliers");
         if (res.ok) {
           const data = await res.json();
-          setGrowers(data);
+          setSuppliers(data);
         }
       } finally {
         setLoading(false);
       }
     }
-    fetchGrowers();
+    fetchSuppliers();
   }, []);
 
-  const selectedGrower = growers.find((g) => g.id === selectedGrowerId);
+  const selectedSupplier = suppliers.find((g) => g.id === selectedSupplierId);
 
   const filtered = useMemo(() => {
-    if (!search) return growers;
+    if (!search) return suppliers;
     const q = search.toLowerCase();
-    return growers.filter(
+    return suppliers.filter(
       (g) =>
         g.code.toLowerCase().includes(q) ||
         g.name.toLowerCase().includes(q) ||
         (g.company && g.company.toLowerCase().includes(q))
     );
-  }, [growers, search]);
+  }, [suppliers, search]);
 
-  const handleSelect = useCallback((growerId: string) => {
+  const handleSelect = useCallback((supplierId: string) => {
     const params = new URLSearchParams(searchParams.toString());
-    if (growerId === selectedGrowerId) {
-      params.delete("growerId");
+    if (supplierId === selectedSupplierId) {
+      params.delete("supplierId");
     } else {
-      params.set("growerId", growerId);
+      params.set("supplierId", supplierId);
     }
     router.push(`${pathname}?${params.toString()}`);
     setOpen(false);
     setSearch("");
-  }, [searchParams, selectedGrowerId, router, pathname]);
+  }, [searchParams, selectedSupplierId, router, pathname]);
 
   if (loading) {
     return <div className="bg-muted h-10 animate-pulse rounded-md" />;
@@ -87,11 +87,11 @@ function GrowerSelectorInner() {
       >
           <div className="flex items-center gap-2 truncate">
             <RiPlantLine className="text-muted-foreground h-4 w-4 shrink-0" />
-            {selectedGrower ? (
+            {selectedSupplier ? (
               <span className="truncate">
-                <span className="font-medium">{selectedGrower.code}</span>
+                <span className="font-medium">{selectedSupplier.code}</span>
                 <span className="text-sidebar-foreground/60 ml-2 text-xs">
-                  {selectedGrower.company || selectedGrower.name}
+                  {selectedSupplier.company || selectedSupplier.name}
                 </span>
               </span>
             ) : (
@@ -110,7 +110,7 @@ function GrowerSelectorInner() {
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search grower..."
+              placeholder="Search supplier..."
               className="placeholder:text-muted-foreground w-full bg-transparent text-sm outline-none"
               autoFocus
             />
@@ -119,26 +119,26 @@ function GrowerSelectorInner() {
         <div className="max-h-60 overflow-y-auto p-1">
           {filtered.length === 0 ? (
             <p className="text-muted-foreground py-4 text-center text-sm">
-              No growers found
+              No suppliers found
             </p>
           ) : (
-            filtered.map((grower) => (
+            filtered.map((supplier) => (
               <button
-                key={grower.id}
+                key={supplier.id}
                 type="button"
-                onClick={() => handleSelect(grower.id)}
+                onClick={() => handleSelect(supplier.id)}
                 className="hover:bg-accent hover:text-accent-foreground flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm transition-colors"
               >
                 <RiCheckLine
                   className={`h-4 w-4 shrink-0 ${
-                    grower.id === selectedGrowerId
+                    supplier.id === selectedSupplierId
                       ? "opacity-100"
                       : "opacity-0"
                   }`}
                 />
-                <span className="font-medium">{grower.code}</span>
+                <span className="font-medium">{supplier.code}</span>
                 <span className="text-muted-foreground truncate text-xs">
-                  {grower.company || grower.name}
+                  {supplier.company || supplier.name}
                 </span>
               </button>
             ))
@@ -149,12 +149,12 @@ function GrowerSelectorInner() {
   );
 }
 
-export function GrowerSelector() {
+export function SupplierSelector() {
   return (
     <Suspense
       fallback={<div className="bg-muted h-10 animate-pulse rounded-md" />}
     >
-      <GrowerSelectorInner />
+      <SupplierSelectorInner />
     </Suspense>
   );
 }

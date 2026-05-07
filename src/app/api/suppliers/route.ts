@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
 
   // Simple mode: return minimal data for dropdowns
   if (!full) {
-    const growers = await prisma.grower.findMany({
+    const suppliers = await prisma.supplier.findMany({
       where: fustOnly ? { fustEnabled: true } : undefined,
       select: {
         id: true,
@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
       },
       orderBy: { code: "asc" },
     });
-    return NextResponse.json(growers.map((g) => ({
+    return NextResponse.json(suppliers.map((g) => ({
       id: g.id,
       code: g.code,
       name: g.name,
@@ -33,8 +33,8 @@ export async function GET(request: NextRequest) {
     })));
   }
 
-  // Full mode: return complete grower list with commercie and login status
-  const growers = await prisma.grower.findMany({
+  // Full mode: return complete supplier list with commercie and login status
+  const suppliers = await prisma.supplier.findMany({
     include: {
       commercie: { select: { id: true, name: true } },
       companyEntity: { select: { id: true, name: true, slug: true } },
@@ -43,7 +43,7 @@ export async function GET(request: NextRequest) {
     orderBy: { code: "asc" },
   });
 
-  const result = growers.map((g) => ({
+  const result = suppliers.map((g) => ({
     id: g.id,
     code: g.code,
     name: g.name,
@@ -62,7 +62,7 @@ export async function GET(request: NextRequest) {
   return NextResponse.json(result);
 }
 
-const createGrowerSchema = z.object({
+const createSupplierSchema = z.object({
   code: z.string().min(1),
   name: z.string().min(1),
   company: z.string().optional(),
@@ -75,7 +75,7 @@ export async function POST(request: NextRequest) {
   if (error) return error;
 
   const body = await request.json();
-  const parsed = createGrowerSchema.safeParse(body);
+  const parsed = createSupplierSchema.safeParse(body);
 
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
@@ -83,12 +83,12 @@ export async function POST(request: NextRequest) {
 
   const { code, name, company, country, companyId } = parsed.data;
 
-  const existing = await prisma.grower.findUnique({ where: { code } });
+  const existing = await prisma.supplier.findUnique({ where: { code } });
   if (existing) {
-    return NextResponse.json({ error: "Grower code already exists" }, { status: 409 });
+    return NextResponse.json({ error: "Supplier code already exists" }, { status: 409 });
   }
 
-  const grower = await prisma.grower.create({
+  const supplier = await prisma.supplier.create({
     data: {
       code,
       name,
@@ -98,5 +98,5 @@ export async function POST(request: NextRequest) {
     },
   });
 
-  return NextResponse.json(grower, { status: 201 });
+  return NextResponse.json(supplier, { status: 201 });
 }

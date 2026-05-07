@@ -58,7 +58,7 @@ interface FustOrder {
   rejectionReason: string | null;
   createdAt: string;
   items: FustOrderItem[];
-  grower: {
+  supplier: {
     id: string;
     code: string;
     name: string;
@@ -93,7 +93,7 @@ function StatusBadge({ status }: { status: string }) {
 export function FustOrders() {
   const { t } = useLanguage();
   const searchParams = useSearchParams();
-  const growerId = searchParams.get("growerId");
+  const supplierId = searchParams.get("supplierId");
   const [rejectDialogOrder, setRejectDialogOrder] = useState<FustOrder | null>(null);
   const [rejectionReason, setRejectionReason] = useState("");
   const [processing, setProcessing] = useState<string | null>(null);
@@ -101,9 +101,9 @@ export function FustOrders() {
 
   const url = useMemo(() => {
     const params = new URLSearchParams();
-    if (growerId) params.set("growerId", growerId);
+    if (supplierId) params.set("supplierId", supplierId);
     return `/api/fust/orders?${params.toString()}`;
-  }, [growerId]);
+  }, [supplierId]);
 
   const { data: orders, loading, refetch } = useFetch<FustOrder[]>(url);
 
@@ -268,7 +268,7 @@ export function FustOrders() {
           </DialogHeader>
           <div className="py-4">
             <p className="mb-2 text-sm text-muted-foreground">
-              {rejectDialogOrder?.orderNumber} - {rejectDialogOrder?.grower.code}
+              {rejectDialogOrder?.orderNumber} - {rejectDialogOrder?.supplier.code}
             </p>
             <Input
               value={rejectionReason}
@@ -337,7 +337,7 @@ function OrdersTable({ orders, processing, onApprove, onReject, onTimeline, t, e
         <TableHeader>
           <TableRow>
             <TableHead>{t("fust.orderNumber")}</TableHead>
-            <TableHead>{t("fust.grower")}</TableHead>
+            <TableHead>{t("fust.supplier")}</TableHead>
             <TableHead>{t("fust.createdAt")}</TableHead>
             <TableHead>{t("fust.requestedDate")}</TableHead>
             <TableHead>{t("fust.status")}</TableHead>
@@ -357,9 +357,9 @@ function OrdersTable({ orders, processing, onApprove, onReject, onTimeline, t, e
                 <TableCell className="font-medium">{order.orderNumber}</TableCell>
                 <TableCell>
                   <div>
-                    <p className="text-sm font-medium">{order.grower.code}</p>
+                    <p className="text-sm font-medium">{order.supplier.code}</p>
                     <p className="text-xs text-muted-foreground">
-                      {order.grower.company || order.grower.name}
+                      {order.supplier.company || order.supplier.name}
                     </p>
                   </div>
                 </TableCell>

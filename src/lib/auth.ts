@@ -18,7 +18,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
         const user = await prisma.user.findUnique({
           where: { email: credentials.email as string },
-          include: { grower: true },
+          include: { supplier: true },
         });
 
         if (!user || !user.passwordHash || !user.isActive) {
@@ -39,8 +39,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           email: user.email,
           name: user.name,
           role: user.role,
-          growerId: user.growerId,
-          growerCode: user.grower?.code,
+          supplierId: user.supplierId,
+          supplierCode: user.supplier?.code,
           transporterId: user.transporterId,
         };
       },
@@ -53,20 +53,20 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     async jwt({ token, user, trigger, session: updateData }) {
       if (user) {
         token.role = user.role;
-        token.growerId = user.growerId;
-        token.growerCode = user.growerCode;
+        token.supplierId = user.supplierId;
+        token.supplierCode = user.supplierCode;
         token.transporterId = user.transporterId;
       }
       // Re-read from DB when client calls update() (e.g. after profile change)
       if (trigger === "update" && updateData?.refreshFromDb) {
         const dbUser = await prisma.user.findUnique({
           where: { id: token.sub! },
-          include: { grower: true },
+          include: { supplier: true },
         });
         if (dbUser) {
           token.role = dbUser.role;
-          token.growerId = dbUser.growerId;
-          token.growerCode = dbUser.grower?.code ?? null;
+          token.supplierId = dbUser.supplierId;
+          token.supplierCode = dbUser.supplier?.code ?? null;
           token.transporterId = dbUser.transporterId;
         }
       }
@@ -79,19 +79,19 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         }
         token.role = updateData.switchRole;
       }
-      // Test mode: switch to a specific grower entity
-      if (trigger === "update" && updateData?.switchGrowerId !== undefined) {
-        token.growerId = updateData.switchGrowerId;
-        token.growerCode = updateData.switchGrowerCode || null;
-        // Clear transporter when switching to grower
+      // Test mode: switch to a specific supplier entity
+      if (trigger === "update" && updateData?.switchSupplierId !== undefined) {
+        token.supplierId = updateData.switchSupplierId;
+        token.supplierCode = updateData.switchSupplierCode || null;
+        // Clear transporter when switching to supplier
         token.transporterId = null;
       }
       // Test mode: switch to a specific transporter entity
       if (trigger === "update" && updateData?.switchTransporterId !== undefined) {
         token.transporterId = updateData.switchTransporterId;
-        // Clear grower when switching to transporter
-        token.growerId = null;
-        token.growerCode = null;
+        // Clear supplier when switching to transporter
+        token.supplierId = null;
+        token.supplierCode = null;
       }
       return token;
     },
@@ -99,8 +99,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       if (session.user) {
         session.user.id = token.sub!;
         session.user.role = token.role as string;
-        session.user.growerId = token.growerId as string | null;
-        session.user.growerCode = token.growerCode as string | null;
+        session.user.supplierId = token.supplierId as string | null;
+        session.user.supplierCode = token.supplierCode as string | null;
         session.user.transporterId = token.transporterId as string | null;
       }
       return session;

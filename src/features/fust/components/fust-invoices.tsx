@@ -58,17 +58,17 @@ interface InvoiceItem {
   totalPrice: string;
 }
 
-interface GrowerRef {
+interface SupplierRef {
   id: string;
   code: string;
   name: string;
   company: string | null;
 }
 
-interface GrowerCharge {
+interface SupplierCharge {
   id: string;
-  growerId: string;
-  grower: GrowerRef;
+  supplierId: string;
+  supplier: SupplierRef;
   amount: string;
   description: string | null;
   status: string;
@@ -85,10 +85,10 @@ interface FustInvoice {
   notes: string | null;
   createdAt: string;
   items: InvoiceItem[];
-  charges: GrowerCharge[];
+  charges: SupplierCharge[];
 }
 
-interface GrowerOption {
+interface SupplierOption {
   id: string;
   code: string;
   name: string;
@@ -488,13 +488,13 @@ function InvoiceDetailDialog({
           {invoice.charges.length > 0 && (
             <div>
               <h3 className="mb-2 text-sm font-semibold">
-                {t("fust.growerCharges" as Parameters<typeof t>[0])}
+                {t("fust.supplierCharges" as Parameters<typeof t>[0])}
               </h3>
               <div className="overflow-x-auto rounded-lg border">
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>{t("fust.grower" as Parameters<typeof t>[0])}</TableHead>
+                      <TableHead>{t("fust.supplier" as Parameters<typeof t>[0])}</TableHead>
                       <TableHead className="text-right">
                         {t("fust.amount" as Parameters<typeof t>[0])}
                       </TableHead>
@@ -507,9 +507,9 @@ function InvoiceDetailDialog({
                       <TableRow key={charge.id}>
                         <TableCell>
                           <div>
-                            <span className="font-medium">{charge.grower.code}</span>
+                            <span className="font-medium">{charge.supplier.code}</span>
                             <span className="ml-1.5 text-xs text-muted-foreground">
-                              {charge.grower.company || charge.grower.name}
+                              {charge.supplier.company || charge.supplier.name}
                             </span>
                           </div>
                         </TableCell>
@@ -552,7 +552,7 @@ function InvoiceDetailDialog({
 // ─── Charge Assignment Dialog ───────────────────────────
 
 interface ChargeRow {
-  growerId: string;
+  supplierId: string;
   amount: string;
   description: string;
 }
@@ -570,11 +570,11 @@ function ChargeAssignmentDialog({
   const [charges, setCharges] = useState<ChargeRow[]>([]);
   const [submitting, setSubmitting] = useState(false);
 
-  // Fetch growers with fust enabled for the dropdown
-  const { data: growers } = useFetch<GrowerOption[]>("/api/growers");
+  // Fetch suppliers with fust enabled for the dropdown
+  const { data: suppliers } = useFetch<SupplierOption[]>("/api/suppliers");
 
   const addChargeRow = useCallback(() => {
-    setCharges((prev) => [...prev, { growerId: "", amount: "", description: "" }]);
+    setCharges((prev) => [...prev, { supplierId: "", amount: "", description: "" }]);
   }, []);
 
   const removeChargeRow = useCallback((index: number) => {
@@ -591,17 +591,17 @@ function ChargeAssignmentDialog({
   );
 
   const autoDistribute = useCallback(() => {
-    if (!growers || growers.length === 0) return;
+    if (!suppliers || suppliers.length === 0) return;
     const totalAmount = Number(invoice.totalAmount);
-    const perGrower = totalAmount / growers.length;
+    const perSupplier = totalAmount / suppliers.length;
     setCharges(
-      growers.map((g) => ({
-        growerId: g.id,
-        amount: perGrower.toFixed(2),
+      suppliers.map((g) => ({
+        supplierId: g.id,
+        amount: perSupplier.toFixed(2),
         description: "",
       }))
     );
-  }, [growers, invoice.totalAmount]);
+  }, [suppliers, invoice.totalAmount]);
 
   const totalCharged = useMemo(
     () => charges.reduce((sum, c) => sum + (parseFloat(c.amount) || 0), 0),
@@ -611,7 +611,7 @@ function ChargeAssignmentDialog({
   const isValid = useMemo(
     () =>
       charges.length > 0 &&
-      charges.every((c) => c.growerId && parseFloat(c.amount) > 0),
+      charges.every((c) => c.supplierId && parseFloat(c.amount) > 0),
     [charges]
   );
 
@@ -621,7 +621,7 @@ function ChargeAssignmentDialog({
     try {
       const body = {
         charges: charges.map((c) => ({
-          growerId: c.growerId,
+          supplierId: c.supplierId,
           amount: parseFloat(c.amount),
           description: c.description || null,
         })),
@@ -679,7 +679,7 @@ function ChargeAssignmentDialog({
           {/* Actions */}
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={addChargeRow}>
-              + {t("fust.grower" as Parameters<typeof t>[0])}
+              + {t("fust.supplier" as Parameters<typeof t>[0])}
             </Button>
             <Button variant="outline" size="sm" onClick={autoDistribute}>
               {t("fust.autoDistribute" as Parameters<typeof t>[0])}
@@ -696,21 +696,21 @@ function ChargeAssignmentDialog({
                 >
                   <div className="flex-1">
                     <Label className="text-xs">
-                      {t("fust.grower" as Parameters<typeof t>[0])}
+                      {t("fust.supplier" as Parameters<typeof t>[0])}
                     </Label>
                     <Select
-                      value={charge.growerId || undefined}
+                      value={charge.supplierId || undefined}
                       onValueChange={(v) =>
-                        updateChargeRow(index, "growerId", v ?? "")
+                        updateChargeRow(index, "supplierId", v ?? "")
                       }
                     >
                       <SelectTrigger className="mt-1">
                         <SelectValue
-                          placeholder={t("fust.filterByGrower" as Parameters<typeof t>[0])}
+                          placeholder={t("fust.filterBySupplier" as Parameters<typeof t>[0])}
                         />
                       </SelectTrigger>
                       <SelectContent>
-                        {growers?.map((g) => (
+                        {suppliers?.map((g) => (
                           <SelectItem key={g.id} value={g.id}>
                             {g.code} - {g.company || g.name}
                           </SelectItem>

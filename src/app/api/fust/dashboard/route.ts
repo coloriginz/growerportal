@@ -1,16 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { requireAuth, resolveGrowerId } from "@/lib/api-helpers";
+import { requireAuth, resolveSupplierId } from "@/lib/api-helpers";
 
 export async function GET(request: NextRequest) {
   const { error, session } = await requireAuth();
   if (error) return error;
 
   const params = request.nextUrl.searchParams;
-  const requestedGrowerId = params.get("growerId");
-  const growerId = resolveGrowerId(session!, requestedGrowerId);
+  const requestedSupplierId = params.get("supplierId");
+  const supplierId = resolveSupplierId(session!, requestedSupplierId);
 
-  if (!growerId) {
+  if (!supplierId) {
     // Aggregate view for admin/commercie
     const [pendingCount, approvedCount, deliveredCount] = await Promise.all([
       prisma.fustOrder.count({ where: { status: "pending", deletedAt: null } }),
@@ -27,10 +27,10 @@ export async function GET(request: NextRequest) {
 
   const [pendingOrders, recentOrders, recentDeliveries, openCharges] = await Promise.all([
     prisma.fustOrder.count({
-      where: { growerId, status: { in: ["pending", "approved", "scheduled"] }, deletedAt: null },
+      where: { supplierId, status: { in: ["pending", "approved", "scheduled"] }, deletedAt: null },
     }),
     prisma.fustOrder.findMany({
-      where: { growerId, deletedAt: null },
+      where: { supplierId, deletedAt: null },
       include: {
         items: { include: { fustType: true } },
       },
@@ -38,7 +38,7 @@ export async function GET(request: NextRequest) {
       take: 5,
     }),
     prisma.fustDelivery.findMany({
-      where: { order: { growerId }, status: "delivered" },
+      where: { order: { supplierId }, status: "delivered" },
       include: {
         order: { select: { orderNumber: true } },
         items: { include: { fustType: true } },
@@ -47,7 +47,7 @@ export async function GET(request: NextRequest) {
       take: 5,
     }),
     prisma.fustGrowerCharge.aggregate({
-      where: { growerId, status: "pending" },
+      where: { supplierId, status: "pending" },
       _sum: { amount: true },
       _count: true,
     }),
