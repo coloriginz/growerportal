@@ -62,6 +62,7 @@
     "dashboard": "Dashboard",
     "sales": "Verkopen",
     "lots": "Partijen",
+    "shipments": "Leveringen",
     "documents": "Documenten",
     "quality": "Kwaliteit",
     "profile": "Profiel",
@@ -160,6 +161,20 @@
     "salesSheet": "Salessheet",
     "qualityIssues": "Kwaliteitsissues",
     "containerType": "Verpakking"
+  },
+  "shipments": {
+    "title": "Leveringen",
+    "details": "Leveringsdetails",
+    "invoiceNumber": "Factuurnummer",
+    "deliveryDate": "Leverdatum",
+    "lots": "Partijen",
+    "stems": "Stelen",
+    "turnover": "Omzet",
+    "costs": "Kosten",
+    "netResult": "Nettoresultaat",
+    "costType": "Kostentype",
+    "lotsInShipment": "Partijen in Levering",
+    "searchPlaceholder": "Zoek op factuurnummer..."
   },
   "documents": {
     "title": "Documenten",

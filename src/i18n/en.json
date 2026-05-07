@@ -62,6 +62,7 @@
     "dashboard": "Dashboard",
     "sales": "Sales",
     "lots": "Lots",
+    "shipments": "Shipments",
     "documents": "Documents",
     "quality": "Quality",
     "profile": "Profile",
@@ -160,6 +161,20 @@
     "salesSheet": "Sales Sheet",
     "qualityIssues": "Quality Issues",
     "containerType": "Container"
+  },
+  "shipments": {
+    "title": "Shipments",
+    "details": "Shipment Details",
+    "invoiceNumber": "Invoice Number",
+    "deliveryDate": "Delivery Date",
+    "lots": "Lots",
+    "stems": "Stems",
+    "turnover": "Turnover",
+    "costs": "Costs",
+    "netResult": "Net Result",
+    "costType": "Cost Type",
+    "lotsInShipment": "Lots in Shipment",
+    "searchPlaceholder": "Search by invoice number..."
   },
   "documents": {
     "title": "Documents",

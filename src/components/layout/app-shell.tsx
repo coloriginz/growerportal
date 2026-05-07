@@ -68,7 +68,7 @@ interface NavItem {
 const mainNavItems: NavItem[] = [
   { href: "/dashboard", labelKey: "nav.dashboard", icon: RiDashboardLine },
   { href: "/sales", labelKey: "nav.sales", icon: RiShoppingCartLine },
-  { href: "/lots", labelKey: "nav.lots", icon: RiStackLine },
+  { href: "/shipments", labelKey: "nav.shipments", icon: RiStackLine },
   { href: "/documents", labelKey: "nav.documents", icon: RiFileTextLine },
   { href: "/quality", labelKey: "nav.quality", icon: RiShieldCheckLine },
   { href: "/forecasts", labelKey: "nav.forecasts", icon: RiCalendarScheduleLine },
