@@ -27,6 +27,7 @@ import {
   RiLink,
   RiHistoryLine,
   RiMailLine,
+  RiDatabase2Line,
 } from "@remixicon/react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -108,6 +109,12 @@ const bottomNavItems: NavItem[] = [
     href: "/admin",
     labelKey: "nav.users",
     icon: RiUserSettingsLine,
+    roles: ["admin"],
+  },
+  {
+    href: "/admin/imports",
+    labelKey: "nav.importStatus",
+    icon: RiDatabase2Line,
     roles: ["admin"],
   },
 ];
@@ -298,7 +305,7 @@ export function AppShell({ user, children }: AppShellProps) {
             <Separator className="bg-sidebar-border" />
             <nav className="space-y-0.5 px-3 py-3">
               {filteredBottomNav.map((item) => {
-                const isActive = pathname.startsWith(item.href);
+                const isActive = item.href === "/admin" ? pathname === "/admin" : pathname.startsWith(item.href);
                 const Icon = item.icon;
                 return (
                   <Link

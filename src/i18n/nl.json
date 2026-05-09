@@ -83,7 +83,8 @@
     "fustSettings": "Fust Instellingen",
     "fustActivity": "Activiteit",
     "fustEmails": "Email Log",
-    "fust": "Fust"
+    "fust": "Fust",
+    "importStatus": "Import Status"
   },
   "dashboard": {
     "title": "Dashboard",
@@ -359,6 +360,15 @@
     "passwordsMismatch": "Wachtwoorden komen niet overeen.",
     "tokenExpired": "Deze activatielink is niet meer geldig. Vraag een nieuwe aan.",
     "genericError": "Er is iets misgegaan. Probeer het opnieuw."
+  },
+  "imports": {
+    "title": "Import Status",
+    "lastSync": "Laatste Sync",
+    "endpoint": "Endpoint",
+    "received": "Ontvangen",
+    "duration": "Duur",
+    "noData": "Geen importbatches gevonden",
+    "errors24h": "Fouten (24u)"
   },
   "fust": {
     "title": "Fustbestellingen",

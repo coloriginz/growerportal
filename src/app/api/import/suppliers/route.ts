@@ -19,65 +19,128 @@ export async function POST(request: NextRequest) {
   const authError = requireImportAuth(request);
   if (authError) return authError;
 
+  const startTime = Date.now();
+  let batch: { id: string } | null = null;
+  try {
+    batch = await prisma.importBatch.create({
+      data: { endpoint: "suppliers", status: "running" },
+    });
+  } catch {
+    // Batch logging should not block the import
+  }
+
   const body = await request.json();
   const parsed = bodySchema.safeParse(body);
   if (!parsed.success) {
+    if (batch) {
+      try {
+        await prisma.importBatch.update({
+          where: { id: batch.id },
+          data: {
+            status: "error",
+            errorMessage: JSON.stringify(parsed.error.flatten()),
+            durationMs: Date.now() - startTime,
+            completedAt: new Date(),
+          },
+        });
+      } catch {
+        // Batch logging should not block the import
+      }
+    }
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  const { suppliers } = parsed.data;
+  try {
+    const { suppliers } = parsed.data;
 
-  // Ensure default company exists
-  let company = await prisma.company.findFirst({ where: { slug: "coloriginz" } });
-  if (!company) {
-    company = await prisma.company.create({
-      data: {
-        name: "Coloriginz",
-        slug: "coloriginz",
-        logoUrl: "/logos/coloriginz.png",
-        emailFrom: "noreply@coloriginz.com",
-        emailName: "Coloriginz Grower Portal",
-        footerText: "Coloriginz — OZ Import BV, Aalsmeer",
-      },
-    });
-  }
-
-  let created = 0;
-  let updated = 0;
-  let errors = 0;
-
-  for (const row of suppliers) {
-    try {
-      const result = await prisma.supplier.upsert({
-        where: { fabricId: row.ID },
-        update: {
-          code: row.Code,
-          name: row.Naam,
-          accountManagerName: row["AM Naam"] || null,
-          accountManagerCode: row["AM Code"] || null,
-        },
-        create: {
-          code: row.Code,
-          name: row.Naam,
-          fabricId: row.ID,
-          accountManagerName: row["AM Naam"] || null,
-          accountManagerCode: row["AM Code"] || null,
-          companyId: company.id,
+    // Ensure default company exists
+    let company = await prisma.company.findFirst({ where: { slug: "coloriginz" } });
+    if (!company) {
+      company = await prisma.company.create({
+        data: {
+          name: "Coloriginz",
+          slug: "coloriginz",
+          logoUrl: "/logos/coloriginz.png",
+          emailFrom: "noreply@coloriginz.com",
+          emailName: "Coloriginz Grower Portal",
+          footerText: "Coloriginz — OZ Import BV, Aalsmeer",
         },
       });
-      // Check if it was created or updated by comparing createdAt timestamps
-      const isNew = result.createdAt.getTime() > Date.now() - 5000;
-      if (isNew) created++;
-      else updated++;
-    } catch {
-      errors++;
     }
-  }
 
-  return NextResponse.json({
-    received: suppliers.length,
-    created,
-    updated,
-    errors,
-  });
+    let created = 0;
+    let updated = 0;
+    let errors = 0;
+
+    for (const row of suppliers) {
+      try {
+        const result = await prisma.supplier.upsert({
+          where: { fabricId: row.ID },
+          update: {
+            code: row.Code,
+            name: row.Naam,
+            accountManagerName: row["AM Naam"] || null,
+            accountManagerCode: row["AM Code"] || null,
+          },
+          create: {
+            code: row.Code,
+            name: row.Naam,
+            fabricId: row.ID,
+            accountManagerName: row["AM Naam"] || null,
+            accountManagerCode: row["AM Code"] || null,
+            companyId: company.id,
+          },
+        });
+        // Check if it was created or updated by comparing createdAt timestamps
+        const isNew = result.createdAt.getTime() > Date.now() - 5000;
+        if (isNew) created++;
+        else updated++;
+      } catch {
+        errors++;
+      }
+    }
+
+    if (batch) {
+      try {
+        await prisma.importBatch.update({
+          where: { id: batch.id },
+          data: {
+            status: "success",
+            recordsReceived: suppliers.length,
+            recordsCreated: created,
+            recordsUpdated: updated,
+            recordsSkipped: errors,
+            durationMs: Date.now() - startTime,
+            completedAt: new Date(),
+          },
+        });
+      } catch {
+        // Batch logging should not block the import
+      }
+    }
+
+    return NextResponse.json({
+      received: suppliers.length,
+      created,
+      updated,
+      errors,
+    });
+  } catch (err) {
+    if (batch) {
+      try {
+        await prisma.importBatch.update({
+          where: { id: batch.id },
+          data: {
+            status: "error",
+            errorMessage: err instanceof Error ? err.message : String(err),
+            durationMs: Date.now() - startTime,
+            completedAt: new Date(),
+          },
+        });
+      } catch {
+        // Batch logging should not block the import
+      }
+    }
+    throw err;
+  }
 }

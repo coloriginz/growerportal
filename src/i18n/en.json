@@ -83,7 +83,8 @@
     "fustSettings": "Fust Settings",
     "fustActivity": "Activity",
     "fustEmails": "Email Log",
-    "fust": "Fust"
+    "fust": "Fust",
+    "importStatus": "Import Status"
   },
   "dashboard": {
     "title": "Dashboard",
@@ -359,6 +360,15 @@
     "passwordsMismatch": "Passwords do not match.",
     "tokenExpired": "This activation link is no longer valid. Please request a new one.",
     "genericError": "Something went wrong. Please try again."
+  },
+  "imports": {
+    "title": "Import Status",
+    "lastSync": "Last Sync",
+    "endpoint": "Endpoint",
+    "received": "Received",
+    "duration": "Duration",
+    "noData": "No import batches found",
+    "errors24h": "Errors (24h)"
   },
   "fust": {
     "title": "Fust Orders",

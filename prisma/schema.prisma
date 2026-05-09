@@ -164,6 +164,7 @@ model SalesSheet {
   pdfDocumentId   String?  // Link to Document
   pdfDocument     Document? @relation(fields: [pdfDocumentId], references: [id])
   createdAt       DateTime @default(now())
+  updatedAt       DateTime @default(now()) @updatedAt
 
   lots            Lot[]
   costs           SalesSheetCost[]
@@ -185,6 +186,8 @@ model SalesSheetCost {
   costTypeName   String?   // Kost Type Naam
   totalTurnover  Decimal?  @db.Decimal(12, 2) // Totaal Omzet (context)
   totalQuantity  Int?      // Totaal Aantal (context)
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @default(now()) @updatedAt
 
   @@index([salesSheetId])
 }
@@ -226,6 +229,7 @@ model Lot {
   invoicedVolume     Int?   // Inkoopfactuur volume
   correctionVolume   Int?   // Inslagcorrectie volume
   createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @default(now()) @updatedAt
 
   transactions   Transaction[]
   qualityIssues  QualityIssue[]
@@ -256,11 +260,33 @@ model Transaction {
   pricePerStem  Decimal  @db.Decimal(10, 4)
   amount        Decimal  @db.Decimal(12, 2)
   createdAt     DateTime @default(now())
+  updatedAt     DateTime @default(now()) @updatedAt
 
   @@index([lotId])
   @@index([date])
   @@index([salesType])
   @@index([fabricOrdregId])
+}
+
+// ─── IMPORT BATCHES ─────────────────────────────────────
+
+model ImportBatch {
+  id               String   @id @default(uuid())
+  endpoint         String   // "suppliers", "lots", "orders", "costs"
+  status           String   @default("running") // "running", "success", "error"
+  recordsReceived  Int      @default(0)
+  recordsCreated   Int      @default(0)
+  recordsUpdated   Int      @default(0)
+  recordsSkipped   Int      @default(0)
+  durationMs       Int?
+  errorMessage     String?
+  details          Json?    // Extra info (e.g. salesSheetsRecalculated, growers created)
+  startedAt        DateTime @default(now())
+  completedAt      DateTime?
+
+  @@index([endpoint])
+  @@index([startedAt])
+  @@index([status])
 }
 
 // ─── DOCUMENTS ───────────────────────────────────────────
