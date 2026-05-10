@@ -261,6 +261,57 @@ Upserts salessheet costs (kosten per levering). Recalculates salessheet totals. 
 
 ---
 
+## 5. POST /api/import/growers
+
+Enriches existing Grower (kweker) records with name, code, country, and city from the Fabric `Dim_Kweker` dimension table. **Only updates growers that already exist** in the database (created via the orders import). Does not create new records.
+
+**Push strategy:** Full set (all kwekers). Small dataset (~2700 records). Run after orders import.
+
+### Request body
+
+```json
+{
+  "growers": [
+    {
+      "Naam": "Bergflora Capetown (Pty) Ltd",
+      "Code": "PCDEGREE",
+      "ID": 18189,
+      "Land Code": "ZA",
+      "Land Naam": "Zuid Afrika",
+      "Plaats": "Waboomskraal"
+    }
+  ]
+}
+```
+
+| Field | Type | Required | Maps to |
+|-------|------|----------|---------|
+| `Naam` | string | yes | `Grower.name` |
+| `Code` | string | yes | `Grower.code` |
+| `ID` | integer | yes | Match key: `Grower.fabricId` |
+| `Land Code` | string | no | (not stored, informational) |
+| `Land Naam` | string | no | `Grower.country` |
+| `Plaats` | string | no | `Grower.city` |
+
+### Response
+
+```json
+{
+  "received": 2687,
+  "matched": 63,
+  "updated": 58,
+  "unchanged": 5,
+  "notInDb": 2624,
+  "errors": 0
+}
+```
+
+### Behavior
+
+Only Grower records that already exist (created via the orders import when a new `rel_id_kweker` appears) are updated. The `notInDb` count shows how many incoming kwekers had no matching Grower record — this is expected, as most kwekers don't have transactions through our suppliers.
+
+---
+
 ## Power Automate Setup
 
 ### Flow: "Fabric → Grower Portal Sync" (runs 4x/day)
@@ -268,7 +319,7 @@ Upserts salessheet costs (kosten per levering). Recalculates salessheet totals. 
 ```
 Recurrence trigger (every 6 hours)
   ↓
-Step 1: Run DAX query — all suppliers
+Step 1: Run DAX query — all suppliers (Dim_Leverancier)
 Step 2: POST /api/import/suppliers (full set)
   ↓
 Step 3: Run DAX query — partijen (last 48 hours)
@@ -279,6 +330,9 @@ Step 6: POST /api/import/orders
   ↓
 Step 7: Run DAX query — shcosts (last 48 hours)
 Step 8: POST /api/import/costs
+  ↓
+Step 9: Run DAX query — all kwekers (Dim_Kweker)
+Step 10: POST /api/import/growers (full set, enrichment only)
 ```
 
 ### HTTP action settings
@@ -288,7 +342,7 @@ Step 8: POST /api/import/costs
 - **Headers:**
   - `Content-Type`: `application/json`
   - `Authorization`: `Bearer <your-api-key>`
-- **Body:** JSON output from DAX query, wrapped in the expected root key (`suppliers`, `partijen`, `orders`, or `costs`)
+- **Body:** JSON output from DAX query, wrapped in the expected root key (`suppliers`, `partijen`, `orders`, `costs`, or `growers`)
 
 ### DAX query window filter (48h example)
 
@@ -315,5 +369,5 @@ Recommendation: add a "Condition" step after each HTTP action to check for non-2
 - **Decimals:** Power Automate should send numbers as JSON numbers (not comma-separated strings). The DAX output typically uses dots for decimals in JSON mode.
 - **Nulls:** Optional fields can be `null` or omitted entirely.
 - **Idempotent:** All endpoints are safe to call multiple times with the same data.
-- **Order matters:** Suppliers must exist before lots can link to them. Lots must exist before orders can link to them. Run in sequence: suppliers → lots → orders → costs.
+- **Order matters:** Suppliers must exist before lots can link to them. Lots must exist before orders can link to them. Growers are enriched after orders create them. Run in sequence: suppliers → lots → orders → costs → growers.
 - **Vercel timeout:** Serverless functions have a 60-second timeout. For large batches (>5000 records), split into multiple requests.

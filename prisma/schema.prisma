@@ -120,6 +120,9 @@ model Grower {
   id             String   @id @default(uuid())
   fabricId       Int?     @unique // rel_id_kweker from Fabric
   name           String?          // Grower/farm name (if available)
+  code           String?          // Grower code from Fabric (e.g. "PCFUP", "V#530453")
+  country        String?          // Country name from Fabric (e.g. "Zuid Afrika")
+  city           String?          // City from Fabric (e.g. "Waboomskraal")
   supplierId     String
   supplier       Supplier @relation(fields: [supplierId], references: [id])
   createdAt      DateTime @default(now())
