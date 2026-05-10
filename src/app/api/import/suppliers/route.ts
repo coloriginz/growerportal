@@ -53,28 +53,13 @@ export async function POST(request: NextRequest) {
   try {
     const { suppliers } = parsed.data;
 
-    // Ensure default company exists
-    let company = await prisma.company.findFirst({ where: { slug: "coloriginz" } });
-    if (!company) {
-      company = await prisma.company.create({
-        data: {
-          name: "Coloriginz",
-          slug: "coloriginz",
-          logoUrl: "/logos/coloriginz.png",
-          emailFrom: "noreply@coloriginz.com",
-          emailName: "Coloriginz Grower Portal",
-          footerText: "Coloriginz — OZ Import BV, Aalsmeer",
-        },
-      });
-    }
-
     let created = 0;
     let updated = 0;
     let errors = 0;
 
     for (const row of suppliers) {
       try {
-        const result = await prisma.supplier.upsert({
+        const result = await prisma.fabricRelation.upsert({
           where: { fabricId: row.ID },
           update: {
             code: row.Code,
@@ -83,12 +68,11 @@ export async function POST(request: NextRequest) {
             accountManagerCode: row["AM Code"] || null,
           },
           create: {
+            fabricId: row.ID,
             code: row.Code,
             name: row.Naam,
-            fabricId: row.ID,
             accountManagerName: row["AM Naam"] || null,
             accountManagerCode: row["AM Code"] || null,
-            companyId: company.id,
           },
         });
         // Check if it was created or updated by comparing createdAt timestamps
@@ -98,6 +82,20 @@ export async function POST(request: NextRequest) {
       } catch {
         errors++;
       }
+    }
+
+    // Batch-update Grower names from FabricRelation
+    let growerNamesFilled = 0;
+    try {
+      growerNamesFilled = await prisma.$executeRaw`
+        UPDATE "Grower" g
+        SET name = fr.name
+        FROM "FabricRelation" fr
+        WHERE g."fabricId" = fr."fabricId"
+          AND (g.name IS NULL OR g.name != fr.name)
+      `;
+    } catch {
+      // Name sync should not block the import
     }
 
     if (batch) {
@@ -112,6 +110,9 @@ export async function POST(request: NextRequest) {
             recordsSkipped: errors,
             durationMs: Date.now() - startTime,
             completedAt: new Date(),
+            details: {
+              growerNamesFilled,
+            },
           },
         });
       } catch {
