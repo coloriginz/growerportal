@@ -90,6 +90,17 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Resolve grower names from FabricRelation
+    const growerFabricIds = [...growerPairs.keys()];
+    const fabricRelations = await prisma.fabricRelation.findMany({
+      where: { fabricId: { in: growerFabricIds } },
+      select: { fabricId: true, name: true },
+    });
+    const nameMap = new Map<number, string>();
+    for (const fr of fabricRelations) {
+      nameMap.set(fr.fabricId, fr.name);
+    }
+
     let growersCreated = 0;
     let growersExisting = 0;
     const growerMap = new Map<number, string>(); // fabricId → grower UUID
@@ -98,11 +109,22 @@ export async function POST(request: NextRequest) {
       const existing = await prisma.grower.findUnique({ where: { fabricId: fabricKwekerId } });
       if (existing) {
         growerMap.set(fabricKwekerId, existing.id);
+        const frName = nameMap.get(fabricKwekerId);
+        if (frName && existing.name !== frName) {
+          await prisma.grower.update({
+            where: { id: existing.id },
+            data: { name: frName },
+          });
+        }
         growersExisting++;
       } else {
         try {
           const grower = await prisma.grower.create({
-            data: { fabricId: fabricKwekerId, supplierId },
+            data: {
+              fabricId: fabricKwekerId,
+              supplierId,
+              name: nameMap.get(fabricKwekerId) || null,
+            },
           });
           growerMap.set(fabricKwekerId, grower.id);
           growersCreated++;
