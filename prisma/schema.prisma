@@ -688,22 +688,22 @@ model FustAuditLog {
   @@index([createdAt])
 }
 
-// ─── STAGING TABLES (raw Fabric data import) ────────────
+// ─── FABRIC RELATIONS (all Fabric relaties, staging) ──────
 
-model StagingKbtLeverancier {
-  id            String   @id @default(uuid())
-  naam          String
-  code          String
-  fabricId      Int      // rel_id_leverancier
-  amNaam        String?
-  amCode        String?
-  importBatchId String
-  importedAt    DateTime @default(now())
+model FabricRelation {
+  id                 String   @id @default(uuid())
+  fabricId           Int      @unique  // rel_id from Fabric
+  code               String             // e.g. "COLBFL"
+  name               String             // e.g. "Bergflora Capetown"
+  accountManagerName String?
+  accountManagerCode String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @default(now()) @updatedAt
 
-  @@index([fabricId])
   @@index([code])
-  @@index([importBatchId])
 }
+
+// ─── STAGING TABLES (raw Fabric data import) ────────────
 
 model StagingKbtPartij {
   id                    String   @id @default(uuid())
