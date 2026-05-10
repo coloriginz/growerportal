@@ -64,6 +64,12 @@ Upserts supplier (leverancier) records. Match key: `fabricId` (= `ID` from DAX).
 }
 ```
 
+### Behavior
+
+Records are stored in the `FabricRelation` staging table (not directly as Supplier records). An admin must activate individual relations as Supplier via the portal UI (Suppliers > Fabric Relations tab). This allows selective onboarding of relevant suppliers.
+
+Additionally, existing Grower records that match a FabricRelation by `fabricId` will have their `name` field updated automatically.
+
 ---
 
 ## 2. POST /api/import/lots
