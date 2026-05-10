@@ -29,9 +29,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { RiAddLine, RiSearchLine, RiPlantLine } from "@remixicon/react";
 import { useLanguage } from "@/components/providers/language-provider";
 import { toast } from "sonner";
+import { FabricRelationsTab } from "./fabric-relations-tab";
 
 interface CompanyOption {
   id: string;
@@ -51,7 +53,7 @@ interface SupplierRow {
   userCount: number;
 }
 
-export function SuppliersContent() {
+export function SuppliersContent({ isAdmin }: { isAdmin?: boolean }) {
   const [suppliers, setSuppliers] = useState<SupplierRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -139,6 +141,81 @@ export function SuppliersContent() {
     }
   }
 
+  const tAny = t as unknown as (k: string) => string;
+
+  const suppliersTable = (
+    <>
+      {/* Search */}
+      <div className="filter-bar">
+        <div className="relative flex-1 min-w-[200px]">
+          <RiSearchLine className="text-muted-foreground absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2" />
+          <Input
+            placeholder={t("suppliers.searchPlaceholder")}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-10"
+          />
+        </div>
+      </div>
+
+      {/* Table */}
+      <Card>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>{t("suppliers.code")}</TableHead>
+                <TableHead>{t("suppliers.name")}</TableHead>
+                <TableHead>{t("suppliers.company")}</TableHead>
+                <TableHead>Brand</TableHead>
+                <TableHead>{t("suppliers.country")}</TableHead>
+                <TableHead>{t("suppliers.accountManager")}</TableHead>
+                <TableHead>{t("common.status")}</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filtered.map((supplier) => (
+                <TableRow
+                  key={supplier.id}
+                  className="cursor-pointer"
+                  onClick={() => router.push(`/suppliers/${supplier.id}`)}
+                >
+                  <TableCell className="font-medium">{supplier.code}</TableCell>
+                  <TableCell>{supplier.name}</TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {supplier.company || "-"}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {supplier.companyEntity?.name || "-"}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {supplier.country || "-"}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {supplier.commercie ? supplier.commercie.name : "-"}
+                  </TableCell>
+                  <TableCell>{statusBadge(supplier)}</TableCell>
+                </TableRow>
+              ))}
+              {filtered.length === 0 && !loading && (
+                <TableRow className="hover:bg-transparent">
+                  <TableCell colSpan={7} className="py-0">
+                    <div className="empty-state">
+                      <div className="empty-state-icon">
+                        <RiPlantLine />
+                      </div>
+                      <p className="empty-state-text">{t("common.noResults")}</p>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    </>
+  );
+
   return (
     <div className="page-content">
       <div className="page-header">
@@ -211,74 +288,22 @@ export function SuppliersContent() {
         </Dialog>
       </div>
 
-      {/* Search */}
-      <div className="filter-bar">
-        <div className="relative flex-1 min-w-[200px]">
-          <RiSearchLine className="text-muted-foreground absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2" />
-          <Input
-            placeholder={t("suppliers.searchPlaceholder")}
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-10"
-          />
-        </div>
-      </div>
-
-      {/* Table */}
-      <Card>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>{t("suppliers.code")}</TableHead>
-                <TableHead>{t("suppliers.name")}</TableHead>
-                <TableHead>{t("suppliers.company")}</TableHead>
-                <TableHead>Brand</TableHead>
-                <TableHead>{t("suppliers.country")}</TableHead>
-                <TableHead>{t("suppliers.accountManager")}</TableHead>
-                <TableHead>{t("common.status")}</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filtered.map((supplier) => (
-                <TableRow
-                  key={supplier.id}
-                  className="cursor-pointer"
-                  onClick={() => router.push(`/suppliers/${supplier.id}`)}
-                >
-                  <TableCell className="font-medium">{supplier.code}</TableCell>
-                  <TableCell>{supplier.name}</TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {supplier.company || "-"}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {supplier.companyEntity?.name || "-"}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {supplier.country || "-"}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {supplier.commercie ? supplier.commercie.name : "-"}
-                  </TableCell>
-                  <TableCell>{statusBadge(supplier)}</TableCell>
-                </TableRow>
-              ))}
-              {filtered.length === 0 && !loading && (
-                <TableRow className="hover:bg-transparent">
-                  <TableCell colSpan={7} className="py-0">
-                    <div className="empty-state">
-                      <div className="empty-state-icon">
-                        <RiPlantLine />
-                      </div>
-                      <p className="empty-state-text">{t("common.noResults")}</p>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+      {isAdmin ? (
+        <Tabs defaultValue="suppliers">
+          <TabsList>
+            <TabsTrigger value="suppliers">{t("suppliers.title")}</TabsTrigger>
+            <TabsTrigger value="fabric-relations">{tAny("fabricRelations.title")}</TabsTrigger>
+          </TabsList>
+          <TabsContent value="suppliers" className="mt-4">
+            {suppliersTable}
+          </TabsContent>
+          <TabsContent value="fabric-relations" className="mt-4">
+            <FabricRelationsTab />
+          </TabsContent>
+        </Tabs>
+      ) : (
+        suppliersTable
+      )}
     </div>
   );
 }

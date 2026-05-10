@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { Suspense } from "react";
 import { auth } from "@/lib/auth";
 import { SuppliersContent } from "./suppliers-content";
 
@@ -9,5 +10,9 @@ export default async function SuppliersPage() {
     redirect("/dashboard");
   }
 
-  return <SuppliersContent />;
+  return (
+    <Suspense>
+      <SuppliersContent isAdmin={session.user.role === "admin"} />
+    </Suspense>
+  );
 }
