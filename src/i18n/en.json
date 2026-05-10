@@ -370,6 +370,27 @@
     "noData": "No import batches found",
     "errors24h": "Errors (24h)"
   },
+  "fabricRelations": {
+    "title": "Fabric Relations",
+    "description": "All relations from Fabric. Activate as supplier to give portal access.",
+    "unactivatedWarning": "{{count}} relation(s) have data but are not activated as supplier",
+    "activateAll": "Activate All",
+    "activate": "Activate as Supplier",
+    "selectCompany": "Select brand",
+    "status": "Status",
+    "supplier": "Supplier",
+    "grower": "Grower",
+    "hasData": "Has Data",
+    "noData": "No Data",
+    "lots": "Lots",
+    "transactions": "Transactions",
+    "accountManager": "Account Manager",
+    "lastSynced": "Last Synced",
+    "activateSuccess": "{{name}} activated as supplier",
+    "filterStatus": "Filter by status",
+    "all": "All",
+    "growerUnder": "Grower under {{supplier}}"
+  },
   "fust": {
     "title": "Fust Orders",
     "catalogue": "Catalogue",

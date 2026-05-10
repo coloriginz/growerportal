@@ -370,6 +370,27 @@
     "noData": "Geen importbatches gevonden",
     "errors24h": "Fouten (24u)"
   },
+  "fabricRelations": {
+    "title": "Fabric Relaties",
+    "description": "Alle relaties uit Fabric. Activeer als leverancier voor portaltoegang.",
+    "unactivatedWarning": "{{count}} relatie(s) hebben data maar zijn niet geactiveerd als leverancier",
+    "activateAll": "Alles Activeren",
+    "activate": "Activeer als Leverancier",
+    "selectCompany": "Selecteer merk",
+    "status": "Status",
+    "supplier": "Leverancier",
+    "grower": "Kweker",
+    "hasData": "Heeft Data",
+    "noData": "Geen Data",
+    "lots": "Partijen",
+    "transactions": "Transacties",
+    "accountManager": "Accountmanager",
+    "lastSynced": "Laatst Gesynchroniseerd",
+    "activateSuccess": "{{name}} geactiveerd als leverancier",
+    "filterStatus": "Filter op status",
+    "all": "Alles",
+    "growerUnder": "Kweker onder {{supplier}}"
+  },
   "fust": {
     "title": "Fustbestellingen",
     "catalogue": "Catalogus",
