@@ -20,6 +20,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   RiRefreshLine,
   RiCheckLine,
   RiErrorWarningLine,
@@ -109,7 +115,7 @@ export function ImportsContent() {
   const { t } = useLanguage();
   const [endpointFilter, setEndpointFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [expandedError, setExpandedError] = useState<string | null>(null);
+  const [errorDialogBatch, setErrorDialogBatch] = useState<ImportBatch | null>(null);
 
   const url = useMemo(() => {
     const params = new URLSearchParams();
@@ -301,21 +307,15 @@ export function ImportsContent() {
                       <TableCell className="text-right">
                         {formatDuration(batch.durationMs)}
                       </TableCell>
-                      <TableCell className="max-w-[300px]">
+                      <TableCell>
                         {batch.errorMessage ? (
                           <button
-                            onClick={() =>
-                              setExpandedError(
-                                expandedError === batch.id ? null : batch.id
-                              )
-                            }
-                            className="text-left text-xs text-red-600 dark:text-red-400 hover:underline"
+                            onClick={() => setErrorDialogBatch(batch)}
+                            className="text-left text-xs text-red-600 dark:text-red-400 hover:underline cursor-pointer"
                           >
-                            {expandedError === batch.id
-                              ? batch.errorMessage
-                              : batch.errorMessage.length > 80
-                                ? `${batch.errorMessage.slice(0, 80)}...`
-                                : batch.errorMessage}
+                            {batch.errorMessage.length > 50
+                              ? `${batch.errorMessage.slice(0, 50)}...`
+                              : batch.errorMessage}
                           </button>
                         ) : (
                           <span className="text-muted-foreground">-</span>
@@ -329,6 +329,44 @@ export function ImportsContent() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Error detail dialog */}
+      <Dialog
+        open={!!errorDialogBatch}
+        onOpenChange={(open) => { if (!open) setErrorDialogBatch(null); }}
+      >
+        <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-red-600 dark:text-red-400 flex items-center gap-2">
+              <RiErrorWarningLine className="h-5 w-5" />
+              Import Error — {errorDialogBatch?.endpoint}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 text-sm">
+            <div className="text-muted-foreground">
+              {errorDialogBatch && (
+                <>
+                  {formatDate(errorDialogBatch.startedAt)}{" "}
+                  {formatTime(errorDialogBatch.startedAt)}
+                  {errorDialogBatch.durationMs !== null && (
+                    <> &middot; {formatDuration(errorDialogBatch.durationMs)}</>
+                  )}
+                </>
+              )}
+            </div>
+            <pre className="whitespace-pre-wrap break-words rounded-md bg-muted p-3 text-xs font-mono">
+              {errorDialogBatch?.errorMessage &&
+                (() => {
+                  try {
+                    return JSON.stringify(JSON.parse(errorDialogBatch.errorMessage), null, 2);
+                  } catch {
+                    return errorDialogBatch.errorMessage;
+                  }
+                })()}
+            </pre>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
