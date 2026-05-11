@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
-import { requireImportAuth } from "@/lib/import-auth";
+import { requireImportAuth, stripBracketKeys } from "@/lib/import-auth";
 
 const growerSchema = z.object({
   Naam: z.string().min(1),
@@ -31,6 +31,7 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json();
+  if (body.growers) body.growers = stripBracketKeys(body.growers);
   const parsed = bodySchema.safeParse(body);
   if (!parsed.success) {
     if (batch) {

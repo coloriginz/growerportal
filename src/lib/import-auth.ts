@@ -26,3 +26,19 @@ export function requireImportAuth(request: NextRequest): NextResponse | null {
 
   return null; // auth OK
 }
+
+/**
+ * Strip square brackets from object keys.
+ * DAX query results from Power Automate wrap column names in brackets:
+ * { "[Naam]": "value" } → { "Naam": "value" }
+ */
+export function stripBracketKeys<T>(rows: T[]): T[] {
+  return rows.map((row) => {
+    const obj: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(row as Record<string, unknown>)) {
+      const cleanKey = key.replace(/^\[|\]$/g, "");
+      obj[cleanKey] = value;
+    }
+    return obj as T;
+  });
+}

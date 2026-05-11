@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
-import { requireImportAuth } from "@/lib/import-auth";
+import { requireImportAuth, stripBracketKeys } from "@/lib/import-auth";
 
 const supplierSchema = z.object({
   Code: z.string().min(1),
@@ -30,6 +30,7 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json();
+  if (body.suppliers) body.suppliers = stripBracketKeys(body.suppliers);
   const parsed = bodySchema.safeParse(body);
   if (!parsed.success) {
     if (batch) {

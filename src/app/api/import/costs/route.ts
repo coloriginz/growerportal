@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
-import { requireImportAuth } from "@/lib/import-auth";
+import { requireImportAuth, stripBracketKeys } from "@/lib/import-auth";
 
 const costSchema = z.object({
   "Shkost ID": z.number().int(),
@@ -36,6 +36,7 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json();
+  if (body.costs) body.costs = stripBracketKeys(body.costs);
   const parsed = bodySchema.safeParse(body);
   if (!parsed.success) {
     if (batch) {

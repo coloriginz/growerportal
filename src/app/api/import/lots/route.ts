@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
-import { requireImportAuth } from "@/lib/import-auth";
+import { requireImportAuth, stripBracketKeys } from "@/lib/import-auth";
 
 const partijSchema = z.object({
   part_id: z.number().int(),
@@ -47,6 +47,7 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json();
+  if (body.partijen) body.partijen = stripBracketKeys(body.partijen);
   const parsed = bodySchema.safeParse(body);
   if (!parsed.success) {
     if (batch) {
