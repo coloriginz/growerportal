@@ -21,8 +21,6 @@ const bodySchema = z.object({
   orders: z.array(orderSchema).min(1),
 });
 
-const BATCH_SIZE = 100;
-
 export async function POST(request: NextRequest) {
   const authError = requireImportAuth(request);
   if (authError) return authError;
@@ -144,12 +142,11 @@ export async function POST(request: NextRequest) {
       if (t.fabricOrdregId) txExistsSet.add(t.fabricOrdregId);
     }
 
-    // Phase 2: Upsert growers in bulk
+    // Phase 2: Upsert growers
     let growersCreated = 0,
       growersExisting = 0;
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const growerUpdateOps: any[] = [];
+    const growerUpdateData: { fabricId: number; name: string }[] = [];
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const growerCreateData: any[] = [];
 
@@ -159,12 +156,7 @@ export async function POST(request: NextRequest) {
         growersExisting++;
         const frName = nameMap.get(fabricKwekerId);
         if (frName && existing.name !== frName) {
-          growerUpdateOps.push(
-            prisma.grower.update({
-              where: { fabricId: fabricKwekerId },
-              data: { name: frName },
-            })
-          );
+          growerUpdateData.push({ fabricId: fabricKwekerId, name: frName });
         }
       } else {
         growerCreateData.push({
@@ -176,8 +168,16 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    for (let i = 0; i < growerUpdateOps.length; i += BATCH_SIZE) {
-      await prisma.$transaction(growerUpdateOps.slice(i, i + BATCH_SIZE));
+    if (growerUpdateData.length > 0) {
+      await prisma.$executeRawUnsafe(
+        `UPDATE "Grower" AS t
+         SET
+           name = u.val->>'name',
+           "updatedAt" = NOW()
+         FROM jsonb_array_elements($1::jsonb) AS u(val)
+         WHERE t."fabricId" = (u.val->>'fabricId')::int`,
+        JSON.stringify(growerUpdateData)
+      );
     }
 
     if (growerCreateData.length > 0) {
@@ -213,8 +213,16 @@ export async function POST(request: NextRequest) {
       txSkipped = 0;
     const affectedLotIds = new Set<string>();
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const txUpdateOps: any[] = [];
+    // Deduplicate updates by ordreg_id (last one wins, avoids non-deterministic UPDATE...FROM)
+    const txUpdateMap = new Map<number, {
+      fabricOrdregId: number;
+      date: string;
+      salesType: string;
+      stems: number;
+      pricePerStem: number;
+      amount: number;
+      fabricGrowerId: number;
+    }>();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const txCreateData: any[] = [];
 
@@ -238,19 +246,15 @@ export async function POST(request: NextRequest) {
       const pricePerStem = row["Gem afrekenprijs"] ?? 0;
 
       if (txExistsSet.has(ordregId)) {
-        txUpdateOps.push(
-          prisma.transaction.update({
-            where: { fabricOrdregId: ordregId },
-            data: {
-              date,
-              salesType,
-              stems,
-              pricePerStem: Math.round(pricePerStem * 10000) / 10000,
-              amount: Math.round(amount * 100) / 100,
-              fabricGrowerId: row.rel_id_kweker,
-            },
-          })
-        );
+        txUpdateMap.set(ordregId, {
+          fabricOrdregId: ordregId,
+          date: date.toISOString(),
+          salesType,
+          stems,
+          pricePerStem: Math.round(pricePerStem * 10000) / 10000,
+          amount: Math.round(amount * 100) / 100,
+          fabricGrowerId: row.rel_id_kweker,
+        });
         txUpdated++;
       } else {
         txCreateData.push({
@@ -268,9 +272,23 @@ export async function POST(request: NextRequest) {
       affectedLotIds.add(lotInfo.id);
     }
 
-    // Phase 4: Execute transaction operations in batches
-    for (let i = 0; i < txUpdateOps.length; i += BATCH_SIZE) {
-      await prisma.$transaction(txUpdateOps.slice(i, i + BATCH_SIZE));
+    // Phase 4: Execute transaction operations
+    const txUpdateData = [...txUpdateMap.values()];
+    if (txUpdateData.length > 0) {
+      await prisma.$executeRawUnsafe(
+        `UPDATE "Transaction" AS t
+         SET
+           date = (u.val->>'date')::timestamp,
+           "salesType" = u.val->>'salesType',
+           stems = (u.val->>'stems')::int,
+           "pricePerStem" = (u.val->>'pricePerStem')::numeric,
+           amount = (u.val->>'amount')::numeric,
+           "fabricGrowerId" = (u.val->>'fabricGrowerId')::int,
+           "updatedAt" = NOW()
+         FROM jsonb_array_elements($1::jsonb) AS u(val)
+         WHERE t."fabricOrdregId" = (u.val->>'fabricOrdregId')::int`,
+        JSON.stringify(txUpdateData)
+      );
     }
 
     if (txCreateData.length > 0) {
@@ -289,61 +307,39 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Phase 5: Recalculate lot aggregates using groupBy (2 queries instead of N)
+    // Phase 5: Recalculate lot aggregates via single raw SQL
     let lotsRecalculated = 0;
     if (affectedLotIds.size > 0) {
       const affectedLotIdArr = [...affectedLotIds];
 
-      const [lotAggregates, firstTxPerLot] = await Promise.all([
-        prisma.transaction.groupBy({
-          by: ["lotId"],
-          where: { lotId: { in: affectedLotIdArr } },
-          _sum: { stems: true, amount: true },
-        }),
-        prisma.transaction.findMany({
-          where: {
-            lotId: { in: affectedLotIdArr },
-            fabricGrowerId: { not: null },
-          },
-          select: { lotId: true, fabricGrowerId: true },
-          distinct: ["lotId"],
-        }),
-      ]);
-
-      const lotGrowerMap = new Map<string, number>();
-      for (const tx of firstTxPerLot) {
-        if (tx.fabricGrowerId) lotGrowerMap.set(tx.lotId, tx.fabricGrowerId);
-      }
-
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const lotUpdateOps: any[] = [];
-      for (const agg of lotAggregates) {
-        const totalStems = agg._sum.stems ?? 0;
-        const totalAmount = Number(agg._sum.amount ?? 0);
-        const avgPrice = totalStems > 0 ? totalAmount / totalStems : 0;
-        const fabricGrowerId = lotGrowerMap.get(agg.lotId);
-        const growerId = fabricGrowerId ? growerMap.get(fabricGrowerId) || null : null;
-
-        lotUpdateOps.push(
-          prisma.lot.update({
-            where: { id: agg.lotId },
-            data: {
-              totalStems,
-              totalAmount: Math.round(totalAmount * 100) / 100,
-              avgPrice: Math.round(avgPrice * 10000) / 10000,
-              ...(growerId ? { growerId } : {}),
-            },
-          })
-        );
-        lotsRecalculated++;
-      }
-
-      for (let i = 0; i < lotUpdateOps.length; i += BATCH_SIZE) {
-        await prisma.$transaction(lotUpdateOps.slice(i, i + BATCH_SIZE));
-      }
+      // Single SQL: aggregate transactions + update lots + assign grower via JOIN
+      lotsRecalculated = await prisma.$executeRawUnsafe(
+        `UPDATE "Lot" AS l
+         SET
+           "totalStems" = COALESCE(agg.total_stems, 0),
+           "totalAmount" = ROUND(COALESCE(agg.total_amount, 0)::numeric, 2),
+           "avgPrice" = CASE WHEN COALESCE(agg.total_stems, 0) > 0
+             THEN ROUND((COALESCE(agg.total_amount, 0) / agg.total_stems)::numeric, 4)
+             ELSE 0 END,
+           "growerId" = COALESCE(g.id, l."growerId"),
+           "updatedAt" = NOW()
+         FROM (
+           SELECT
+             "lotId",
+             SUM(stems)::int as total_stems,
+             SUM(amount) as total_amount,
+             MIN("fabricGrowerId") FILTER (WHERE "fabricGrowerId" IS NOT NULL) as fabric_grower_id
+           FROM "Transaction"
+           WHERE "lotId" IN (SELECT jsonb_array_elements_text($1::jsonb))
+           GROUP BY "lotId"
+         ) AS agg
+         LEFT JOIN "Grower" g ON g."fabricId" = agg.fabric_grower_id
+         WHERE l.id = agg."lotId"`,
+        JSON.stringify(affectedLotIdArr)
+      );
     }
 
-    // Phase 6: Recalculate salessheet totals using groupBy (3 queries instead of 2N)
+    // Phase 6: Recalculate salessheet totals via single raw SQL
     let ssRecalculated = 0;
     if (affectedLotIds.size > 0) {
       const affectedLotRecords = await prisma.lot.findMany({
@@ -353,49 +349,34 @@ export async function POST(request: NextRequest) {
       const affectedSSIds = [...new Set(affectedLotRecords.map((l) => l.salesSheetId).filter(Boolean))] as string[];
 
       if (affectedSSIds.length > 0) {
-        const [ssLotAggs, ssCostAggs] = await Promise.all([
-          prisma.lot.groupBy({
-            by: ["salesSheetId"],
-            where: { salesSheetId: { in: affectedSSIds } },
-            _sum: { totalAmount: true },
-          }),
-          prisma.salesSheetCost.groupBy({
-            by: ["salesSheetId"],
-            where: { salesSheetId: { in: affectedSSIds } },
-            _sum: { amount: true },
-          }),
-        ]);
-
-        const ssLotTotals = new Map<string, number>();
-        for (const a of ssLotAggs) {
-          if (a.salesSheetId) ssLotTotals.set(a.salesSheetId, Number(a._sum.totalAmount ?? 0));
-        }
-        const ssCostTotals = new Map<string, number>();
-        for (const a of ssCostAggs) {
-          if (a.salesSheetId) ssCostTotals.set(a.salesSheetId, Number(a._sum.amount ?? 0));
-        }
-
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const ssUpdateOps: any[] = [];
-        for (const ssId of affectedSSIds) {
-          const totalTurnover = ssLotTotals.get(ssId) ?? 0;
-          const totalCosts = ssCostTotals.get(ssId) ?? 0;
-          ssUpdateOps.push(
-            prisma.salesSheet.update({
-              where: { id: ssId },
-              data: {
-                totalTurnover: Math.round(totalTurnover * 100) / 100,
-                totalCosts: Math.round(totalCosts * 100) / 100,
-                netResult: Math.round((totalTurnover - totalCosts) * 100) / 100,
-              },
-            })
-          );
-          ssRecalculated++;
-        }
-
-        for (let i = 0; i < ssUpdateOps.length; i += BATCH_SIZE) {
-          await prisma.$transaction(ssUpdateOps.slice(i, i + BATCH_SIZE));
-        }
+        ssRecalculated = await prisma.$executeRawUnsafe(
+          `WITH ss_ids AS (
+             SELECT jsonb_array_elements_text($1::jsonb) AS id
+           ),
+           lot_totals AS (
+             SELECT "salesSheetId", SUM("totalAmount") as total
+             FROM "Lot"
+             WHERE "salesSheetId" IN (SELECT id FROM ss_ids)
+             GROUP BY "salesSheetId"
+           ),
+           cost_totals AS (
+             SELECT "salesSheetId", SUM(amount) as total
+             FROM "SalesSheetCost"
+             WHERE "salesSheetId" IN (SELECT id FROM ss_ids)
+             GROUP BY "salesSheetId"
+           )
+           UPDATE "SalesSheet" AS ss
+           SET
+             "totalTurnover" = ROUND(COALESCE(lt.total, 0)::numeric, 2),
+             "totalCosts" = ROUND(COALESCE(ct.total, 0)::numeric, 2),
+             "netResult" = ROUND((COALESCE(lt.total, 0) - COALESCE(ct.total, 0))::numeric, 2),
+             "updatedAt" = NOW()
+           FROM ss_ids
+           LEFT JOIN lot_totals lt ON lt."salesSheetId" = ss_ids.id
+           LEFT JOIN cost_totals ct ON ct."salesSheetId" = ss_ids.id
+           WHERE ss.id = ss_ids.id`,
+          JSON.stringify(affectedSSIds)
+        );
       }
     }
 

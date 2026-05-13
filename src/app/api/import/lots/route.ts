@@ -32,8 +32,6 @@ function deriveArticleGroup(productName: string): string {
   return productName.trim().split(/\s+/)[0] || "Unknown";
 }
 
-const BATCH_SIZE = 100;
-
 export async function POST(request: NextRequest) {
   const authError = requireImportAuth(request);
   if (authError) return authError;
@@ -92,7 +90,7 @@ export async function POST(request: NextRequest) {
     const allParthdrIds = [...byParthdr.keys()];
     const allPartIds = partijen.map((p) => p.part_id);
 
-    // Phase 1: Pre-fetch all existing data in parallel (3 queries instead of N)
+    // Phase 1: Pre-fetch all existing data in parallel (3 queries)
     const [suppliers, existingSalesSheets, existingLots] = await Promise.all([
       prisma.supplier.findMany({
         where: { fabricId: { not: null } },
@@ -123,7 +121,7 @@ export async function POST(request: NextRequest) {
       if (l.fabricPartId) lotExistsSet.add(l.fabricPartId);
     }
 
-    // Phase 2: Collect potential invoice numbers for new salessheets and check collisions in bulk
+    // Phase 2: Collect potential invoice numbers for new salessheets and check collisions
     const newSsInvoiceNumbers: string[] = [];
     for (const [parthdrId, rows] of byParthdr) {
       if (ssMap.has(parthdrId)) continue;
@@ -152,8 +150,7 @@ export async function POST(request: NextRequest) {
       lotUpdated = 0;
     let skipped = 0;
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const ssUpdateOps: any[] = [];
+    const ssUpdateData: { fabricParthdrId: number; deliveryDate: string }[] = [];
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const ssCreateData: any[] = [];
 
@@ -170,12 +167,10 @@ export async function POST(request: NextRequest) {
         : new Date();
 
       if (ssMap.has(parthdrId)) {
-        ssUpdateOps.push(
-          prisma.salesSheet.update({
-            where: { fabricParthdrId: parthdrId },
-            data: { deliveryDate },
-          })
-        );
+        ssUpdateData.push({
+          fabricParthdrId: parthdrId,
+          deliveryDate: deliveryDate.toISOString(),
+        });
         ssUpdated++;
       } else {
         let invoiceNumber = firstRow["Inkoop Factuur Nummer"]?.trim() || null;
@@ -204,9 +199,17 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Phase 4: Execute salessheet operations in batches
-    for (let i = 0; i < ssUpdateOps.length; i += BATCH_SIZE) {
-      await prisma.$transaction(ssUpdateOps.slice(i, i + BATCH_SIZE));
+    // Phase 4: Execute salessheet operations
+    if (ssUpdateData.length > 0) {
+      await prisma.$executeRawUnsafe(
+        `UPDATE "SalesSheet" AS t
+         SET
+           "deliveryDate" = (u.val->>'deliveryDate')::timestamp,
+           "updatedAt" = NOW()
+         FROM jsonb_array_elements($1::jsonb) AS u(val)
+         WHERE t."fabricParthdrId" = (u.val->>'fabricParthdrId')::int`,
+        JSON.stringify(ssUpdateData)
+      );
     }
 
     if (ssCreateData.length > 0) {
@@ -227,7 +230,7 @@ export async function POST(request: NextRequest) {
 
     // Phase 5: Build lot operations
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const lotUpdateOps: any[] = [];
+    const lotUpdateData: any[] = [];
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const lotCreateData: any[] = [];
 
@@ -254,25 +257,21 @@ export async function POST(request: NextRequest) {
         const stemLength = row.S01 ? parseInt(row.S01, 10) || 0 : 0;
 
         if (lotExistsSet.has(row.part_id)) {
-          lotUpdateOps.push(
-            prisma.lot.update({
-              where: { fabricPartId: row.part_id },
-              data: {
-                lotNumber,
-                productName,
-                articleGroup: deriveArticleGroup(productName),
-                articleCode: row["Artikel Code"] || null,
-                purchaseType: row["Inkooptype Code"] || null,
-                s1: row.S01 || null,
-                s2: row.S02 || null,
-                s3: row.S03 || null,
-                correctionReasonId: row.reden_id_correctie || null,
-                invoicedColli: row["Inkoopfactuur colli"] || null,
-                invoicedVolume: row["Inkoopfactuur volume"] || null,
-                correctionVolume: row["Inslagcorrectie volume"] || null,
-              },
-            })
-          );
+          lotUpdateData.push({
+            fabricPartId: row.part_id,
+            lotNumber,
+            productName,
+            articleGroup: deriveArticleGroup(productName),
+            articleCode: row["Artikel Code"] || null,
+            purchaseType: row["Inkooptype Code"] || null,
+            s1: row.S01 || null,
+            s2: row.S02 || null,
+            s3: row.S03 || null,
+            correctionReasonId: row.reden_id_correctie || null,
+            invoicedColli: row["Inkoopfactuur colli"] ?? null,
+            invoicedVolume: row["Inkoopfactuur volume"] ?? null,
+            correctionVolume: row["Inslagcorrectie volume"] ?? null,
+          });
           lotUpdated++;
         } else {
           lotCreateData.push({
@@ -307,9 +306,28 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Phase 6: Execute lot operations in batches
-    for (let i = 0; i < lotUpdateOps.length; i += BATCH_SIZE) {
-      await prisma.$transaction(lotUpdateOps.slice(i, i + BATCH_SIZE));
+    // Phase 6: Execute lot operations
+    if (lotUpdateData.length > 0) {
+      await prisma.$executeRawUnsafe(
+        `UPDATE "Lot" AS t
+         SET
+           "lotNumber" = u.val->>'lotNumber',
+           "productName" = u.val->>'productName',
+           "articleGroup" = u.val->>'articleGroup',
+           "articleCode" = u.val->>'articleCode',
+           "purchaseType" = u.val->>'purchaseType',
+           s1 = u.val->>'s1',
+           s2 = u.val->>'s2',
+           s3 = u.val->>'s3',
+           "correctionReasonId" = (u.val->>'correctionReasonId')::int,
+           "invoicedColli" = (u.val->>'invoicedColli')::int,
+           "invoicedVolume" = (u.val->>'invoicedVolume')::int,
+           "correctionVolume" = (u.val->>'correctionVolume')::int,
+           "updatedAt" = NOW()
+         FROM jsonb_array_elements($1::jsonb) AS u(val)
+         WHERE t."fabricPartId" = (u.val->>'fabricPartId')::int`,
+        JSON.stringify(lotUpdateData)
+      );
     }
 
     if (lotCreateData.length > 0) {
@@ -317,11 +335,9 @@ export async function POST(request: NextRequest) {
         await prisma.lot.createMany({ data: lotCreateData });
       } catch {
         // Fallback to individual creates if batch fails (e.g. unique constraint)
-        let fallbackCreated = 0;
         for (const data of lotCreateData) {
           try {
             await prisma.lot.create({ data });
-            fallbackCreated++;
           } catch {
             skipped++;
             lotCreated--;

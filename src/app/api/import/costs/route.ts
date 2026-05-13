@@ -21,8 +21,6 @@ const bodySchema = z.object({
   costs: z.array(costSchema).min(1),
 });
 
-const BATCH_SIZE = 100;
-
 export async function POST(request: NextRequest) {
   const authError = requireImportAuth(request);
   if (authError) return authError;
@@ -102,7 +100,7 @@ export async function POST(request: NextRequest) {
     const affectedSSIds = new Set<string>();
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const costUpdateOps: any[] = [];
+    const costUpdateData: any[] = [];
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const costCreateData: any[] = [];
 
@@ -117,23 +115,19 @@ export async function POST(request: NextRequest) {
       const amount = Math.round(row["Salesheet Amount"] * 100) / 100;
 
       if (costExistsSet.has(row["Shkost ID"])) {
-        costUpdateOps.push(
-          prisma.salesSheetCost.update({
-            where: { fabricShkostId: row["Shkost ID"] },
-            data: {
-              description,
-              amount,
-              fabricKostId: row["Kost ID"] || null,
-              costTypeCode: row["Kost Type Code"] || null,
-              costTypeName: row["Kost Type Naam"] || null,
-              totalTurnover:
-                row["Totaal Omzet"] != null
-                  ? Math.round(row["Totaal Omzet"] * 100) / 100
-                  : null,
-              totalQuantity: row["Totaal Aantal"] || null,
-            },
-          })
-        );
+        costUpdateData.push({
+          fabricShkostId: row["Shkost ID"],
+          description,
+          amount,
+          fabricKostId: row["Kost ID"] || null,
+          costTypeCode: row["Kost Type Code"] || null,
+          costTypeName: row["Kost Type Naam"] || null,
+          totalTurnover:
+            row["Totaal Omzet"] != null
+              ? Math.round(row["Totaal Omzet"] * 100) / 100
+              : null,
+          totalQuantity: row["Totaal Aantal"] || null,
+        });
         updated++;
       } else {
         costCreateData.push({
@@ -155,9 +149,23 @@ export async function POST(request: NextRequest) {
       affectedSSIds.add(salesSheetId);
     }
 
-    // Phase 3: Execute cost operations in batches
-    for (let i = 0; i < costUpdateOps.length; i += BATCH_SIZE) {
-      await prisma.$transaction(costUpdateOps.slice(i, i + BATCH_SIZE));
+    // Phase 3: Execute cost operations
+    if (costUpdateData.length > 0) {
+      await prisma.$executeRawUnsafe(
+        `UPDATE "SalesSheetCost" AS t
+         SET
+           description = u.val->>'description',
+           amount = (u.val->>'amount')::numeric,
+           "fabricKostId" = (u.val->>'fabricKostId')::int,
+           "costTypeCode" = u.val->>'costTypeCode',
+           "costTypeName" = u.val->>'costTypeName',
+           "totalTurnover" = (u.val->>'totalTurnover')::numeric,
+           "totalQuantity" = (u.val->>'totalQuantity')::int,
+           "updatedAt" = NOW()
+         FROM jsonb_array_elements($1::jsonb) AS u(val)
+         WHERE t."fabricShkostId" = (u.val->>'fabricShkostId')::int`,
+        JSON.stringify(costUpdateData)
+      );
     }
 
     if (costCreateData.length > 0) {
@@ -176,32 +184,10 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Phase 4: Recalculate salessheet totals using groupBy (2 queries instead of 2N)
+    // Phase 4: Recalculate salessheet totals via single raw SQL
     let ssRecalculated = 0;
     if (affectedSSIds.size > 0) {
       const ssIds = [...affectedSSIds];
-
-      const [ssLotAggs, ssCostAggs] = await Promise.all([
-        prisma.lot.groupBy({
-          by: ["salesSheetId"],
-          where: { salesSheetId: { in: ssIds } },
-          _sum: { totalAmount: true },
-        }),
-        prisma.salesSheetCost.groupBy({
-          by: ["salesSheetId"],
-          where: { salesSheetId: { in: ssIds } },
-          _sum: { amount: true },
-        }),
-      ]);
-
-      const ssLotTotals = new Map<string, number>();
-      for (const a of ssLotAggs) {
-        if (a.salesSheetId) ssLotTotals.set(a.salesSheetId, Number(a._sum.totalAmount ?? 0));
-      }
-      const ssCostTotals = new Map<string, number>();
-      for (const a of ssCostAggs) {
-        if (a.salesSheetId) ssCostTotals.set(a.salesSheetId, Number(a._sum.amount ?? 0));
-      }
 
       // Build date maps from input data for receipt/registration dates
       const ssReceiptDates = new Map<string, Date>();
@@ -226,31 +212,59 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const ssUpdateOps: any[] = [];
+      // Recalculate totals in a single SQL with CTEs
+      ssRecalculated = await prisma.$executeRawUnsafe(
+        `WITH ss_ids AS (
+           SELECT jsonb_array_elements_text($1::jsonb) AS id
+         ),
+         lot_totals AS (
+           SELECT "salesSheetId", SUM("totalAmount") as total
+           FROM "Lot"
+           WHERE "salesSheetId" IN (SELECT id FROM ss_ids)
+           GROUP BY "salesSheetId"
+         ),
+         cost_totals AS (
+           SELECT "salesSheetId", SUM(amount) as total
+           FROM "SalesSheetCost"
+           WHERE "salesSheetId" IN (SELECT id FROM ss_ids)
+           GROUP BY "salesSheetId"
+         )
+         UPDATE "SalesSheet" AS ss
+         SET
+           "totalTurnover" = ROUND(COALESCE(lt.total, 0)::numeric, 2),
+           "totalCosts" = ROUND(COALESCE(ct.total, 0)::numeric, 2),
+           "netResult" = ROUND((COALESCE(lt.total, 0) - COALESCE(ct.total, 0))::numeric, 2),
+           "updatedAt" = NOW()
+         FROM ss_ids
+         LEFT JOIN lot_totals lt ON lt."salesSheetId" = ss_ids.id
+         LEFT JOIN cost_totals ct ON ct."salesSheetId" = ss_ids.id
+         WHERE ss.id = ss_ids.id`,
+        JSON.stringify(ssIds)
+      );
+
+      // Update receipt/registration dates separately
+      const dateUpdates: { id: string; lastReceiptDate: string | null; lastRegistrationDate: string | null }[] = [];
       for (const ssId of ssIds) {
-        const totalTurnover = ssLotTotals.get(ssId) ?? 0;
-        const totalCosts = ssCostTotals.get(ssId) ?? 0;
-        const lastReceiptDate = ssReceiptDates.get(ssId);
-        const lastRegistrationDate = ssRegistrationDates.get(ssId);
-
-        ssUpdateOps.push(
-          prisma.salesSheet.update({
-            where: { id: ssId },
-            data: {
-              totalTurnover: Math.round(totalTurnover * 100) / 100,
-              totalCosts: Math.round(totalCosts * 100) / 100,
-              netResult: Math.round((totalTurnover - totalCosts) * 100) / 100,
-              ...(lastReceiptDate ? { lastReceiptDate } : {}),
-              ...(lastRegistrationDate ? { lastRegistrationDate } : {}),
-            },
-          })
-        );
-        ssRecalculated++;
+        const receipt = ssReceiptDates.get(ssId);
+        const registration = ssRegistrationDates.get(ssId);
+        if (receipt || registration) {
+          dateUpdates.push({
+            id: ssId,
+            lastReceiptDate: receipt?.toISOString() || null,
+            lastRegistrationDate: registration?.toISOString() || null,
+          });
+        }
       }
-
-      for (let i = 0; i < ssUpdateOps.length; i += BATCH_SIZE) {
-        await prisma.$transaction(ssUpdateOps.slice(i, i + BATCH_SIZE));
+      if (dateUpdates.length > 0) {
+        await prisma.$executeRawUnsafe(
+          `UPDATE "SalesSheet" AS t
+           SET
+             "lastReceiptDate" = COALESCE((u.val->>'lastReceiptDate')::timestamp, t."lastReceiptDate"),
+             "lastRegistrationDate" = COALESCE((u.val->>'lastRegistrationDate')::timestamp, t."lastRegistrationDate")
+           FROM jsonb_array_elements($1::jsonb) AS u(val)
+           WHERE t.id = (u.val->>'id')::uuid`,
+          JSON.stringify(dateUpdates)
+        );
       }
     }
 

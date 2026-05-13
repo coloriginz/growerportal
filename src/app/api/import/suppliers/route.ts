@@ -15,8 +15,6 @@ const bodySchema = z.object({
   suppliers: z.array(supplierSchema).min(1),
 });
 
-const BATCH_SIZE = 100;
-
 export async function POST(request: NextRequest) {
   const authError = requireImportAuth(request);
   if (authError) return authError;
@@ -56,7 +54,7 @@ export async function POST(request: NextRequest) {
   try {
     const { suppliers } = parsed.data;
 
-    // Phase 1: Pre-fetch all existing FabricRelations in bulk
+    // Phase 1: Pre-fetch existing FabricRelations in bulk
     const allFabricIds = suppliers.map((s) => s.ID);
     const existingRelations = await prisma.fabricRelation.findMany({
       where: { fabricId: { in: allFabricIds } },
@@ -65,46 +63,51 @@ export async function POST(request: NextRequest) {
     const existingSet = new Set(existingRelations.map((r) => r.fabricId));
 
     // Phase 2: Split into creates and updates
-    let created = 0;
-    let updated = 0;
-    let errors = 0;
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const updateOps: any[] = [];
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const createData: any[] = [];
+    const updateData: { fabricId: number; code: string; name: string; accountManagerName: string | null; accountManagerCode: string | null }[] = [];
+    const createData: typeof updateData = [];
 
     for (const row of suppliers) {
+      const record = {
+        fabricId: row.ID,
+        code: row.Code,
+        name: row.Naam,
+        accountManagerName: row["AM Naam"] || null,
+        accountManagerCode: row["AM Code"] || null,
+      };
       if (existingSet.has(row.ID)) {
-        updateOps.push(
-          prisma.fabricRelation.update({
-            where: { fabricId: row.ID },
-            data: {
-              code: row.Code,
-              name: row.Naam,
-              accountManagerName: row["AM Naam"] || null,
-              accountManagerCode: row["AM Code"] || null,
-            },
-          })
-        );
-        updated++;
+        updateData.push(record);
       } else {
-        createData.push({
-          fabricId: row.ID,
-          code: row.Code,
-          name: row.Naam,
-          accountManagerName: row["AM Naam"] || null,
-          accountManagerCode: row["AM Code"] || null,
-        });
-        created++;
+        createData.push(record);
       }
     }
 
-    // Phase 3: Execute in batches
-    for (let i = 0; i < updateOps.length; i += BATCH_SIZE) {
-      await prisma.$transaction(updateOps.slice(i, i + BATCH_SIZE));
+    // Phase 3: Bulk update via single raw SQL (1 query instead of N)
+    if (updateData.length > 0) {
+      await prisma.$executeRawUnsafe(
+        `UPDATE "FabricRelation" AS t
+         SET
+           code = u.code,
+           name = u.name,
+           "accountManagerName" = u.am_name,
+           "accountManagerCode" = u.am_code,
+           "updatedAt" = NOW()
+         FROM (
+           SELECT
+             (val->>'fabricId')::int AS fabric_id,
+             val->>'code' AS code,
+             val->>'name' AS name,
+             val->>'accountManagerName' AS am_name,
+             val->>'accountManagerCode' AS am_code
+           FROM jsonb_array_elements($1::jsonb) AS val
+         ) AS u
+         WHERE t."fabricId" = u.fabric_id`,
+        JSON.stringify(updateData)
+      );
     }
 
+    // Phase 4: Bulk create
+    let created = createData.length;
+    let errors = 0;
     if (createData.length > 0) {
       try {
         await prisma.fabricRelation.createMany({ data: createData });
@@ -121,7 +124,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Phase 4: Batch-update Grower names from FabricRelation
+    // Phase 5: Batch-update Grower names from FabricRelation
     let growerNamesFilled = 0;
     try {
       growerNamesFilled = await prisma.$executeRaw`
@@ -143,7 +146,7 @@ export async function POST(request: NextRequest) {
             status: "success",
             recordsReceived: suppliers.length,
             recordsCreated: created,
-            recordsUpdated: updated,
+            recordsUpdated: updateData.length,
             recordsSkipped: errors,
             durationMs: Date.now() - startTime,
             completedAt: new Date(),
@@ -160,7 +163,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       received: suppliers.length,
       created,
-      updated,
+      updated: updateData.length,
       errors,
     });
   } catch (err) {
