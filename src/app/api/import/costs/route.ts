@@ -21,6 +21,8 @@ const bodySchema = z.object({
   costs: z.array(costSchema).min(1),
 });
 
+const BATCH_SIZE = 100;
+
 export async function POST(request: NextRequest) {
   const authError = requireImportAuth(request);
   if (authError) return authError;
@@ -60,34 +62,55 @@ export async function POST(request: NextRequest) {
   try {
     const { costs } = parsed.data;
 
-    // Build salessheet lookup: fabricParthdrId → UUID
+    // Phase 1: Pre-fetch salessheet lookup and existing costs in parallel
     const parthdrIds = [...new Set(costs.map((c) => c["Parthdr ID"]))];
-    const salesSheets = await prisma.salesSheet.findMany({
-      where: { fabricParthdrId: { in: parthdrIds } },
-      select: { id: true, fabricParthdrId: true },
-    });
+    const allShkostIds = costs.map((c) => c["Shkost ID"]);
+
+    const [salesSheets, existingCosts] = await Promise.all([
+      prisma.salesSheet.findMany({
+        where: { fabricParthdrId: { in: parthdrIds } },
+        select: { id: true, fabricParthdrId: true },
+      }),
+      prisma.salesSheetCost.findMany({
+        where: { fabricShkostId: { in: allShkostIds } },
+        select: { id: true, fabricShkostId: true },
+      }),
+    ]);
+
     const ssMap = new Map<number, string>();
     for (const ss of salesSheets) {
       if (ss.fabricParthdrId) ssMap.set(ss.fabricParthdrId, ss.id);
     }
 
-    let created = 0, updated = 0, skipped = 0;
+    const costExistsSet = new Set<number>();
+    for (const c of existingCosts) {
+      if (c.fabricShkostId) costExistsSet.add(c.fabricShkostId);
+    }
+
+    // Phase 2: Build cost operations
+    let created = 0,
+      updated = 0,
+      skipped = 0;
     const affectedSSIds = new Set<string>();
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const costUpdateOps: any[] = [];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const costCreateData: any[] = [];
 
     for (const row of costs) {
       const salesSheetId = ssMap.get(row["Parthdr ID"]);
-      if (!salesSheetId) { skipped++; continue; }
+      if (!salesSheetId) {
+        skipped++;
+        continue;
+      }
 
       const description = row["Kost Naam"]?.trim() || "Unknown cost";
       const amount = Math.round(row["Salesheet Amount"] * 100) / 100;
 
-      try {
-        const existing = await prisma.salesSheetCost.findUnique({
-          where: { fabricShkostId: row["Shkost ID"] },
-        });
-
-        if (existing) {
-          await prisma.salesSheetCost.update({
+      if (costExistsSet.has(row["Shkost ID"])) {
+        costUpdateOps.push(
+          prisma.salesSheetCost.update({
             where: { fabricShkostId: row["Shkost ID"] },
             data: {
               description,
@@ -95,73 +118,132 @@ export async function POST(request: NextRequest) {
               fabricKostId: row["Kost ID"] || null,
               costTypeCode: row["Kost Type Code"] || null,
               costTypeName: row["Kost Type Naam"] || null,
-              totalTurnover: row["Totaal Omzet"] != null ? Math.round(row["Totaal Omzet"] * 100) / 100 : null,
+              totalTurnover:
+                row["Totaal Omzet"] != null
+                  ? Math.round(row["Totaal Omzet"] * 100) / 100
+                  : null,
               totalQuantity: row["Totaal Aantal"] || null,
             },
-          });
-          updated++;
-        } else {
-          await prisma.salesSheetCost.create({
-            data: {
-              salesSheetId,
-              description,
-              amount,
-              fabricShkostId: row["Shkost ID"],
-              fabricKostId: row["Kost ID"] || null,
-              costTypeCode: row["Kost Type Code"] || null,
-              costTypeName: row["Kost Type Naam"] || null,
-              totalTurnover: row["Totaal Omzet"] != null ? Math.round(row["Totaal Omzet"] * 100) / 100 : null,
-              totalQuantity: row["Totaal Aantal"] || null,
-            },
-          });
-          created++;
-        }
-        affectedSSIds.add(salesSheetId);
+          })
+        );
+        updated++;
+      } else {
+        costCreateData.push({
+          salesSheetId,
+          description,
+          amount,
+          fabricShkostId: row["Shkost ID"],
+          fabricKostId: row["Kost ID"] || null,
+          costTypeCode: row["Kost Type Code"] || null,
+          costTypeName: row["Kost Type Naam"] || null,
+          totalTurnover:
+            row["Totaal Omzet"] != null
+              ? Math.round(row["Totaal Omzet"] * 100) / 100
+              : null,
+          totalQuantity: row["Totaal Aantal"] || null,
+        });
+        created++;
+      }
+      affectedSSIds.add(salesSheetId);
+    }
+
+    // Phase 3: Execute cost operations in batches
+    for (let i = 0; i < costUpdateOps.length; i += BATCH_SIZE) {
+      await prisma.$transaction(costUpdateOps.slice(i, i + BATCH_SIZE));
+    }
+
+    if (costCreateData.length > 0) {
+      try {
+        await prisma.salesSheetCost.createMany({ data: costCreateData });
       } catch {
-        skipped++;
+        // Fallback to individual creates
+        for (const data of costCreateData) {
+          try {
+            await prisma.salesSheetCost.create({ data });
+          } catch {
+            skipped++;
+            created--;
+          }
+        }
       }
     }
 
-    // Recalculate salessheet totals + update receipt/registration dates
+    // Phase 4: Recalculate salessheet totals using groupBy (2 queries instead of 2N)
     let ssRecalculated = 0;
-    for (const ssId of affectedSSIds) {
-      const lotAgg = await prisma.lot.aggregate({
-        where: { salesSheetId: ssId },
-        _sum: { totalAmount: true },
-      });
-      const costAgg = await prisma.salesSheetCost.aggregate({
-        where: { salesSheetId: ssId },
-        _sum: { amount: true },
-      });
-      const totalTurnover = Number(lotAgg._sum.totalAmount ?? 0);
-      const totalCosts = Number(costAgg._sum.amount ?? 0);
+    if (affectedSSIds.size > 0) {
+      const ssIds = [...affectedSSIds];
 
-      // Find latest receipt/registration dates from cost rows for this salessheet
-      const ssSourceRows = costs.filter((c) => ssMap.get(c["Parthdr ID"]) === ssId);
-      let lastReceiptDate: Date | null = null;
-      let lastRegistrationDate: Date | null = null;
-      for (const r of ssSourceRows) {
-        if (r["Laatste Ontvangstdatum"]) {
-          const d = new Date(r["Laatste Ontvangstdatum"]);
-          if (!isNaN(d.getTime()) && (!lastReceiptDate || d > lastReceiptDate)) lastReceiptDate = d;
+      const [ssLotAggs, ssCostAggs] = await Promise.all([
+        prisma.lot.groupBy({
+          by: ["salesSheetId"],
+          where: { salesSheetId: { in: ssIds } },
+          _sum: { totalAmount: true },
+        }),
+        prisma.salesSheetCost.groupBy({
+          by: ["salesSheetId"],
+          where: { salesSheetId: { in: ssIds } },
+          _sum: { amount: true },
+        }),
+      ]);
+
+      const ssLotTotals = new Map<string, number>();
+      for (const a of ssLotAggs) {
+        if (a.salesSheetId) ssLotTotals.set(a.salesSheetId, Number(a._sum.totalAmount ?? 0));
+      }
+      const ssCostTotals = new Map<string, number>();
+      for (const a of ssCostAggs) {
+        if (a.salesSheetId) ssCostTotals.set(a.salesSheetId, Number(a._sum.amount ?? 0));
+      }
+
+      // Build date maps from input data for receipt/registration dates
+      const ssReceiptDates = new Map<string, Date>();
+      const ssRegistrationDates = new Map<string, Date>();
+      for (const row of costs) {
+        const ssId = ssMap.get(row["Parthdr ID"]);
+        if (!ssId) continue;
+
+        if (row["Laatste Ontvangstdatum"]) {
+          const d = new Date(row["Laatste Ontvangstdatum"]);
+          if (!isNaN(d.getTime())) {
+            const current = ssReceiptDates.get(ssId);
+            if (!current || d > current) ssReceiptDates.set(ssId, d);
+          }
         }
-        if (r["Laatste Aanmelddatum"]) {
-          const d = new Date(r["Laatste Aanmelddatum"]);
-          if (!isNaN(d.getTime()) && (!lastRegistrationDate || d > lastRegistrationDate)) lastRegistrationDate = d;
+        if (row["Laatste Aanmelddatum"]) {
+          const d = new Date(row["Laatste Aanmelddatum"]);
+          if (!isNaN(d.getTime())) {
+            const current = ssRegistrationDates.get(ssId);
+            if (!current || d > current) ssRegistrationDates.set(ssId, d);
+          }
         }
       }
 
-      await prisma.salesSheet.update({
-        where: { id: ssId },
-        data: {
-          totalTurnover: Math.round(totalTurnover * 100) / 100,
-          totalCosts: Math.round(totalCosts * 100) / 100,
-          netResult: Math.round((totalTurnover - totalCosts) * 100) / 100,
-          ...(lastReceiptDate ? { lastReceiptDate } : {}),
-          ...(lastRegistrationDate ? { lastRegistrationDate } : {}),
-        },
-      });
-      ssRecalculated++;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const ssUpdateOps: any[] = [];
+      for (const ssId of ssIds) {
+        const totalTurnover = ssLotTotals.get(ssId) ?? 0;
+        const totalCosts = ssCostTotals.get(ssId) ?? 0;
+        const lastReceiptDate = ssReceiptDates.get(ssId);
+        const lastRegistrationDate = ssRegistrationDates.get(ssId);
+
+        ssUpdateOps.push(
+          prisma.salesSheet.update({
+            where: { id: ssId },
+            data: {
+              totalTurnover: Math.round(totalTurnover * 100) / 100,
+              totalCosts: Math.round(totalCosts * 100) / 100,
+              netResult: Math.round((totalTurnover - totalCosts) * 100) / 100,
+              ...(lastReceiptDate ? { lastReceiptDate } : {}),
+              ...(lastRegistrationDate ? { lastRegistrationDate } : {}),
+            },
+          })
+        );
+        ssRecalculated++;
+      }
+
+      for (let i = 0; i < ssUpdateOps.length; i += BATCH_SIZE) {
+        await prisma.$transaction(ssUpdateOps.slice(i, i + BATCH_SIZE));
+      }
     }
 
     if (batch) {

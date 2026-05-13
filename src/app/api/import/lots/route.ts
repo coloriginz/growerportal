@@ -32,6 +32,8 @@ function deriveArticleGroup(productName: string): string {
   return productName.trim().split(/\s+/)[0] || "Unknown";
 }
 
+const BATCH_SIZE = 100;
+
 export async function POST(request: NextRequest) {
   const authError = requireImportAuth(request);
   if (authError) return authError;
@@ -71,26 +73,80 @@ export async function POST(request: NextRequest) {
   try {
     const { partijen } = parsed.data;
 
-    // Build supplier lookup: fabricId → UUID
-    const supplierMap = new Map<number, string>();
-    const suppliers = await prisma.supplier.findMany({
-      where: { fabricId: { not: null } },
-      select: { id: true, fabricId: true },
-    });
-    for (const s of suppliers) {
-      if (s.fabricId) supplierMap.set(s.fabricId, s.id);
-    }
-
-    // Group partijen by parthdr_id for salessheet creation
+    // Group by parthdr_id
     const byParthdr = new Map<number, typeof partijen>();
     for (const row of partijen) {
       if (!byParthdr.has(row.parthdr_id)) byParthdr.set(row.parthdr_id, []);
       byParthdr.get(row.parthdr_id)!.push(row);
     }
 
-    let ssCreated = 0, ssUpdated = 0;
-    let lotCreated = 0, lotUpdated = 0;
+    const allParthdrIds = [...byParthdr.keys()];
+    const allPartIds = partijen.map((p) => p.part_id);
+
+    // Phase 1: Pre-fetch all existing data in parallel (3 queries instead of N)
+    const [suppliers, existingSalesSheets, existingLots] = await Promise.all([
+      prisma.supplier.findMany({
+        where: { fabricId: { not: null } },
+        select: { id: true, fabricId: true },
+      }),
+      prisma.salesSheet.findMany({
+        where: { fabricParthdrId: { in: allParthdrIds } },
+        select: { id: true, fabricParthdrId: true },
+      }),
+      prisma.lot.findMany({
+        where: { fabricPartId: { in: allPartIds } },
+        select: { id: true, fabricPartId: true },
+      }),
+    ]);
+
+    const supplierMap = new Map<number, string>();
+    for (const s of suppliers) {
+      if (s.fabricId) supplierMap.set(s.fabricId, s.id);
+    }
+
+    const ssMap = new Map<number, string>();
+    for (const ss of existingSalesSheets) {
+      if (ss.fabricParthdrId) ssMap.set(ss.fabricParthdrId, ss.id);
+    }
+
+    const lotExistsSet = new Set<number>();
+    for (const l of existingLots) {
+      if (l.fabricPartId) lotExistsSet.add(l.fabricPartId);
+    }
+
+    // Phase 2: Collect potential invoice numbers for new salessheets and check collisions in bulk
+    const newSsInvoiceNumbers: string[] = [];
+    for (const [parthdrId, rows] of byParthdr) {
+      if (ssMap.has(parthdrId)) continue;
+      const supplierId = supplierMap.get(rows[0].rel_id_leverancier);
+      if (!supplierId) continue;
+      let inv = rows[0]["Inkoop Factuur Nummer"]?.trim() || null;
+      if (!inv || ["", "xxx", "volgt", "test", "restpartijen"].includes(inv)) {
+        inv = `FABRIC-${parthdrId}`;
+      }
+      newSsInvoiceNumbers.push(inv);
+    }
+
+    const existingInvoices =
+      newSsInvoiceNumbers.length > 0
+        ? await prisma.salesSheet.findMany({
+            where: { invoiceNumber: { in: newSsInvoiceNumbers } },
+            select: { invoiceNumber: true },
+          })
+        : [];
+    const usedInvoiceNumbers = new Set(existingInvoices.map((inv) => inv.invoiceNumber));
+
+    // Phase 3: Build salessheet operations
+    let ssCreated = 0,
+      ssUpdated = 0;
+    let lotCreated = 0,
+      lotUpdated = 0;
     let skipped = 0;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const ssUpdateOps: any[] = [];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const ssCreateData: any[] = [];
 
     for (const [parthdrId, rows] of byParthdr) {
       const firstRow = rows[0];
@@ -100,69 +156,97 @@ export async function POST(request: NextRequest) {
         continue;
       }
 
-      // Determine invoice number
-      let invoiceNumber = firstRow["Inkoop Factuur Nummer"]?.trim() || null;
-      if (!invoiceNumber || ["", "xxx", "volgt", "test", "restpartijen"].includes(invoiceNumber)) {
-        invoiceNumber = `FABRIC-${parthdrId}`;
+      const deliveryDate = firstRow["Lever Datum/Tijd"]
+        ? new Date(firstRow["Lever Datum/Tijd"])
+        : new Date();
+
+      if (ssMap.has(parthdrId)) {
+        ssUpdateOps.push(
+          prisma.salesSheet.update({
+            where: { fabricParthdrId: parthdrId },
+            data: { deliveryDate },
+          })
+        );
+        ssUpdated++;
+      } else {
+        let invoiceNumber = firstRow["Inkoop Factuur Nummer"]?.trim() || null;
+        if (
+          !invoiceNumber ||
+          ["", "xxx", "volgt", "test", "restpartijen"].includes(invoiceNumber)
+        ) {
+          invoiceNumber = `FABRIC-${parthdrId}`;
+        }
+        if (usedInvoiceNumbers.has(invoiceNumber)) {
+          invoiceNumber = `${invoiceNumber}-${parthdrId}`;
+        }
+        usedInvoiceNumbers.add(invoiceNumber);
+
+        ssCreateData.push({
+          invoiceNumber,
+          fabricParthdrId: parthdrId,
+          supplierId,
+          invoiceDate: deliveryDate,
+          deliveryDate,
+          totalTurnover: 0,
+          totalCosts: 0,
+          netResult: 0,
+        });
+        ssCreated++;
       }
+    }
+
+    // Phase 4: Execute salessheet operations in batches
+    for (let i = 0; i < ssUpdateOps.length; i += BATCH_SIZE) {
+      await prisma.$transaction(ssUpdateOps.slice(i, i + BATCH_SIZE));
+    }
+
+    if (ssCreateData.length > 0) {
+      await prisma.salesSheet.createMany({ data: ssCreateData });
+      // Fetch new salessheet IDs
+      const newSalesSheets = await prisma.salesSheet.findMany({
+        where: {
+          fabricParthdrId: {
+            in: ssCreateData.map((d: { fabricParthdrId: number }) => d.fabricParthdrId),
+          },
+        },
+        select: { id: true, fabricParthdrId: true },
+      });
+      for (const ss of newSalesSheets) {
+        if (ss.fabricParthdrId) ssMap.set(ss.fabricParthdrId, ss.id);
+      }
+    }
+
+    // Phase 5: Build lot operations
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const lotUpdateOps: any[] = [];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const lotCreateData: any[] = [];
+
+    for (const [parthdrId, rows] of byParthdr) {
+      const firstRow = rows[0];
+      const supplierId = supplierMap.get(firstRow.rel_id_leverancier);
+      if (!supplierId) continue;
+
+      const salesSheetId = ssMap.get(parthdrId);
+      if (!salesSheetId) continue;
 
       const deliveryDate = firstRow["Lever Datum/Tijd"]
         ? new Date(firstRow["Lever Datum/Tijd"])
         : new Date();
 
-      // Upsert SalesSheet
-      try {
-        const existing = await prisma.salesSheet.findUnique({ where: { fabricParthdrId: parthdrId } });
-        if (existing) {
-          await prisma.salesSheet.update({
-            where: { fabricParthdrId: parthdrId },
-            data: { deliveryDate },
-          });
-          ssUpdated++;
-        } else {
-          // Check for invoiceNumber collision
-          const existingByInvoice = await prisma.salesSheet.findUnique({ where: { invoiceNumber } });
-          if (existingByInvoice) {
-            invoiceNumber = `${invoiceNumber}-${parthdrId}`;
-          }
-          await prisma.salesSheet.create({
-            data: {
-              invoiceNumber,
-              fabricParthdrId: parthdrId,
-              supplierId,
-              invoiceDate: deliveryDate,
-              deliveryDate,
-              totalTurnover: 0,
-              totalCosts: 0,
-              netResult: 0,
-            },
-          });
-          ssCreated++;
-        }
-      } catch {
-        skipped += rows.length;
-        continue;
-      }
-
-      // Get salesSheet ID
-      const salesSheet = await prisma.salesSheet.findUnique({
-        where: { fabricParthdrId: parthdrId },
-        select: { id: true },
-      });
-      if (!salesSheet) continue;
-
-      // Upsert lots
       for (const row of rows) {
         const lotNumber = String(row.Partijnummer).trim();
-        if (!lotNumber) { skipped++; continue; }
+        if (!lotNumber) {
+          skipped++;
+          continue;
+        }
 
         const productName = row["Artikel Naam"]?.trim() || "Unknown";
         const stemLength = row.S01 ? parseInt(row.S01, 10) || 0 : 0;
 
-        try {
-          const existingLot = await prisma.lot.findUnique({ where: { fabricPartId: row.part_id } });
-          if (existingLot) {
-            await prisma.lot.update({
+        if (lotExistsSet.has(row.part_id)) {
+          lotUpdateOps.push(
+            prisma.lot.update({
               where: { fabricPartId: row.part_id },
               data: {
                 lotNumber,
@@ -178,42 +262,61 @@ export async function POST(request: NextRequest) {
                 invoicedVolume: row["Inkoopfactuur volume"] || null,
                 correctionVolume: row["Inslagcorrectie volume"] || null,
               },
-            });
-            lotUpdated++;
-          } else {
-            await prisma.lot.create({
-              data: {
-                lotNumber,
-                refNumber: lotNumber,
-                fabricPartId: row.part_id,
-                fabricParthdrId: parthdrId,
-                supplierId,
-                salesSheetId: salesSheet.id,
-                articleCode: row["Artikel Code"] || null,
-                productName,
-                articleGroup: deriveArticleGroup(productName),
-                purchaseType: row["Inkooptype Code"] || null,
-                fabricArticleId: row.art_id || null,
-                colli: row["Inkoopfactuur colli"] || 0,
-                stemLength,
-                totalStems: row["Inkoopfactuur volume"] || 0,
-                avgPrice: 0,
-                totalAmount: 0,
-                deliveryDate,
-                status: "sold",
-                s1: row.S01 || null,
-                s2: row.S02 || null,
-                s3: row.S03 || null,
-                correctionReasonId: row.reden_id_correctie || null,
-                invoicedColli: row["Inkoopfactuur colli"] || null,
-                invoicedVolume: row["Inkoopfactuur volume"] || null,
-                correctionVolume: row["Inslagcorrectie volume"] || null,
-              },
-            });
-            lotCreated++;
+            })
+          );
+          lotUpdated++;
+        } else {
+          lotCreateData.push({
+            lotNumber,
+            refNumber: lotNumber,
+            fabricPartId: row.part_id,
+            fabricParthdrId: parthdrId,
+            supplierId,
+            salesSheetId,
+            articleCode: row["Artikel Code"] || null,
+            productName,
+            articleGroup: deriveArticleGroup(productName),
+            purchaseType: row["Inkooptype Code"] || null,
+            fabricArticleId: row.art_id || null,
+            colli: row["Inkoopfactuur colli"] || 0,
+            stemLength,
+            totalStems: row["Inkoopfactuur volume"] || 0,
+            avgPrice: 0,
+            totalAmount: 0,
+            deliveryDate,
+            status: "sold",
+            s1: row.S01 || null,
+            s2: row.S02 || null,
+            s3: row.S03 || null,
+            correctionReasonId: row.reden_id_correctie || null,
+            invoicedColli: row["Inkoopfactuur colli"] || null,
+            invoicedVolume: row["Inkoopfactuur volume"] || null,
+            correctionVolume: row["Inslagcorrectie volume"] || null,
+          });
+          lotCreated++;
+        }
+      }
+    }
+
+    // Phase 6: Execute lot operations in batches
+    for (let i = 0; i < lotUpdateOps.length; i += BATCH_SIZE) {
+      await prisma.$transaction(lotUpdateOps.slice(i, i + BATCH_SIZE));
+    }
+
+    if (lotCreateData.length > 0) {
+      try {
+        await prisma.lot.createMany({ data: lotCreateData });
+      } catch {
+        // Fallback to individual creates if batch fails (e.g. unique constraint)
+        let fallbackCreated = 0;
+        for (const data of lotCreateData) {
+          try {
+            await prisma.lot.create({ data });
+            fallbackCreated++;
+          } catch {
+            skipped++;
+            lotCreated--;
           }
-        } catch {
-          skipped++;
         }
       }
     }
