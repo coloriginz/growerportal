@@ -4,7 +4,7 @@ import { prisma } from "@/lib/db";
 import { requireImportAuth, stripBracketKeys } from "@/lib/import-auth";
 
 const orderSchema = z.object({
-  ordreg_id: z.number(),
+  ordreg_id: z.number().nullable().optional(),
   part_id: z.number(),
   parthdr_id: z.number(),
   rel_id_kweker: z.number(),
@@ -73,9 +73,13 @@ export async function POST(request: NextRequest) {
       if (s.fabricId) supplierMap.set(s.fabricId, s.id);
     }
 
+    // Filter out rows without ordreg_id (zero-volume DAX rows with BLANK ordreg_id)
+    const validOrders = orders.filter((o) => o.ordreg_id != null);
+    const skippedNoOrdregId = orders.length - validOrders.length;
+
     // Round IDs (DAX/Power Automate can send 1.0 instead of 1)
-    for (const row of orders) {
-      row.ordreg_id = Math.round(row.ordreg_id);
+    for (const row of validOrders) {
+      row.ordreg_id = Math.round(row.ordreg_id!);
       row.part_id = Math.round(row.part_id);
       row.parthdr_id = Math.round(row.parthdr_id);
       row.rel_id_kweker = Math.round(row.rel_id_kweker);
@@ -84,7 +88,7 @@ export async function POST(request: NextRequest) {
 
     // Build grower pairs: fabricKwekerId → supplierId
     const growerPairs = new Map<number, string>();
-    for (const row of orders) {
+    for (const row of validOrders) {
       if (!growerPairs.has(row.rel_id_kweker)) {
         const supplierId = supplierMap.get(row.rel_id_leverancier);
         if (supplierId) growerPairs.set(row.rel_id_kweker, supplierId);
@@ -93,8 +97,8 @@ export async function POST(request: NextRequest) {
 
     // Phase 1: Pre-fetch existing growers, FabricRelations, lots, transactions in parallel
     const growerFabricIds = [...growerPairs.keys()];
-    const lotPartIds = [...new Set(orders.map((o) => o.part_id))];
-    const allOrdregIds = orders.map((o) => o.ordreg_id);
+    const lotPartIds = [...new Set(validOrders.map((o) => o.part_id))];
+    const allOrdregIds = validOrders.map((o) => o.ordreg_id as number);
 
     const [existingGrowers, fabricRelations, lots, existingTransactions] = await Promise.all([
       prisma.grower.findMany({
@@ -214,7 +218,8 @@ export async function POST(request: NextRequest) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const txCreateData: any[] = [];
 
-    for (const row of orders) {
+    for (const row of validOrders) {
+      const ordregId = row.ordreg_id as number;
       const lotInfo = lotMap.get(row.part_id);
       if (!lotInfo) {
         txSkipped++;
@@ -232,10 +237,10 @@ export async function POST(request: NextRequest) {
       const amount = row.Afrekenomzet ?? 0;
       const pricePerStem = row["Gem afrekenprijs"] ?? 0;
 
-      if (txExistsSet.has(row.ordreg_id)) {
+      if (txExistsSet.has(ordregId)) {
         txUpdateOps.push(
           prisma.transaction.update({
-            where: { fabricOrdregId: row.ordreg_id },
+            where: { fabricOrdregId: ordregId },
             data: {
               date,
               salesType,
@@ -250,7 +255,7 @@ export async function POST(request: NextRequest) {
       } else {
         txCreateData.push({
           lotId: lotInfo.id,
-          fabricOrdregId: row.ordreg_id,
+          fabricOrdregId: ordregId,
           fabricGrowerId: row.rel_id_kweker,
           date,
           salesType,
@@ -403,12 +408,13 @@ export async function POST(request: NextRequest) {
             recordsReceived: orders.length,
             recordsCreated: txCreated,
             recordsUpdated: txUpdated,
-            recordsSkipped: txSkipped,
+            recordsSkipped: txSkipped + skippedNoOrdregId,
             durationMs: Date.now() - startTime,
             completedAt: new Date(),
             details: {
               growers: { created: growersCreated, existing: growersExisting },
               recalculated: { lots: lotsRecalculated, salesSheets: ssRecalculated },
+              skippedNoOrdregId,
             },
           },
         });
@@ -419,6 +425,8 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       received: orders.length,
+      valid: validOrders.length,
+      skippedNoOrdregId,
       growers: { created: growersCreated, existing: growersExisting },
       transactions: { created: txCreated, updated: txUpdated, skipped: txSkipped },
       recalculated: { lots: lotsRecalculated, salesSheets: ssRecalculated },
