@@ -15,6 +15,8 @@ const bodySchema = z.object({
   suppliers: z.array(supplierSchema).min(1),
 });
 
+const BATCH_SIZE = 100;
+
 export async function POST(request: NextRequest) {
   const authError = requireImportAuth(request);
   if (authError) return authError;
@@ -54,38 +56,72 @@ export async function POST(request: NextRequest) {
   try {
     const { suppliers } = parsed.data;
 
+    // Phase 1: Pre-fetch all existing FabricRelations in bulk
+    const allFabricIds = suppliers.map((s) => s.ID);
+    const existingRelations = await prisma.fabricRelation.findMany({
+      where: { fabricId: { in: allFabricIds } },
+      select: { fabricId: true },
+    });
+    const existingSet = new Set(existingRelations.map((r) => r.fabricId));
+
+    // Phase 2: Split into creates and updates
     let created = 0;
     let updated = 0;
     let errors = 0;
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const updateOps: any[] = [];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const createData: any[] = [];
+
     for (const row of suppliers) {
-      try {
-        const result = await prisma.fabricRelation.upsert({
-          where: { fabricId: row.ID },
-          update: {
-            code: row.Code,
-            name: row.Naam,
-            accountManagerName: row["AM Naam"] || null,
-            accountManagerCode: row["AM Code"] || null,
-          },
-          create: {
-            fabricId: row.ID,
-            code: row.Code,
-            name: row.Naam,
-            accountManagerName: row["AM Naam"] || null,
-            accountManagerCode: row["AM Code"] || null,
-          },
+      if (existingSet.has(row.ID)) {
+        updateOps.push(
+          prisma.fabricRelation.update({
+            where: { fabricId: row.ID },
+            data: {
+              code: row.Code,
+              name: row.Naam,
+              accountManagerName: row["AM Naam"] || null,
+              accountManagerCode: row["AM Code"] || null,
+            },
+          })
+        );
+        updated++;
+      } else {
+        createData.push({
+          fabricId: row.ID,
+          code: row.Code,
+          name: row.Naam,
+          accountManagerName: row["AM Naam"] || null,
+          accountManagerCode: row["AM Code"] || null,
         });
-        // Check if it was created or updated by comparing createdAt timestamps
-        const isNew = result.createdAt.getTime() > Date.now() - 5000;
-        if (isNew) created++;
-        else updated++;
-      } catch {
-        errors++;
+        created++;
       }
     }
 
-    // Batch-update Grower names from FabricRelation
+    // Phase 3: Execute in batches
+    for (let i = 0; i < updateOps.length; i += BATCH_SIZE) {
+      await prisma.$transaction(updateOps.slice(i, i + BATCH_SIZE));
+    }
+
+    if (createData.length > 0) {
+      try {
+        await prisma.fabricRelation.createMany({ data: createData });
+      } catch {
+        // Fallback to individual creates
+        for (const data of createData) {
+          try {
+            await prisma.fabricRelation.create({ data });
+          } catch {
+            errors++;
+            created--;
+          }
+        }
+      }
+    }
+
+    // Phase 4: Batch-update Grower names from FabricRelation
     let growerNamesFilled = 0;
     try {
       growerNamesFilled = await prisma.$executeRaw`
