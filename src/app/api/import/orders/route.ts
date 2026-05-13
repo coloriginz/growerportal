@@ -4,15 +4,15 @@ import { prisma } from "@/lib/db";
 import { requireImportAuth, stripBracketKeys } from "@/lib/import-auth";
 
 const orderSchema = z.object({
-  ordreg_id: z.number().int(),
-  part_id: z.number().int(),
-  parthdr_id: z.number().int(),
-  rel_id_kweker: z.number().int(),
-  rel_id_leverancier: z.number().int(),
+  ordreg_id: z.number(),
+  part_id: z.number(),
+  parthdr_id: z.number(),
+  rel_id_kweker: z.number(),
+  rel_id_leverancier: z.number(),
   _datum_key_vertrek: z.string(),
   Verkooptype: z.string().nullable().optional(),
-  Verkoopvolume: z.number().int().nullable().optional(),
-  Verkoop_colli: z.number().int().nullable().optional(),
+  Verkoopvolume: z.number().nullable().optional(),
+  Verkoop_colli: z.number().nullable().optional(),
   Afrekenomzet: z.number().nullable().optional(),
   "Gem afrekenprijs": z.number().nullable().optional(),
 });
@@ -71,6 +71,15 @@ export async function POST(request: NextRequest) {
     const supplierMap = new Map<number, string>();
     for (const s of suppliers) {
       if (s.fabricId) supplierMap.set(s.fabricId, s.id);
+    }
+
+    // Round IDs (DAX/Power Automate can send 1.0 instead of 1)
+    for (const row of orders) {
+      row.ordreg_id = Math.round(row.ordreg_id);
+      row.part_id = Math.round(row.part_id);
+      row.parthdr_id = Math.round(row.parthdr_id);
+      row.rel_id_kweker = Math.round(row.rel_id_kweker);
+      row.rel_id_leverancier = Math.round(row.rel_id_leverancier);
     }
 
     // Build grower pairs: fabricKwekerId → supplierId

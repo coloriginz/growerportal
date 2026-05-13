@@ -4,14 +4,14 @@ import { prisma } from "@/lib/db";
 import { requireImportAuth, stripBracketKeys } from "@/lib/import-auth";
 
 const costSchema = z.object({
-  "Shkost ID": z.number().int(),
-  "Parthdr ID": z.number().int(),
+  "Shkost ID": z.number(),
+  "Parthdr ID": z.number(),
   "Kost Naam": z.string().nullable().optional(),
-  "Kost ID": z.number().int().nullable().optional(),
+  "Kost ID": z.number().nullable().optional(),
   "Kost Type Code": z.string().nullable().optional(),
   "Kost Type Naam": z.string().nullable().optional(),
   "Totaal Omzet": z.number().nullable().optional(),
-  "Totaal Aantal": z.number().int().nullable().optional(),
+  "Totaal Aantal": z.number().nullable().optional(),
   "Salesheet Amount": z.number(),
   "Laatste Ontvangstdatum": z.string().nullable().optional(),
   "Laatste Aanmelddatum": z.string().nullable().optional(),
@@ -61,6 +61,14 @@ export async function POST(request: NextRequest) {
 
   try {
     const { costs } = parsed.data;
+
+    // Round IDs (DAX/Power Automate can send 1.0 instead of 1)
+    for (const row of costs) {
+      row["Shkost ID"] = Math.round(row["Shkost ID"]);
+      row["Parthdr ID"] = Math.round(row["Parthdr ID"]);
+      if (row["Kost ID"]) row["Kost ID"] = Math.round(row["Kost ID"]);
+      if (row["Totaal Aantal"]) row["Totaal Aantal"] = Math.round(row["Totaal Aantal"]);
+    }
 
     // Phase 1: Pre-fetch salessheet lookup and existing costs in parallel
     const parthdrIds = [...new Set(costs.map((c) => c["Parthdr ID"]))];

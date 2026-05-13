@@ -4,9 +4,9 @@ import { prisma } from "@/lib/db";
 import { requireImportAuth, stripBracketKeys } from "@/lib/import-auth";
 
 const partijSchema = z.object({
-  part_id: z.number().int(),
-  parthdr_id: z.number().int(),
-  rel_id_leverancier: z.number().int(),
+  part_id: z.number(),
+  parthdr_id: z.number(),
+  rel_id_leverancier: z.number(),
   Partijnummer: z.union([z.string(), z.number()]),
   "Inkoop Factuur Nummer": z.string().nullable().optional(),
   "Lever Datum/Tijd": z.string().nullable().optional(),
@@ -16,11 +16,11 @@ const partijSchema = z.object({
   S01: z.string().nullable().optional(),
   S02: z.string().nullable().optional(),
   S03: z.string().nullable().optional(),
-  art_id: z.number().int().nullable().optional(),
-  reden_id_correctie: z.number().int().nullable().optional(),
-  "Inkoopfactuur colli": z.number().int().nullable().optional(),
-  "Inkoopfactuur volume": z.number().int().nullable().optional(),
-  "Inslagcorrectie volume": z.number().int().nullable().optional(),
+  art_id: z.number().nullable().optional(),
+  reden_id_correctie: z.number().nullable().optional(),
+  "Inkoopfactuur colli": z.number().nullable().optional(),
+  "Inkoopfactuur volume": z.number().nullable().optional(),
+  "Inslagcorrectie volume": z.number().nullable().optional(),
 });
 
 const bodySchema = z.object({
@@ -72,6 +72,15 @@ export async function POST(request: NextRequest) {
 
   try {
     const { partijen } = parsed.data;
+
+    // Round IDs (DAX/Power Automate can send 1.0 instead of 1)
+    for (const row of partijen) {
+      row.part_id = Math.round(row.part_id);
+      row.parthdr_id = Math.round(row.parthdr_id);
+      row.rel_id_leverancier = Math.round(row.rel_id_leverancier);
+      if (row.art_id) row.art_id = Math.round(row.art_id);
+      if (row.reden_id_correctie) row.reden_id_correctie = Math.round(row.reden_id_correctie);
+    }
 
     // Group by parthdr_id
     const byParthdr = new Map<number, typeof partijen>();
