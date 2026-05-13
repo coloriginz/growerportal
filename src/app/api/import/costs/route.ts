@@ -220,13 +220,13 @@ export async function POST(request: NextRequest) {
          lot_totals AS (
            SELECT "salesSheetId", SUM("totalAmount") as total
            FROM "Lot"
-           WHERE "salesSheetId" IN (SELECT id FROM ss_ids)
+           WHERE "salesSheetId" IN (SELECT id::uuid FROM ss_ids)
            GROUP BY "salesSheetId"
          ),
          cost_totals AS (
            SELECT "salesSheetId", SUM(amount) as total
            FROM "SalesSheetCost"
-           WHERE "salesSheetId" IN (SELECT id FROM ss_ids)
+           WHERE "salesSheetId" IN (SELECT id::uuid FROM ss_ids)
            GROUP BY "salesSheetId"
          )
          UPDATE "SalesSheet" AS ss
@@ -236,9 +236,9 @@ export async function POST(request: NextRequest) {
            "netResult" = ROUND((COALESCE(lt.total, 0) - COALESCE(ct.total, 0))::numeric, 2),
            "updatedAt" = NOW()
          FROM ss_ids
-         LEFT JOIN lot_totals lt ON lt."salesSheetId" = ss_ids.id
-         LEFT JOIN cost_totals ct ON ct."salesSheetId" = ss_ids.id
-         WHERE ss.id = ss_ids.id`,
+         LEFT JOIN lot_totals lt ON lt."salesSheetId" = ss_ids.id::uuid
+         LEFT JOIN cost_totals ct ON ct."salesSheetId" = ss_ids.id::uuid
+         WHERE ss.id = ss_ids.id::uuid`,
         JSON.stringify(ssIds)
       );
 
@@ -262,7 +262,7 @@ export async function POST(request: NextRequest) {
              "lastReceiptDate" = COALESCE((u.val->>'lastReceiptDate')::timestamp, t."lastReceiptDate"),
              "lastRegistrationDate" = COALESCE((u.val->>'lastRegistrationDate')::timestamp, t."lastRegistrationDate")
            FROM jsonb_array_elements($1::jsonb) AS u(val)
-           WHERE t.id = (u.val->>'id')::uuid`,
+           WHERE t.id = (u.val->>'id')::text::uuid`,
           JSON.stringify(dateUpdates)
         );
       }
