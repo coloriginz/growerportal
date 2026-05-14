@@ -21,11 +21,19 @@ const partijSchema = z.object({
   "Inkoopfactuur colli": z.number().nullable().optional(),
   "Inkoopfactuur volume": z.number().nullable().optional(),
   "Inslagcorrectie volume": z.number().nullable().optional(),
+  "Facttype Sub": z.string().nullable().optional(),
 });
 
 const bodySchema = z.object({
   partijen: z.array(partijSchema),
 });
+
+/** Classify a Facttype Sub value into base lot or correction */
+function isCorrection(facttypeSub: string | null | undefined): boolean {
+  if (!facttypeSub) return false;
+  const lower = facttypeSub.toLowerCase().trim();
+  return lower === "correctie" || lower === "productiecorrectie";
+}
 
 function deriveArticleGroup(productName: string): string {
   if (!productName) return "Unknown";
@@ -92,15 +100,19 @@ export async function POST(request: NextRequest) {
       if (row.reden_id_correctie) row.reden_id_correctie = Math.round(row.reden_id_correctie);
     }
 
+    // Split rows by Facttype Sub: base rows vs correction rows
+    const baseRows = partijen.filter((r) => !isCorrection(r["Facttype Sub"]));
+    const correctionRows = partijen.filter((r) => isCorrection(r["Facttype Sub"]));
+
     // Group by parthdr_id
     const byParthdr = new Map<number, typeof partijen>();
-    for (const row of partijen) {
+    for (const row of baseRows) {
       if (!byParthdr.has(row.parthdr_id)) byParthdr.set(row.parthdr_id, []);
       byParthdr.get(row.parthdr_id)!.push(row);
     }
 
     const allParthdrIds = [...byParthdr.keys()];
-    const allPartIds = partijen.map((p) => p.part_id);
+    const allPartIds = baseRows.map((p) => p.part_id);
 
     // Phase 1: Pre-fetch all existing data in parallel (3 queries)
     const [suppliers, existingSalesSheets, existingLots] = await Promise.all([
@@ -316,7 +328,6 @@ export async function POST(request: NextRequest) {
             s1: row.S01 || null,
             s2: row.S02 || null,
             s3: row.S03 || null,
-            correctionReasonId: row.reden_id_correctie || null,
             invoicedColli: row["Inkoopfactuur colli"] ?? null,
             invoicedVolume: row["Inkoopfactuur volume"] ?? null,
             correctionVolume: row["Inslagcorrectie volume"] ?? null,
@@ -345,7 +356,6 @@ export async function POST(request: NextRequest) {
             s1: row.S01 || null,
             s2: row.S02 || null,
             s3: row.S03 || null,
-            correctionReasonId: row.reden_id_correctie || null,
             invoicedColli: row["Inkoopfactuur colli"] || null,
             invoicedVolume: row["Inkoopfactuur volume"] || null,
             correctionVolume: row["Inslagcorrectie volume"] || null,
@@ -382,7 +392,6 @@ export async function POST(request: NextRequest) {
            s1 = u.val->>'s1',
            s2 = u.val->>'s2',
            s3 = u.val->>'s3',
-           "correctionReasonId" = (u.val->>'correctionReasonId')::int,
            "invoicedColli" = (u.val->>'invoicedColli')::int,
            "invoicedVolume" = (u.val->>'invoicedVolume')::int,
            "correctionVolume" = (u.val->>'correctionVolume')::int,
@@ -428,7 +437,6 @@ export async function POST(request: NextRequest) {
         s1: d.s1,
         s2: d.s2,
         s3: d.s3,
-        correctionReasonId: d.correctionReasonId,
         invoicedColli: d.invoicedColli,
         invoicedVolume: d.invoicedVolume,
         correctionVolume: d.correctionVolume,
@@ -440,7 +448,7 @@ export async function POST(request: NextRequest) {
            "supplierId", "salesSheetId", "articleCode", "productName", "articleGroup",
            "purchaseType", "fabricArticleId", colli, "stemLength", "totalStems",
            "avgPrice", "totalAmount", "deliveryDate", status,
-           s1, s2, s3, "correctionReasonId", "invoicedColli", "invoicedVolume", "correctionVolume",
+           s1, s2, s3, "invoicedColli", "invoicedVolume", "correctionVolume",
            "createdAt", "updatedAt"
          )
          SELECT
@@ -466,7 +474,6 @@ export async function POST(request: NextRequest) {
            v.val->>'s1',
            v.val->>'s2',
            v.val->>'s3',
-           (v.val->>'correctionReasonId')::int,
            (v.val->>'invoicedColli')::int,
            (v.val->>'invoicedVolume')::int,
            (v.val->>'correctionVolume')::int,
@@ -482,7 +489,6 @@ export async function POST(request: NextRequest) {
            s1 = EXCLUDED.s1,
            s2 = EXCLUDED.s2,
            s3 = EXCLUDED.s3,
-           "correctionReasonId" = EXCLUDED."correctionReasonId",
            "invoicedColli" = EXCLUDED."invoicedColli",
            "invoicedVolume" = EXCLUDED."invoicedVolume",
            "correctionVolume" = EXCLUDED."correctionVolume",
@@ -496,6 +502,154 @@ export async function POST(request: NextRequest) {
         const diff = lotCreateData.length - actualAffected;
         lotCreated -= diff;
         skipped += diff;
+      }
+    }
+
+    // Phase 7: Process correction rows → LotCorrection records
+    let correctionsCreated = 0;
+    let correctionsUpdated = 0;
+    let correctionsSkipped = 0;
+
+    if (correctionRows.length > 0) {
+      // Find parent lots for correction rows by lotNumber + supplier
+      const corrLotNumbers = [...new Set(correctionRows.map((r) => String(r.Partijnummer).trim()))];
+      const corrSupplierFabricIds = [...new Set(correctionRows.map((r) => r.rel_id_leverancier))];
+      const corrSupplierIds = corrSupplierFabricIds
+        .map((fid) => supplierMap.get(fid))
+        .filter(Boolean) as string[];
+
+      const parentLots = corrSupplierIds.length > 0 && corrLotNumbers.length > 0
+        ? await prisma.lot.findMany({
+            where: {
+              lotNumber: { in: corrLotNumbers },
+              supplierId: { in: corrSupplierIds },
+            },
+            select: { id: true, lotNumber: true, supplierId: true },
+          })
+        : [];
+
+      // Build lookup: "lotNumber::supplierId" → lot.id
+      const lotLookup = new Map<string, string>();
+      for (const lot of parentLots) {
+        lotLookup.set(`${lot.lotNumber}::${lot.supplierId}`, lot.id);
+      }
+
+      // Check which corrections already exist
+      const corrFabricPartIds = correctionRows.map((r) => r.part_id);
+      const existingCorrections = await prisma.lotCorrection.findMany({
+        where: { fabricPartId: { in: corrFabricPartIds } },
+        select: { fabricPartId: true },
+      });
+      const existingCorrSet = new Set(existingCorrections.map((c) => c.fabricPartId));
+
+      // Deduplicate correction rows by fabricPartId (part_id)
+      const corrDedupMap = new Map<number, (typeof correctionRows)[0]>();
+      for (const row of correctionRows) {
+        corrDedupMap.set(row.part_id, row);
+      }
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const corrCreateData: any[] = [];
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const corrUpdateData: any[] = [];
+
+      for (const row of corrDedupMap.values()) {
+        const lotNumber = String(row.Partijnummer).trim();
+        const supplierId = supplierMap.get(row.rel_id_leverancier);
+        if (!supplierId) {
+          correctionsSkipped++;
+          continue;
+        }
+
+        const lotId = lotLookup.get(`${lotNumber}::${supplierId}`);
+        if (!lotId) {
+          correctionsSkipped++;
+          continue;
+        }
+
+        const corrData = {
+          lotId,
+          fabricPartId: row.part_id,
+          facttypeSub: row["Facttype Sub"]?.toLowerCase().trim() || "correctie",
+          correctionReasonId: row.reden_id_correctie || null,
+          correctionVolume: row["Inslagcorrectie volume"] ?? null,
+          correctionColli: row["Inkoopfactuur colli"] ?? null,
+        };
+
+        if (existingCorrSet.has(row.part_id)) {
+          corrUpdateData.push(corrData);
+          correctionsUpdated++;
+        } else {
+          corrCreateData.push(corrData);
+          correctionsCreated++;
+        }
+      }
+
+      // Bulk insert new corrections
+      if (corrCreateData.length > 0) {
+        await prisma.$executeRawUnsafe(
+          `INSERT INTO "LotCorrection" (
+             id, "lotId", "fabricPartId", "facttypeSub",
+             "correctionReasonId", "correctionVolume", "correctionColli",
+             "createdAt", "updatedAt"
+           )
+           SELECT
+             gen_random_uuid()::text,
+             v.val->>'lotId',
+             (v.val->>'fabricPartId')::int,
+             v.val->>'facttypeSub',
+             (v.val->>'correctionReasonId')::int,
+             (v.val->>'correctionVolume')::int,
+             (v.val->>'correctionColli')::int,
+             NOW(),
+             NOW()
+           FROM jsonb_array_elements($1::jsonb) AS v(val)
+           ON CONFLICT ("lotId", "fabricPartId") DO UPDATE SET
+             "facttypeSub" = EXCLUDED."facttypeSub",
+             "correctionReasonId" = EXCLUDED."correctionReasonId",
+             "correctionVolume" = EXCLUDED."correctionVolume",
+             "correctionColli" = EXCLUDED."correctionColli",
+             "updatedAt" = NOW()`,
+          JSON.stringify(corrCreateData)
+        );
+      }
+
+      // Bulk update existing corrections
+      if (corrUpdateData.length > 0) {
+        await prisma.$executeRawUnsafe(
+          `UPDATE "LotCorrection" AS t
+           SET
+             "facttypeSub" = u.val->>'facttypeSub',
+             "correctionReasonId" = (u.val->>'correctionReasonId')::int,
+             "correctionVolume" = (u.val->>'correctionVolume')::int,
+             "correctionColli" = (u.val->>'correctionColli')::int,
+             "updatedAt" = NOW()
+           FROM jsonb_array_elements($1::jsonb) AS u(val)
+           WHERE t."fabricPartId" = (u.val->>'fabricPartId')::int`,
+          JSON.stringify(corrUpdateData)
+        );
+      }
+
+      // Update aggregate correctionVolume on parent lots
+      const affectedLotIds = [...new Set([
+        ...corrCreateData.map((d: { lotId: string }) => d.lotId),
+        ...corrUpdateData.map((d: { lotId: string }) => d.lotId),
+      ])];
+
+      if (affectedLotIds.length > 0) {
+        await prisma.$executeRawUnsafe(
+          `UPDATE "Lot" AS l
+           SET "correctionVolume" = sub.total_vol,
+               "updatedAt" = NOW()
+           FROM (
+             SELECT "lotId", SUM("correctionVolume") AS total_vol
+             FROM "LotCorrection"
+             WHERE "lotId" = ANY($1::text[])
+             GROUP BY "lotId"
+           ) AS sub
+           WHERE l.id = sub."lotId"`,
+          affectedLotIds
+        );
       }
     }
 
@@ -514,6 +668,7 @@ export async function POST(request: NextRequest) {
             details: {
               salesSheets: { created: ssCreated, updated: ssUpdated },
               lots: { created: lotCreated, updated: lotUpdated },
+              corrections: { created: correctionsCreated, updated: correctionsUpdated, skipped: correctionsSkipped },
             },
           },
         });
@@ -526,6 +681,7 @@ export async function POST(request: NextRequest) {
       received: partijen.length,
       salesSheets: { created: ssCreated, updated: ssUpdated },
       lots: { created: lotCreated, updated: lotUpdated },
+      corrections: { created: correctionsCreated, updated: correctionsUpdated, skipped: correctionsSkipped },
       skipped,
     });
   } catch (err) {
