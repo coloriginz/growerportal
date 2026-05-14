@@ -45,6 +45,12 @@ interface LotCorrection {
   correctionReasonId: number | null;
   correctionVolume: number | null;
   correctionColli: number | null;
+  correctionReason: {
+    code: string;
+    nameNl: string;
+    nameEn: string | null;
+    typeCode: string;
+  } | null;
 }
 
 interface Lot {
@@ -237,9 +243,11 @@ export function ShipmentDetail({ shipment }: ShipmentDetailProps) {
                       <TableRow key={corr.id} className="bg-red-50 dark:bg-red-950/20">
                         <TableCell></TableCell>
                         <TableCell colSpan={3} className="text-red-600 dark:text-red-400 text-sm">
-                          {corr.facttypeSub}
-                          {corr.correctionReasonId != null && (
-                            <span className="text-muted-foreground ml-2">(reason {corr.correctionReasonId})</span>
+                          {corr.correctionReason
+                            ? corr.correctionReason.nameNl
+                            : corr.facttypeSub}
+                          {corr.correctionReason && (
+                            <span className="text-muted-foreground ml-2">({corr.correctionReason.code})</span>
                           )}
                         </TableCell>
                         <TableCell colSpan={3}></TableCell>

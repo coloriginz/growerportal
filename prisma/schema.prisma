@@ -249,6 +249,25 @@ model Lot {
   @@index([fabricParthdrId])
 }
 
+// ─── CORRECTION REASON CODES (REDENCODES) ──────────────────
+
+model CorrectionReasonCode {
+  id         Int      @id           // reden_id from Fabric
+  code       String                 // "PTWG", "PVTG", etc.
+  nameNl     String                 // Dutch name: "Verwerking: te weinig in doos"
+  nameEn     String?                // English (future)
+  nameEs     String?                // Spanish (future)
+  typeCode   String                 // "LEV", "VRD", "VRK", "RET"
+  typeNameNl String                 // "Levering correctie reden"
+  typeNameEn String?                // English (future)
+  active     Boolean  @default(true)
+  isClaim    Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  corrections LotCorrection[]
+}
+
 // ─── LOT CORRECTIONS (PARTIJCORRECTIES) ────────────────────
 
 model LotCorrection {
@@ -258,6 +277,7 @@ model LotCorrection {
   fabricPartId       Int?     // part_id of the correction row (unique in Fabric)
   facttypeSub        String   // "correctie" or "productiecorrectie"
   correctionReasonId Int?     // reden_id_correctie from Fabric
+  correctionReason   CorrectionReasonCode? @relation(fields: [correctionReasonId], references: [id])
   correctionVolume   Int?     // Inslagcorrectie volume (this individual correction)
   correctionColli    Int?     // Inslag colli correctie (this individual correction)
   createdAt          DateTime @default(now())
@@ -265,6 +285,7 @@ model LotCorrection {
 
   @@index([lotId])
   @@index([fabricPartId])
+  @@index([correctionReasonId])
 }
 
 // ─── TRANSACTIONS ────────────────────────────────────────

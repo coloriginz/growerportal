@@ -40,6 +40,14 @@ export default async function ShipmentDetailPage({ params }: Props) {
               correctionReasonId: true,
               correctionVolume: true,
               correctionColli: true,
+              correctionReason: {
+                select: {
+                  code: true,
+                  nameNl: true,
+                  nameEn: true,
+                  typeCode: true,
+                },
+              },
             },
           },
         },
