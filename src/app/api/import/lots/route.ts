@@ -355,7 +355,21 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Phase 6: Execute lot operations
+    // Phase 6: Execute lot operations — deduplicate updates by fabricPartId
+    if (lotUpdateData.length > 0) {
+      const updateDedupMap = new Map<number, (typeof lotUpdateData)[0]>();
+      for (const d of lotUpdateData) {
+        updateDedupMap.set(d.fabricPartId, d);
+      }
+      const dedupCount = lotUpdateData.length - updateDedupMap.size;
+      if (dedupCount > 0) {
+        lotUpdated -= dedupCount;
+        skipped += dedupCount;
+      }
+      // Replace with deduped array
+      lotUpdateData.length = 0;
+      lotUpdateData.push(...updateDedupMap.values());
+    }
     if (lotUpdateData.length > 0) {
       await prisma.$executeRawUnsafe(
         `UPDATE "Lot" AS t
@@ -380,9 +394,19 @@ export async function POST(request: NextRequest) {
     }
 
     if (lotCreateData.length > 0) {
-      // Use raw SQL INSERT ... ON CONFLICT for bulk upsert (single roundtrip)
-      // This handles both new inserts and duplicate fabricPartId/lotNumber+supplierId gracefully
-      const lotJsonData = lotCreateData.map((d: Record<string, unknown>) => ({
+      // Deduplicate by fabricPartId — PostgreSQL INSERT ON CONFLICT cannot affect the same row twice
+      const dedupMap = new Map<number, Record<string, unknown>>();
+      for (const d of lotCreateData) {
+        dedupMap.set(d.fabricPartId as number, d);
+      }
+      const dedupedCreateData = [...dedupMap.values()];
+      const dupCount = lotCreateData.length - dedupedCreateData.length;
+      if (dupCount > 0) {
+        lotCreated -= dupCount;
+        skipped += dupCount;
+      }
+
+      const lotJsonData = dedupedCreateData.map((d: Record<string, unknown>) => ({
         lotNumber: d.lotNumber,
         refNumber: d.refNumber,
         fabricPartId: d.fabricPartId,
