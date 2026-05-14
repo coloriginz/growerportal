@@ -204,9 +204,8 @@ export function LotsContent({ supplierId }: { supplierId: string | null }) {
       </div>
 
       {/* Desktop lots table */}
-      <Card className="hidden md:block">
-        <CardContent className="p-0">
-          <Table>
+      <div className="hidden md:block">
+          <Table stickyHeader>
             <TableHeader>
               <TableRow>
                 <TableHead>{t("lots.lotNumber")}</TableHead>
@@ -269,8 +268,7 @@ export function LotsContent({ supplierId }: { supplierId: string | null }) {
               )}
             </TableBody>
           </Table>
-        </CardContent>
-      </Card>
+      </div>
     </div>
   );
 }

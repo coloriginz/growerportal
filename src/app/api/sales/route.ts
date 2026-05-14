@@ -19,11 +19,12 @@ export async function GET(request: NextRequest) {
   const filterProducts = params.getAll("product");
   const filterSalesTypes = params.getAll("salesType");
   const filterStemLengths = params.getAll("stemLength").map((s) => parseInt(s));
+  const filterGrowerIds = params.getAll("grower");
 
   if (!supplierId) {
     return NextResponse.json({
       totalStems: 0, totalTurnover: 0, avgPrice: 0,
-      bySalesType: [], byProduct: [], daily: [],
+      bySalesType: [], byProduct: [], byGrower: [], daily: [],
     });
   }
 
@@ -84,6 +85,7 @@ export async function GET(request: NextRequest) {
   const lotFilter: Record<string, any> = { supplierId };
   if (filterProducts.length > 0) lotFilter.productName = { in: filterProducts };
   if (filterStemLengths.length > 0) lotFilter.stemLength = { in: filterStemLengths };
+  if (filterGrowerIds.length > 0) lotFilter.growerId = { in: filterGrowerIds };
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const baseWhere: Record<string, any> = {
@@ -119,9 +121,9 @@ export async function GET(request: NextRequest) {
   const lotIds = byLot.map((b: { lotId: string; _sum: { stems: number | null; amount: unknown } }) => b.lotId);
   const lots = await prisma.lot.findMany({
     where: { id: { in: lotIds } },
-    select: { id: true, productName: true },
+    select: { id: true, productName: true, growerId: true },
   });
-  const lotMap = new Map(lots.map((l: { id: string; productName: string }) => [l.id, l.productName]));
+  const lotMap = new Map(lots.map((l) => [l.id, l.productName]));
 
   const productMap = new Map<string, { stems: number; turnover: number }>();
   for (const b of byLot) {
@@ -130,6 +132,32 @@ export async function GET(request: NextRequest) {
     existing.stems += b._sum.stems || 0;
     existing.turnover += Number(b._sum.amount) || 0;
     productMap.set(product, existing);
+  }
+
+  // By grower
+  const growerIds = [...new Set(
+    lots.filter((l) => l.growerId != null).map((l) => l.growerId as string)
+  )];
+  const growerRecords = growerIds.length > 0
+    ? await prisma.grower.findMany({
+        where: { id: { in: growerIds } },
+        select: { id: true, name: true, code: true },
+      })
+    : [];
+  const growerNameMap = new Map(
+    growerRecords.map((g) => [g.id, g.name || g.code || "Unknown"])
+  );
+  const growerLotMap = new Map(lots.map((l) => [l.id, l.growerId]));
+
+  const growerAggMap = new Map<string, { stems: number; turnover: number }>();
+  for (const b of byLot) {
+    const growerId = growerLotMap.get(b.lotId);
+    if (!growerId) continue;
+    const growerName = growerNameMap.get(growerId) || "Unknown";
+    const existing = growerAggMap.get(growerName) || { stems: 0, turnover: 0 };
+    existing.stems += b._sum.stems || 0;
+    existing.turnover += Number(b._sum.amount) || 0;
+    growerAggMap.set(growerName, existing);
   }
 
   // Daily breakdown
@@ -185,6 +213,13 @@ export async function GET(request: NextRequest) {
     byProduct: Array.from(productMap.entries())
       .map(([product, data]) => ({
         product,
+        ...data,
+        avgPrice: data.stems > 0 ? data.turnover / data.stems : 0,
+      }))
+      .sort((a, b) => b.stems - a.stems),
+    byGrower: Array.from(growerAggMap.entries())
+      .map(([grower, data]) => ({
+        grower,
         ...data,
         avgPrice: data.stems > 0 ? data.turnover / data.stems : 0,
       }))

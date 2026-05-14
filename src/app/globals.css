@@ -177,4 +177,10 @@
   .page-content {
     @apply space-y-8;
   }
+
+  /* Ensure page content (filters, cards, headers) paints above sticky table header shadows */
+  .page-content > *:not([data-slot="table-container"]) {
+    position: relative;
+    z-index: 20;
+  }
 }

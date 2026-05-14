@@ -23,6 +23,7 @@ export async function GET(request: NextRequest) {
   const filterProducts = params.getAll("product");
   const filterSalesTypes = params.getAll("salesType");
   const filterStemLengths = params.getAll("stemLength").map((s) => parseInt(s));
+  const filterGrowerIds = params.getAll("grower");
 
   const now = new Date();
   const yearStart = startOfYear(now);
@@ -30,6 +31,7 @@ export async function GET(request: NextRequest) {
   const lotFilter: Record<string, unknown> = { supplierId };
   if (filterProducts.length > 0) lotFilter.productName = { in: filterProducts };
   if (filterStemLengths.length > 0) lotFilter.stemLength = { in: filterStemLengths };
+  if (filterGrowerIds.length > 0) lotFilter.growerId = { in: filterGrowerIds };
 
   const baseWhere: Record<string, unknown> = {
     lot: lotFilter,

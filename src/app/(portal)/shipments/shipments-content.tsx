@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   Table,
@@ -41,6 +42,7 @@ interface ShipmentRow {
 export function ShipmentsContent({ supplierId }: { supplierId: string | null }) {
   const [search, setSearch] = useState("");
   const { t } = useLanguage();
+  const router = useRouter();
 
   const url = useMemo(() => {
     const params = new URLSearchParams();
@@ -177,11 +179,13 @@ export function ShipmentsContent({ supplierId }: { supplierId: string | null }) 
             </TableHeader>
             <TableBody>
               {filtered.map((s) => (
-                <TableRow key={s.id}>
-                  <TableCell className="font-medium">
-                    <Link href={`/shipments/${s.id}`} className="text-primary hover:underline">
-                      {s.invoiceNumber}
-                    </Link>
+                <TableRow
+                  key={s.id}
+                  className="cursor-pointer"
+                  onClick={() => router.push(`/shipments/${s.id}`)}
+                >
+                  <TableCell className="font-medium text-primary">
+                    {s.invoiceNumber}
                   </TableCell>
                   <TableCell className="text-muted-foreground">{formatDate(s.deliveryDate)}</TableCell>
                   <TableCell className="text-right tabular-nums">{s.lotCount}</TableCell>

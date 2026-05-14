@@ -51,6 +51,7 @@ interface SupplierRow {
   commercie: { id: string; name: string } | null;
   loginStatus: "active" | "pending" | "none";
   userCount: number;
+  growerCount: number;
 }
 
 export function SuppliersContent({ isAdmin }: { isAdmin?: boolean }) {
@@ -159,9 +160,7 @@ export function SuppliersContent({ isAdmin }: { isAdmin?: boolean }) {
       </div>
 
       {/* Table */}
-      <Card>
-        <CardContent className="p-0">
-          <Table>
+          <Table stickyHeader>
             <TableHeader>
               <TableRow>
                 <TableHead>{t("suppliers.code")}</TableHead>
@@ -170,6 +169,7 @@ export function SuppliersContent({ isAdmin }: { isAdmin?: boolean }) {
                 <TableHead>Brand</TableHead>
                 <TableHead>{t("suppliers.country")}</TableHead>
                 <TableHead>{t("suppliers.accountManager")}</TableHead>
+                <TableHead>Growers</TableHead>
                 <TableHead>{t("common.status")}</TableHead>
               </TableRow>
             </TableHeader>
@@ -194,12 +194,15 @@ export function SuppliersContent({ isAdmin }: { isAdmin?: boolean }) {
                   <TableCell className="text-muted-foreground">
                     {supplier.commercie ? supplier.commercie.name : "-"}
                   </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {supplier.growerCount || "-"}
+                  </TableCell>
                   <TableCell>{statusBadge(supplier)}</TableCell>
                 </TableRow>
               ))}
               {filtered.length === 0 && !loading && (
                 <TableRow className="hover:bg-transparent">
-                  <TableCell colSpan={7} className="py-0">
+                  <TableCell colSpan={8} className="py-0">
                     <div className="empty-state">
                       <div className="empty-state-icon">
                         <RiPlantLine />
@@ -211,8 +214,6 @@ export function SuppliersContent({ isAdmin }: { isAdmin?: boolean }) {
               )}
             </TableBody>
           </Table>
-        </CardContent>
-      </Card>
     </>
   );
 

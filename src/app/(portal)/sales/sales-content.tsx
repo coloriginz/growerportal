@@ -53,6 +53,7 @@ interface FiltersData {
   products: string[];
   salesTypes: string[];
   stemLengths: string[];
+  growers: { id: string; label: string }[];
 }
 
 interface TrendsData {
@@ -70,6 +71,7 @@ interface SalesData {
   lastYearComparison: { totalStems: number; totalTurnover: number; avgPrice: number } | null;
   bySalesType: { salesType: string; stems: number; turnover: number; avgPrice: number }[];
   byProduct: { product: string; stems: number; turnover: number; avgPrice: number }[];
+  byGrower: { grower: string; stems: number; turnover: number; avgPrice: number }[];
   daily: { date: string; stems: number; turnover: number }[];
 }
 
@@ -86,6 +88,7 @@ export function SalesContent({ supplierId }: { supplierId: string | null }) {
   const [filterProducts, setFilterProducts] = useState<string[]>([]);
   const [filterSalesTypes, setFilterSalesTypes] = useState<string[]>([]);
   const [filterStemLengths, setFilterStemLengths] = useState<string[]>([]);
+  const [filterGrowers, setFilterGrowers] = useState<string[]>([]);
   const { t } = useLanguage();
 
   // Fetch available filter options
@@ -96,12 +99,13 @@ export function SalesContent({ supplierId }: { supplierId: string | null }) {
   }, [supplierId]);
   const { data: filterOptions } = useFetch<FiltersData>(filtersUrl);
 
-  const hasActiveFilters = filterProducts.length > 0 || filterSalesTypes.length > 0 || filterStemLengths.length > 0;
+  const hasActiveFilters = filterProducts.length > 0 || filterSalesTypes.length > 0 || filterStemLengths.length > 0 || filterGrowers.length > 0;
 
   const clearAllFilters = () => {
     setFilterProducts([]);
     setFilterSalesTypes([]);
     setFilterStemLengths([]);
+    setFilterGrowers([]);
   };
 
   const url = useMemo(() => {
@@ -118,8 +122,12 @@ export function SalesContent({ supplierId }: { supplierId: string | null }) {
     for (const p of filterProducts) params.append("product", p);
     for (const s of filterSalesTypes) params.append("salesType", s);
     for (const l of filterStemLengths) params.append("stemLength", l.replace(" cm", ""));
+    for (const label of filterGrowers) {
+      const g = filterOptions?.growers?.find((gr) => gr.label === label);
+      if (g) params.append("grower", g.id);
+    }
     return `/api/sales?${params}`;
-  }, [supplierId, period, selectedWeek, selectedYear, dateFrom, dateTo, filterProducts, filterSalesTypes, filterStemLengths]);
+  }, [supplierId, period, selectedWeek, selectedYear, dateFrom, dateTo, filterProducts, filterSalesTypes, filterStemLengths, filterGrowers, filterOptions]);
   const { data, loading, error, lastUpdated, refetch } = useFetch<SalesData>(url);
 
   const trendsUrl = useMemo(() => {
@@ -128,8 +136,12 @@ export function SalesContent({ supplierId }: { supplierId: string | null }) {
     for (const p of filterProducts) params.append("product", p);
     for (const s of filterSalesTypes) params.append("salesType", s);
     for (const l of filterStemLengths) params.append("stemLength", l.replace(" cm", ""));
+    for (const label of filterGrowers) {
+      const g = filterOptions?.growers?.find((gr) => gr.label === label);
+      if (g) params.append("grower", g.id);
+    }
     return `/api/sales/trends?${params}`;
-  }, [supplierId, filterProducts, filterSalesTypes, filterStemLengths]);
+  }, [supplierId, filterProducts, filterSalesTypes, filterStemLengths, filterGrowers, filterOptions]);
   const { data: trends } = useFetch<TrendsData>(trendsUrl);
 
   if (error) {
@@ -153,6 +165,7 @@ export function SalesContent({ supplierId }: { supplierId: string | null }) {
                 const allRows = [
                   ...data.bySalesType.map((r) => ({ type: "Channel", name: r.salesType, stems: r.stems, turnover: r.turnover, avgPrice: r.avgPrice })),
                   ...data.byProduct.map((r) => ({ type: "Product", name: r.product, stems: r.stems, turnover: r.turnover, avgPrice: r.avgPrice })),
+                  ...(data.byGrower || []).map((r) => ({ type: "Grower", name: r.grower, stems: r.stems, turnover: r.turnover, avgPrice: r.avgPrice })),
                 ];
                 exportToCSV(allRows, `sales-${period}`, [
                   { key: "type", header: "Type" },
@@ -259,6 +272,14 @@ export function SalesContent({ supplierId }: { supplierId: string | null }) {
               options={filterOptions.stemLengths}
               selected={filterStemLengths}
               onChange={setFilterStemLengths}
+            />
+          )}
+          {filterOptions.growers && filterOptions.growers.length > 1 && (
+            <MultiSelectFilter
+              label="Grower"
+              options={filterOptions.growers.map((g) => g.label)}
+              selected={filterGrowers}
+              onChange={setFilterGrowers}
             />
           )}
           {hasActiveFilters && (
@@ -417,6 +438,37 @@ export function SalesContent({ supplierId }: { supplierId: string | null }) {
               </Table>
             </CardContent>
           </Card>
+
+          {/* Sales by grower */}
+          {data.byGrower && data.byGrower.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Grower</CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Grower</TableHead>
+                      <TableHead className="text-right">{t("sales.stems")}</TableHead>
+                      <TableHead className="text-right">{t("sales.turnover")}</TableHead>
+                      <TableHead className="text-right">{t("sales.avgPrice")}</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {data.byGrower.map((row) => (
+                      <TableRow key={row.grower}>
+                        <TableCell className="font-medium">{row.grower}</TableCell>
+                        <TableCell className="text-right tabular-nums">{formatNumber(row.stems)}</TableCell>
+                        <TableCell className="text-right tabular-nums">{formatCurrencyDetailed(row.turnover)}</TableCell>
+                        <TableCell className="text-right tabular-nums">{formatPrice(row.avgPrice)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          )}
         </>
       )}
 

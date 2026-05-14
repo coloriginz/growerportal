@@ -22,7 +22,7 @@ EVALUATE
         "reden_id_correctie", 'Fact_Partij'[reden_id_correctie],
         "Inkoopfactuur colli", CALCULATE([Inkoopfactuur colli]),
         "Inkoopfactuur volume", CALCULATE([Inkoopfactuur volume]),
-        "Inslagcorrectie volume", CALCULATE([Inslagcorrectie volume]),
+        "Inslag aantal correctie", 'Fact_Partij'[Inslag aantal correctie],
         "Facttype Sub", 'Fact_Partij'[Facttype Sub]
     )
 ORDER BY [Lever Datum/Tijd] DESC

@@ -11,16 +11,19 @@ export async function GET(request: NextRequest) {
   const status = searchParams.get("status");
   const limitParam = searchParams.get("limit");
   const limit = Math.min(Math.max(parseInt(limitParam || "50", 10) || 50, 1), 200);
+  const pageParam = searchParams.get("page");
+  const page = Math.max(parseInt(pageParam || "1", 10) || 1, 1);
 
   // Build where clause
   const where: Record<string, unknown> = {};
   if (endpoint) where.endpoint = endpoint;
   if (status) where.status = status;
 
-  // Fetch batches
+  // Fetch batches with offset pagination
   const batches = await prisma.importBatch.findMany({
     where,
     orderBy: { startedAt: "desc" },
+    skip: (page - 1) * limit,
     take: limit,
   });
 
@@ -48,8 +51,12 @@ export async function GET(request: NextRequest) {
   // Total batch count (with filters)
   const totalBatches = await prisma.importBatch.count({ where });
 
+  const totalPages = Math.max(Math.ceil(totalBatches / limit), 1);
+
   return NextResponse.json({
     batches,
+    page,
+    totalPages,
     summary: {
       totalBatches,
       errors24h,

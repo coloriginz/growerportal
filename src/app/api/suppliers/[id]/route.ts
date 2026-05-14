@@ -33,6 +33,10 @@ export async function GET(
       companyEntity: {
         select: { id: true, name: true, slug: true },
       },
+      growers: {
+        select: { id: true, code: true, name: true, country: true, city: true },
+        orderBy: { name: "asc" },
+      },
     },
   });
 
@@ -64,6 +68,13 @@ export async function GET(
       number: c.number,
       validFrom: c.validFrom,
       validUntil: c.validUntil,
+    })),
+    growers: supplier.growers.map((g) => ({
+      id: g.id,
+      code: g.code,
+      name: g.name,
+      country: g.country,
+      city: g.city,
     })),
     users: supplier.users.map((u) => ({
       id: u.id,

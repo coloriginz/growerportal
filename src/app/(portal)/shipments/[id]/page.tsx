@@ -33,6 +33,15 @@ export default async function ShipmentDetailPage({ params }: Props) {
           qualityIssues: {
             select: { id: true, code: true, description: true, stems: true, date: true },
           },
+          corrections: {
+            select: {
+              id: true,
+              facttypeSub: true,
+              correctionReasonId: true,
+              correctionVolume: true,
+              correctionColli: true,
+            },
+          },
         },
       },
       costs: {

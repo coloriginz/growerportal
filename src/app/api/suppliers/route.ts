@@ -39,6 +39,7 @@ export async function GET(request: NextRequest) {
       commercie: { select: { id: true, name: true } },
       companyEntity: { select: { id: true, name: true, slug: true } },
       users: { select: { id: true, isActive: true } },
+      _count: { select: { growers: true } },
     },
     orderBy: { code: "asc" },
   });
@@ -57,6 +58,7 @@ export async function GET(request: NextRequest) {
         ? "active"
         : "pending",
     userCount: g.users.length,
+    growerCount: g._count.growers,
   }));
 
   return NextResponse.json(result);

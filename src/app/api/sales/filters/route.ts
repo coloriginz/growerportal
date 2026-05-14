@@ -10,10 +10,10 @@ export async function GET(request: NextRequest) {
   const supplierId = resolveSupplierId(session!, requestedSupplierId);
 
   if (!supplierId) {
-    return NextResponse.json({ products: [], salesTypes: [], stemLengths: [] });
+    return NextResponse.json({ products: [], salesTypes: [], stemLengths: [], growers: [] });
   }
 
-  const [products, salesTypes, stemLengths] = await Promise.all([
+  const [products, salesTypes, stemLengths, growers] = await Promise.all([
     prisma.lot.findMany({
       where: { supplierId },
       select: { productName: true },
@@ -32,11 +32,17 @@ export async function GET(request: NextRequest) {
       distinct: ["stemLength"],
       orderBy: { stemLength: "asc" },
     }),
+    prisma.grower.findMany({
+      where: { supplierId },
+      select: { id: true, name: true, code: true },
+      orderBy: { name: "asc" },
+    }),
   ]);
 
   return NextResponse.json({
     products: products.map((p) => p.productName),
     salesTypes: salesTypes.map((s) => s.salesType),
     stemLengths: stemLengths.map((s) => `${s.stemLength} cm`),
+    growers: growers.map((g) => ({ id: g.id, label: g.name || g.code || g.id })),
   });
 }

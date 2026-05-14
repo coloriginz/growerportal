@@ -55,6 +55,8 @@ interface ImportBatch {
 
 interface ImportBatchResponse {
   batches: ImportBatch[];
+  page: number;
+  totalPages: number;
   summary: {
     totalBatches: number;
     errors24h: number;
@@ -115,6 +117,7 @@ export function ImportsContent() {
   const { t } = useLanguage();
   const [endpointFilter, setEndpointFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [page, setPage] = useState(1);
   const [errorDialogBatch, setErrorDialogBatch] = useState<ImportBatch | null>(null);
 
   const url = useMemo(() => {
@@ -122,8 +125,9 @@ export function ImportsContent() {
     if (endpointFilter !== "all") params.set("endpoint", endpointFilter);
     if (statusFilter !== "all") params.set("status", statusFilter);
     params.set("limit", "50");
+    params.set("page", String(page));
     return `/api/admin/import-batches?${params.toString()}`;
-  }, [endpointFilter, statusFilter]);
+  }, [endpointFilter, statusFilter, page]);
 
   const { data, loading, error, refetch } = useFetch<ImportBatchResponse>(url);
 
@@ -144,9 +148,14 @@ export function ImportsContent() {
 
   const summary = data?.summary;
   const batches = data?.batches || [];
+  const totalBatches = summary?.totalBatches ?? 0;
+  const totalPages = data?.totalPages ?? 1;
+  const currentPage = data?.page ?? page;
+  const pageStart = totalBatches === 0 ? 0 : (currentPage - 1) * 50 + 1;
+  const pageEnd = Math.min(currentPage * 50, totalBatches);
 
   return (
-    <div className="space-y-6">
+    <div className="page-content">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -221,7 +230,7 @@ export function ImportsContent() {
 
       {/* Filter bar */}
       <div className="flex flex-wrap gap-3">
-        <Select value={endpointFilter} onValueChange={(v) => setEndpointFilter(v ?? "all")}>
+        <Select value={endpointFilter} onValueChange={(v) => { setEndpointFilter(v ?? "all"); setPage(1); }}>
           <SelectTrigger className="w-[160px]">
             <SelectValue placeholder={t("imports.endpoint")} />
           </SelectTrigger>
@@ -235,7 +244,7 @@ export function ImportsContent() {
           </SelectContent>
         </Select>
 
-        <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v ?? "all")}>
+        <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v ?? "all"); setPage(1); }}>
           <SelectTrigger className="w-[160px]">
             <SelectValue placeholder={t("common.status")} />
           </SelectTrigger>
@@ -249,10 +258,7 @@ export function ImportsContent() {
       </div>
 
       {/* Table */}
-      <Card>
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <Table>
+            <Table stickyHeader>
               <TableHeader>
                 <TableRow>
                   <TableHead>{t("common.date")}</TableHead>
@@ -326,9 +332,36 @@ export function ImportsContent() {
                 )}
               </TableBody>
             </Table>
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-muted-foreground">
+            Showing {pageStart}-{pageEnd} of {formatNumber(totalBatches)}
+          </p>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={currentPage <= 1 || loading}
+            >
+              Previous
+            </Button>
+            <span className="text-sm text-muted-foreground">
+              Page {currentPage} of {totalPages}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={currentPage >= totalPages || loading}
+            >
+              Next
+            </Button>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      )}
 
       {/* Error detail dialog */}
       <Dialog

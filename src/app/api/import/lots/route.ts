@@ -20,7 +20,8 @@ const partijSchema = z.object({
   reden_id_correctie: z.number().nullable().optional(),
   "Inkoopfactuur colli": z.number().nullable().optional(),
   "Inkoopfactuur volume": z.number().nullable().optional(),
-  "Inslagcorrectie volume": z.number().nullable().optional(),
+  "Inslagcorrectie volume": z.number().nullable().optional(), // legacy, replaced by "Inslag aantal correctie"
+  "Inslag aantal correctie": z.number().nullable().optional(),
   "Facttype Sub": z.string().nullable().optional(),
 });
 
@@ -572,8 +573,8 @@ export async function POST(request: NextRequest) {
           fabricPartId: row.part_id,
           facttypeSub: row["Facttype Sub"]?.toLowerCase().trim() || "correctie",
           correctionReasonId: row.reden_id_correctie || null,
-          correctionVolume: row["Inslagcorrectie volume"] ?? null,
-          correctionColli: row["Inkoopfactuur colli"] ?? null,
+          correctionVolume: row["Inslag aantal correctie"] ?? row["Inslagcorrectie volume"] ?? null,
+          correctionColli: null,
         };
 
         if (existingCorrSet.has(row.part_id)) {

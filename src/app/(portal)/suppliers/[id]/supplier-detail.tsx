@@ -55,6 +55,13 @@ interface SupplierData {
   preferredLanguage: string;
   seasonStartMonth: number;
   commercie: { id: string; name: string; email: string } | null;
+  growers: {
+    id: string;
+    code: string | null;
+    name: string | null;
+    country: string | null;
+    city: string | null;
+  }[];
   certificates: {
     id: string;
     type: string;
@@ -583,6 +590,42 @@ export function SupplierDetail({ supplierId }: { supplierId: string }) {
                     className="text-muted-foreground py-8 text-center"
                   >
                     {t("common.noResults")}
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+
+      {/* Growers Section */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Growers ({supplier.growers.length})</CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Code</TableHead>
+                <TableHead>Name</TableHead>
+                <TableHead>Country</TableHead>
+                <TableHead>City</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {supplier.growers.map((grower) => (
+                <TableRow key={grower.id}>
+                  <TableCell className="font-medium">{grower.code || "-"}</TableCell>
+                  <TableCell>{grower.name || "-"}</TableCell>
+                  <TableCell className="text-muted-foreground">{grower.country || "-"}</TableCell>
+                  <TableCell className="text-muted-foreground">{grower.city || "-"}</TableCell>
+                </TableRow>
+              ))}
+              {supplier.growers.length === 0 && (
+                <TableRow className="hover:bg-transparent">
+                  <TableCell colSpan={4} className="text-muted-foreground py-8 text-center">
+                    No growers linked to this supplier
                   </TableCell>
                 </TableRow>
               )}

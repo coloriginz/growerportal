@@ -39,6 +39,14 @@ interface QualityIssue {
   date: string;
 }
 
+interface LotCorrection {
+  id: string;
+  facttypeSub: string;
+  correctionReasonId: number | null;
+  correctionVolume: number | null;
+  correctionColli: number | null;
+}
+
 interface Lot {
   id: string;
   lotNumber: string;
@@ -55,6 +63,7 @@ interface Lot {
   s3: string | null;
   transactions: Transaction[];
   qualityIssues: QualityIssue[];
+  corrections: LotCorrection[];
 }
 
 interface Cost {
@@ -102,7 +111,7 @@ export function ShipmentDetail({ shipment }: ShipmentDetailProps) {
     <div className="page-content">
       {/* Header */}
       <div className="flex items-center gap-4">
-        <Link href="/shipments">
+        <Link href={`/shipments?supplierId=${shipment.supplier.id}`}>
           <Button variant="ghost" size="icon" className="shrink-0">
             <RiArrowLeftLine className="h-5 w-5" />
           </Button>
@@ -179,16 +188,16 @@ export function ShipmentDetail({ shipment }: ShipmentDetailProps) {
             <TableBody>
               {shipment.lots.map((lot) => {
                 const isExpanded = expandedLots.has(lot.id);
-                const hasTransactions = lot.transactions.length > 0;
+                const hasDetails = lot.transactions.length > 0 || lot.corrections.length > 0;
                 return (
                   <>
                     <TableRow
                       key={lot.id}
-                      className={hasTransactions ? "cursor-pointer hover:bg-accent/50" : ""}
-                      onClick={() => hasTransactions && toggleLot(lot.id)}
+                      className={hasDetails ? "cursor-pointer hover:bg-accent/50" : ""}
+                      onClick={() => hasDetails && toggleLot(lot.id)}
                     >
                       <TableCell className="px-2">
-                        {hasTransactions && (
+                        {hasDetails && (
                           isExpanded
                             ? <RiArrowDownSLine className="h-4 w-4 text-muted-foreground" />
                             : <RiArrowRightSLine className="h-4 w-4 text-muted-foreground" />
@@ -224,9 +233,44 @@ export function ShipmentDetail({ shipment }: ShipmentDetailProps) {
                         </TableCell>
                       </TableRow>
                     ))}
+                    {isExpanded && lot.corrections.map((corr) => (
+                      <TableRow key={corr.id} className="bg-red-50 dark:bg-red-950/20">
+                        <TableCell></TableCell>
+                        <TableCell colSpan={3} className="text-red-600 dark:text-red-400 text-sm">
+                          {corr.facttypeSub}
+                          {corr.correctionReasonId != null && (
+                            <span className="text-muted-foreground ml-2">(reason {corr.correctionReasonId})</span>
+                          )}
+                        </TableCell>
+                        <TableCell colSpan={3}></TableCell>
+                        <TableCell className="text-right tabular-nums text-sm text-red-600 dark:text-red-400">
+                          {corr.correctionColli != null ? corr.correctionColli : ""}
+                        </TableCell>
+                        <TableCell></TableCell>
+                        <TableCell className="text-right tabular-nums text-sm text-red-600 dark:text-red-400">
+                          {corr.correctionVolume != null ? formatNumber(corr.correctionVolume) : "-"}
+                        </TableCell>
+                        <TableCell></TableCell>
+                        <TableCell></TableCell>
+                      </TableRow>
+                    ))}
                   </>
                 );
               })}
+              {shipment.lots.length > 1 && (
+                <TableRow className="font-semibold bg-muted/30">
+                  <TableCell></TableCell>
+                  <TableCell colSpan={3}>{t("common.total")}</TableCell>
+                  <TableCell></TableCell>
+                  <TableCell></TableCell>
+                  <TableCell></TableCell>
+                  <TableCell></TableCell>
+                  <TableCell></TableCell>
+                  <TableCell className="text-right tabular-nums">{formatNumber(totalStems)}</TableCell>
+                  <TableCell></TableCell>
+                  <TableCell className="text-right tabular-nums">{formatCurrencyDetailed(totalTurnover)}</TableCell>
+                </TableRow>
+              )}
             </TableBody>
           </Table>
         </CardContent>
