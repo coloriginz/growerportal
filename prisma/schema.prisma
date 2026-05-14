@@ -227,15 +227,15 @@ model Lot {
   s2             String?
   s3             String?
   // Correction fields
-  correctionReasonId Int?   // reden_id_correctie from Fabric
   invoicedColli      Int?   // Inkoopfactuur colli
   invoicedVolume     Int?   // Inkoopfactuur volume
-  correctionVolume   Int?   // Inslagcorrectie volume
+  correctionVolume   Int?   // Aggregate: sum of all LotCorrection.correctionVolume
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @default(now()) @updatedAt
 
   transactions   Transaction[]
   qualityIssues  QualityIssue[]
+  corrections    LotCorrection[]
 
   @@unique([lotNumber, supplierId])
   @@index([supplierId])
@@ -247,6 +247,25 @@ model Lot {
   @@index([refNumber])
   @@index([fabricPartId])
   @@index([fabricParthdrId])
+}
+
+// ─── LOT CORRECTIONS (PARTIJCORRECTIES) ────────────────────
+
+model LotCorrection {
+  id                 String   @id @default(uuid())
+  lotId              String
+  lot                Lot      @relation(fields: [lotId], references: [id], onDelete: Cascade)
+  fabricPartId       Int?     // part_id of the correction row (unique in Fabric)
+  facttypeSub        String   // "correctie" or "productiecorrectie"
+  correctionReasonId Int?     // reden_id_correctie from Fabric
+  correctionVolume   Int?     // Inslagcorrectie volume (this individual correction)
+  correctionColli    Int?     // Inslag colli correctie (this individual correction)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @default(now()) @updatedAt
+
+  @@unique([lotId, fabricPartId])
+  @@index([lotId])
+  @@index([fabricPartId])
 }
 
 // ─── TRANSACTIONS ────────────────────────────────────────
