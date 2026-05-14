@@ -183,7 +183,9 @@
     "costType": "Kostentype",
     "lotsInShipment": "Partijen in Levering",
     "searchPlaceholder": "Zoek op factuurnummer...",
-    "correction": "Correctie"
+    "correction": "Correctie",
+    "corrections": "Correcties",
+    "correctionReason": "Reden"
   },
   "documents": {
     "title": "Documenten",

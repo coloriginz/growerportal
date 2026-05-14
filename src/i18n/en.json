@@ -183,7 +183,9 @@
     "costType": "Cost Type",
     "lotsInShipment": "Lots in Shipment",
     "searchPlaceholder": "Search by invoice number...",
-    "correction": "Correction"
+    "correction": "Correction",
+    "corrections": "Corrections",
+    "correctionReason": "Reason"
   },
   "documents": {
     "title": "Documents",

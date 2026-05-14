@@ -102,7 +102,15 @@ export function ShipmentDetail({ shipment }: ShipmentDetailProps) {
   const totalTurnover = parseFloat(shipment.totalTurnover);
   const totalCosts = parseFloat(shipment.totalCosts);
   const netResult = parseFloat(shipment.netResult);
-  const totalStems = shipment.lots.reduce((sum, l) => sum + l.totalStems, 0);
+
+  // Calculate stems from transactions (sold stems), not from stored totalStems
+  const lotStems = (lot: Lot) => lot.transactions.reduce((sum, tx) => sum + tx.stems, 0);
+  const totalStems = shipment.lots.reduce((sum, l) => sum + lotStems(l), 0);
+
+  // Collect all corrections across all lots for the separate corrections section
+  const allCorrections = shipment.lots.flatMap((lot) =>
+    lot.corrections.map((corr) => ({ ...corr, lotNumber: lot.lotNumber, productName: lot.productName }))
+  );
 
   function toggleLot(id: string) {
     setExpandedLots((prev) => {
@@ -194,16 +202,17 @@ export function ShipmentDetail({ shipment }: ShipmentDetailProps) {
             <TableBody>
               {shipment.lots.map((lot) => {
                 const isExpanded = expandedLots.has(lot.id);
-                const hasDetails = lot.transactions.length > 0 || lot.corrections.length > 0;
+                const hasTransactions = lot.transactions.length > 0;
+                const stems = lotStems(lot);
                 return (
                   <>
                     <TableRow
                       key={lot.id}
-                      className={hasDetails ? "cursor-pointer hover:bg-accent/50" : ""}
-                      onClick={() => hasDetails && toggleLot(lot.id)}
+                      className={hasTransactions ? "cursor-pointer hover:bg-accent/50" : ""}
+                      onClick={() => hasTransactions && toggleLot(lot.id)}
                     >
                       <TableCell className="px-2">
-                        {hasDetails && (
+                        {hasTransactions && (
                           isExpanded
                             ? <RiArrowDownSLine className="h-4 w-4 text-muted-foreground" />
                             : <RiArrowRightSLine className="h-4 w-4 text-muted-foreground" />
@@ -217,9 +226,9 @@ export function ShipmentDetail({ shipment }: ShipmentDetailProps) {
                       <TableCell className="text-muted-foreground text-xs">{lot.s3 || "-"}</TableCell>
                       <TableCell className="text-right tabular-nums">{lot.colli}</TableCell>
                       <TableCell className="text-right tabular-nums">{lot.stemLength}</TableCell>
-                      <TableCell className="text-right tabular-nums">{formatNumber(lot.totalStems)}</TableCell>
-                      <TableCell className="text-right tabular-nums">{formatPrice(parseFloat(lot.avgPrice))}</TableCell>
-                      <TableCell className="text-right tabular-nums font-medium">{formatCurrencyDetailed(parseFloat(lot.totalAmount))}</TableCell>
+                      <TableCell className="text-right tabular-nums">{formatNumber(stems)}</TableCell>
+                      <TableCell className="text-right tabular-nums">{stems > 0 ? formatPrice(parseFloat(lot.avgPrice)) : "-"}</TableCell>
+                      <TableCell className="text-right tabular-nums font-medium">{stems > 0 ? formatCurrencyDetailed(parseFloat(lot.totalAmount)) : "-"}</TableCell>
                     </TableRow>
                     {isExpanded && lot.transactions.map((tx) => (
                       <TableRow key={tx.id} className="bg-muted/30">
@@ -237,30 +246,6 @@ export function ShipmentDetail({ shipment }: ShipmentDetailProps) {
                         <TableCell className="text-right tabular-nums text-sm">
                           {parseFloat(tx.amount) > 0 ? formatCurrencyDetailed(parseFloat(tx.amount)) : "-"}
                         </TableCell>
-                      </TableRow>
-                    ))}
-                    {isExpanded && lot.corrections.map((corr) => (
-                      <TableRow key={corr.id} className="bg-red-50 dark:bg-red-950/20">
-                        <TableCell></TableCell>
-                        <TableCell colSpan={3} className="text-red-600 dark:text-red-400 text-sm">
-                          <span className="font-medium">{t("shipments.correction")}:</span>{" "}
-                          {corr.correctionReason
-                            ? (language === "en" && corr.correctionReason.nameEn) || corr.correctionReason.nameNl
-                            : corr.facttypeSub}
-                          {corr.correctionReason && (
-                            <span className="text-muted-foreground ml-2">({corr.correctionReason.code})</span>
-                          )}
-                        </TableCell>
-                        <TableCell colSpan={3}></TableCell>
-                        <TableCell className="text-right tabular-nums text-sm text-red-600 dark:text-red-400">
-                          {corr.correctionColli != null ? corr.correctionColli : ""}
-                        </TableCell>
-                        <TableCell></TableCell>
-                        <TableCell className="text-right tabular-nums text-sm text-red-600 dark:text-red-400">
-                          {corr.correctionVolume != null ? formatNumber(corr.correctionVolume) : "-"}
-                        </TableCell>
-                        <TableCell></TableCell>
-                        <TableCell></TableCell>
                       </TableRow>
                     ))}
                   </>
@@ -284,6 +269,54 @@ export function ShipmentDetail({ shipment }: ShipmentDetailProps) {
           </Table>
         </CardContent>
       </Card>
+
+      {/* Corrections */}
+      {allCorrections.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-red-600 dark:text-red-400">
+              {t("shipments.corrections")} ({allCorrections.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>{t("lots.lotNumber")}</TableHead>
+                  <TableHead>{t("lots.product")}</TableHead>
+                  <TableHead>{t("shipments.correctionReason")}</TableHead>
+                  <TableHead className="text-right">{t("shipments.stems")}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {allCorrections.map((corr) => (
+                  <TableRow key={corr.id} className="bg-red-50/50 dark:bg-red-950/10">
+                    <TableCell className="font-medium">{corr.lotNumber}</TableCell>
+                    <TableCell>{corr.productName}</TableCell>
+                    <TableCell className="text-red-600 dark:text-red-400">
+                      {corr.correctionReason
+                        ? (language === "en" && corr.correctionReason.nameEn) || corr.correctionReason.nameNl
+                        : corr.facttypeSub}
+                      {corr.correctionReason && (
+                        <span className="text-muted-foreground ml-2">({corr.correctionReason.code})</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums text-red-600 dark:text-red-400">
+                      {corr.correctionVolume != null ? formatNumber(corr.correctionVolume) : "-"}
+                    </TableCell>
+                  </TableRow>
+                ))}
+                <TableRow className="font-semibold bg-red-50 dark:bg-red-950/20">
+                  <TableCell colSpan={3}>{t("common.total")}</TableCell>
+                  <TableCell className="text-right tabular-nums text-red-600 dark:text-red-400">
+                    {formatNumber(allCorrections.reduce((sum, c) => sum + (c.correctionVolume ?? 0), 0))}
+                  </TableCell>
+                </TableRow>
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Costs */}
       {shipment.costs.length > 0 && (
