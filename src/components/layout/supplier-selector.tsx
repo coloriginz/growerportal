@@ -64,7 +64,15 @@ function SupplierSelectorInner() {
     } else {
       params.set("supplierId", supplierId);
     }
-    router.push(`${pathname}?${params.toString()}`);
+
+    // If on a detail page (path has a UUID segment), navigate to the section root
+    // e.g. /shipments/abc-123 → /shipments, /lots/abc-123 → /lots
+    const uuidPattern = /\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+    const targetPath = uuidPattern.test(pathname)
+      ? pathname.replace(uuidPattern, "")
+      : pathname;
+
+    router.push(`${targetPath}?${params.toString()}`);
     setOpen(false);
     setSearch("");
   }, [searchParams, selectedSupplierId, router, pathname]);
