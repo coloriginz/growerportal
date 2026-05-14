@@ -294,7 +294,7 @@ model Transaction {
   id            String   @id @default(uuid())
   lotId         String
   lot           Lot      @relation(fields: [lotId], references: [id], onDelete: Cascade)
-  fabricOrdregId Int?    @unique // ordreg_id from Fabric
+  fabricOrdregId Int?    // ordreg_id from Fabric (not unique: same ordreg can span multiple lots)
   fabricGrowerId Int?    // rel_id_kweker from Fabric (for grower linking)
   date          DateTime
   salesType     String   // "VMP", "Aurora", "Veilen", "Persoonlijk"
@@ -304,6 +304,7 @@ model Transaction {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @default(now()) @updatedAt
 
+  @@unique([fabricOrdregId, lotId])
   @@index([lotId])
   @@index([date])
   @@index([salesType])

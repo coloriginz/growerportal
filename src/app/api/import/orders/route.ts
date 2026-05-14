@@ -125,7 +125,7 @@ export async function POST(request: NextRequest) {
       }),
       prisma.transaction.findMany({
         where: { fabricOrdregId: { in: allOrdregIds } },
-        select: { id: true, fabricOrdregId: true },
+        select: { id: true, fabricOrdregId: true, lotId: true },
       }),
     ]);
 
@@ -149,9 +149,10 @@ export async function POST(request: NextRequest) {
       if (l.fabricPartId) lotMap.set(l.fabricPartId, { id: l.id, supplierId: l.supplierId });
     }
 
-    const txExistsSet = new Set<number>();
+    // Track existing transactions by composite key (ordregId::lotId)
+    const txExistsSet = new Set<string>();
     for (const t of existingTransactions) {
-      if (t.fabricOrdregId) txExistsSet.add(t.fabricOrdregId);
+      if (t.fabricOrdregId) txExistsSet.add(`${t.fabricOrdregId}::${t.lotId}`);
     }
 
     // Phase 2: Upsert growers
@@ -225,9 +226,10 @@ export async function POST(request: NextRequest) {
       txSkipped = 0;
     const affectedLotIds = new Set<string>();
 
-    // Deduplicate updates by ordreg_id (last one wins, avoids non-deterministic UPDATE...FROM)
-    const txUpdateMap = new Map<number, {
+    // Deduplicate updates by (ordreg_id, lotId) (last one wins, avoids non-deterministic UPDATE...FROM)
+    const txUpdateMap = new Map<string, {
       fabricOrdregId: number;
+      lotId: string;
       date: string;
       salesType: string;
       stems: number;
@@ -257,9 +259,11 @@ export async function POST(request: NextRequest) {
       const amount = row.Afrekenomzet ?? 0;
       const pricePerStem = row["Gem afrekenprijs"] ?? 0;
 
-      if (txExistsSet.has(ordregId)) {
-        txUpdateMap.set(ordregId, {
+      const compositeKey = `${ordregId}::${lotInfo.id}`;
+      if (txExistsSet.has(compositeKey)) {
+        txUpdateMap.set(compositeKey, {
           fabricOrdregId: ordregId,
+          lotId: lotInfo.id,
           date: date.toISOString(),
           salesType,
           stems,
@@ -298,16 +302,17 @@ export async function POST(request: NextRequest) {
            "fabricGrowerId" = (u.val->>'fabricGrowerId')::int,
            "updatedAt" = NOW()
          FROM jsonb_array_elements($1::jsonb) AS u(val)
-         WHERE t."fabricOrdregId" = (u.val->>'fabricOrdregId')::int`,
+         WHERE t."fabricOrdregId" = (u.val->>'fabricOrdregId')::int
+           AND t."lotId" = u.val->>'lotId'`,
         JSON.stringify(txUpdateData)
       );
     }
 
     if (txCreateData.length > 0) {
-      // Deduplicate by fabricOrdregId — PostgreSQL INSERT ON CONFLICT cannot affect the same row twice
-      const createDedupMap = new Map<number, (typeof txCreateData)[0]>();
+      // Deduplicate by (fabricOrdregId, lotId) — PostgreSQL INSERT ON CONFLICT cannot affect the same row twice
+      const createDedupMap = new Map<string, (typeof txCreateData)[0]>();
       for (const d of txCreateData) {
-        createDedupMap.set(d.fabricOrdregId as number, d);
+        createDedupMap.set(`${d.fabricOrdregId}::${d.lotId}`, d);
       }
       const dedupedCreateData = [...createDedupMap.values()];
       const dupCount = txCreateData.length - dedupedCreateData.length;
@@ -346,7 +351,7 @@ export async function POST(request: NextRequest) {
            NOW(),
            NOW()
          FROM jsonb_array_elements($1::jsonb) AS v(val)
-         ON CONFLICT ("fabricOrdregId") DO UPDATE SET
+         ON CONFLICT ("fabricOrdregId", "lotId") DO UPDATE SET
            date = EXCLUDED.date,
            "salesType" = EXCLUDED."salesType",
            stems = EXCLUDED.stems,
