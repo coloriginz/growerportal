@@ -12,7 +12,7 @@ const supplierSchema = z.object({
 });
 
 const bodySchema = z.object({
-  suppliers: z.array(supplierSchema).min(1),
+  suppliers: z.array(supplierSchema),
 });
 
 export async function POST(request: NextRequest) {
@@ -53,6 +53,18 @@ export async function POST(request: NextRequest) {
 
   try {
     const { suppliers } = parsed.data;
+
+    if (suppliers.length === 0) {
+      if (batch) {
+        try {
+          await prisma.importBatch.update({
+            where: { id: batch.id },
+            data: { status: "success", recordsReceived: 0, durationMs: Date.now() - startTime, completedAt: new Date() },
+          });
+        } catch { /* */ }
+      }
+      return NextResponse.json({ received: 0, created: 0, updated: 0 });
+    }
 
     // Phase 1: Pre-fetch existing FabricRelations in bulk
     const allFabricIds = suppliers.map((s) => s.ID);

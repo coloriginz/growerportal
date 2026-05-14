@@ -24,7 +24,7 @@ const partijSchema = z.object({
 });
 
 const bodySchema = z.object({
-  partijen: z.array(partijSchema).min(1),
+  partijen: z.array(partijSchema),
 });
 
 function deriveArticleGroup(productName: string): string {
@@ -70,6 +70,18 @@ export async function POST(request: NextRequest) {
 
   try {
     const { partijen } = parsed.data;
+
+    if (partijen.length === 0) {
+      if (batch) {
+        try {
+          await prisma.importBatch.update({
+            where: { id: batch.id },
+            data: { status: "success", recordsReceived: 0, durationMs: Date.now() - startTime, completedAt: new Date() },
+          });
+        } catch { /* */ }
+      }
+      return NextResponse.json({ received: 0, salesSheets: { created: 0, updated: 0 }, lots: { created: 0, updated: 0 }, skipped: 0 });
+    }
 
     // Round IDs (DAX/Power Automate can send 1.0 instead of 1)
     for (const row of partijen) {

@@ -18,7 +18,7 @@ const orderSchema = z.object({
 });
 
 const bodySchema = z.object({
-  orders: z.array(orderSchema).min(1),
+  orders: z.array(orderSchema),
 });
 
 export async function POST(request: NextRequest) {
@@ -59,6 +59,18 @@ export async function POST(request: NextRequest) {
 
   try {
     const { orders } = parsed.data;
+
+    if (orders.length === 0) {
+      if (batch) {
+        try {
+          await prisma.importBatch.update({
+            where: { id: batch.id },
+            data: { status: "success", recordsReceived: 0, durationMs: Date.now() - startTime, completedAt: new Date() },
+          });
+        } catch { /* */ }
+      }
+      return NextResponse.json({ received: 0, created: 0, updated: 0, skipped: 0 });
+    }
 
     // Build supplier lookup
     const supplierFabricIds = [...new Set(orders.map((o) => o.rel_id_leverancier))];

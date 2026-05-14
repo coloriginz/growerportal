@@ -13,7 +13,7 @@ const growerSchema = z.object({
 });
 
 const bodySchema = z.object({
-  growers: z.array(growerSchema).min(1),
+  growers: z.array(growerSchema),
 });
 
 export async function POST(request: NextRequest) {
@@ -54,6 +54,18 @@ export async function POST(request: NextRequest) {
 
   try {
     const { growers } = parsed.data;
+
+    if (growers.length === 0) {
+      if (batch) {
+        try {
+          await prisma.importBatch.update({
+            where: { id: batch.id },
+            data: { status: "success", recordsReceived: 0, durationMs: Date.now() - startTime, completedAt: new Date() },
+          });
+        } catch { /* */ }
+      }
+      return NextResponse.json({ received: 0, created: 0, updated: 0 });
+    }
 
     // Build a map of incoming grower data keyed by fabricId
     const incomingMap = new Map<number, (typeof growers)[number]>();
