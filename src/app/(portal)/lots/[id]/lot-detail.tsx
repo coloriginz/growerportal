@@ -37,6 +37,7 @@ interface LotDetailProps {
     containerType: string;
     deliveryDate: string;
     status: string;
+    correctionVolume: number | null;
     supplier: { id: string; code: string; name: string };
     salesSheet: { id: string; invoiceNumber: string; pdfDocumentId: string | null } | null;
     transactions: {
@@ -60,6 +61,13 @@ interface LotDetailProps {
       description: string;
       stems: number;
       date: string;
+    }[];
+    corrections: {
+      id: string;
+      facttypeSub: string;
+      correctionReasonId: number | null;
+      correctionVolume: number | null;
+      correctionColli: number | null;
     }[];
   };
 }
@@ -215,6 +223,54 @@ export function LotDetail({ lot }: LotDetailProps) {
                     <TableCell>{translateQualityCode(issue.code, issue.description, t)}</TableCell>
                     <TableCell className="text-right tabular-nums">{formatNumber(issue.stems)}</TableCell>
                     <TableCell className="text-muted-foreground">{formatDate(issue.date)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Corrections */}
+      {lot.corrections.length > 0 && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle>{t("lots.corrections")}</CardTitle>
+              {lot.correctionVolume != null && (
+                <span className="text-sm text-muted-foreground">
+                  {t("lots.totalCorrectionVolume")}: {formatNumber(lot.correctionVolume)}
+                </span>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>{t("lots.correctionType")}</TableHead>
+                  <TableHead>{t("lots.correctionReason")}</TableHead>
+                  <TableHead className="text-right">{t("lots.correctionVolume")}</TableHead>
+                  <TableHead className="text-right">{t("lots.correctionColli")}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {lot.corrections.map((corr) => (
+                  <TableRow key={corr.id}>
+                    <TableCell>
+                      <Badge variant="outline">
+                        {corr.facttypeSub}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {corr.correctionReasonId ?? "-"}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {corr.correctionVolume != null ? formatNumber(corr.correctionVolume) : "-"}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {corr.correctionColli != null ? formatNumber(corr.correctionColli) : "-"}
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>

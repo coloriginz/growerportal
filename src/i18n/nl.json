@@ -161,7 +161,14 @@
     "costs": "Kosten",
     "salesSheet": "Salessheet",
     "qualityIssues": "Kwaliteitsissues",
-    "containerType": "Verpakking"
+    "containerType": "Verpakking",
+    "corrections": "Correcties",
+    "correctionVolume": "Volume",
+    "correctionColli": "Colli",
+    "correctionReason": "Reden ID",
+    "correctionType": "Type",
+    "noCorrections": "Geen correcties",
+    "totalCorrectionVolume": "Totaal Correctie Volume"
   },
   "shipments": {
     "title": "Leveringen",

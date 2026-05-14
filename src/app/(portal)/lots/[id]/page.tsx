@@ -17,6 +17,16 @@ export default async function LotDetailPage({ params }: Props) {
     include: {
       transactions: { orderBy: { date: "asc" } },
       qualityIssues: true,
+      corrections: {
+        orderBy: { createdAt: "asc" },
+        select: {
+          id: true,
+          facttypeSub: true,
+          correctionReasonId: true,
+          correctionVolume: true,
+          correctionColli: true,
+        },
+      },
       salesSheet: { select: { id: true, invoiceNumber: true, pdfDocumentId: true } },
       supplier: { select: { id: true, code: true, name: true } },
     },

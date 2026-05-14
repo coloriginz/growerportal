@@ -161,7 +161,14 @@
     "costs": "Costs",
     "salesSheet": "Sales Sheet",
     "qualityIssues": "Quality Issues",
-    "containerType": "Container"
+    "containerType": "Container",
+    "corrections": "Corrections",
+    "correctionVolume": "Volume",
+    "correctionColli": "Colli",
+    "correctionReason": "Reason ID",
+    "correctionType": "Type",
+    "noCorrections": "No corrections",
+    "totalCorrectionVolume": "Total Correction Volume"
   },
   "shipments": {
     "title": "Shipments",
