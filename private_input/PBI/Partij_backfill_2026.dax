@@ -1,0 +1,28 @@
+EVALUATE
+    SELECTCOLUMNS(
+        FILTER(
+            'Fact_Partij',
+            'Fact_Partij'[Lever Datum/Tijd] >= DATE(2026, 1, 1)
+                && 'Fact_Partij'[Lever Datum/Tijd] < TODAY()
+                && 'Fact_Partij'[Inkooptype Code] = "CONS"
+        ),
+        "Inkoop Factuur Nummer", 'Fact_Partij'[Inkoop Factuur Nummer],
+        "Partijnummer", 'Fact_Partij'[Partijnummer],
+        "Lever Datum/Tijd", 'Fact_Partij'[Lever Datum/Tijd],
+        "Artikel Naam", RELATED('Dim_Artikel'[Artikel Naam]),
+        "Artikel Code", RELATED('Dim_Artikel'[Artikel Code]),
+        "Inkooptype Code", 'Fact_Partij'[Inkooptype Code],
+        "S01", 'Fact_Partij'[S01],
+        "S02", 'Fact_Partij'[S02],
+        "S03", 'Fact_Partij'[S03],
+        "part_id", 'Fact_Partij'[part_id],
+        "parthdr_id", 'Fact_Partij'[parthdr_id],
+        "rel_id_leverancier", 'Fact_Partij'[rel_id_leverancier],
+        "art_id", 'Fact_Partij'[art_id],
+        "reden_id_correctie", 'Fact_Partij'[reden_id_correctie],
+        "Inkoopfactuur colli", CALCULATE([Inkoopfactuur colli]),
+        "Inkoopfactuur volume", CALCULATE([Inkoopfactuur volume]),
+        "Inslagcorrectie volume", CALCULATE([Inslagcorrectie volume]),
+        "Facttype Sub", 'Fact_Partij'[Facttype Sub]
+    )
+ORDER BY [Lever Datum/Tijd] DESC
