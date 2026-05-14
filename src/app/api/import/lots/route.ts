@@ -507,8 +507,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Phase 7: Process correction rows → LotCorrection records
+    // Strategy: delete+insert per part_id (no unique key exists for corrections)
     let correctionsCreated = 0;
-    let correctionsUpdated = 0;
+    let correctionsDeleted = 0;
     let correctionsSkipped = 0;
 
     if (correctionRows.length > 0) {
@@ -535,26 +536,11 @@ export async function POST(request: NextRequest) {
         lotLookup.set(`${lot.lotNumber}::${lot.supplierId}`, lot.id);
       }
 
-      // Check which corrections already exist
-      const corrFabricPartIds = correctionRows.map((r) => r.part_id);
-      const existingCorrections = await prisma.lotCorrection.findMany({
-        where: { fabricPartId: { in: corrFabricPartIds } },
-        select: { fabricPartId: true },
-      });
-      const existingCorrSet = new Set(existingCorrections.map((c) => c.fabricPartId));
+      // Build insert data for all correction rows
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const corrInsertData: any[] = [];
 
-      // Deduplicate correction rows by fabricPartId (part_id)
-      const corrDedupMap = new Map<number, (typeof correctionRows)[0]>();
       for (const row of correctionRows) {
-        corrDedupMap.set(row.part_id, row);
-      }
-
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const corrCreateData: any[] = [];
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const corrUpdateData: any[] = [];
-
-      for (const row of corrDedupMap.values()) {
         const lotNumber = String(row.Partijnummer).trim();
         const supplierId = supplierMap.get(row.rel_id_leverancier);
         if (!supplierId) {
@@ -568,26 +554,24 @@ export async function POST(request: NextRequest) {
           continue;
         }
 
-        const corrData = {
+        corrInsertData.push({
           lotId,
           fabricPartId: row.part_id,
           facttypeSub: row["Facttype Sub"]?.toLowerCase().trim() || "correctie",
           correctionReasonId: row.reden_id_correctie || null,
           correctionVolume: row["Inslag aantal correctie"] ?? row["Inslagcorrectie volume"] ?? null,
-          correctionColli: null,
-        };
-
-        if (existingCorrSet.has(row.part_id)) {
-          corrUpdateData.push(corrData);
-          correctionsUpdated++;
-        } else {
-          corrCreateData.push(corrData);
-          correctionsCreated++;
-        }
+        });
       }
 
-      // Bulk insert new corrections
-      if (corrCreateData.length > 0) {
+      if (corrInsertData.length > 0) {
+        // Delete existing corrections for all part_ids in this batch
+        const corrFabricPartIds = [...new Set(corrInsertData.map((d: { fabricPartId: number }) => d.fabricPartId))];
+        const deleteResult = await prisma.lotCorrection.deleteMany({
+          where: { fabricPartId: { in: corrFabricPartIds } },
+        });
+        correctionsDeleted = deleteResult.count;
+
+        // Insert all correction rows
         await prisma.$executeRawUnsafe(
           `INSERT INTO "LotCorrection" (
              id, "lotId", "fabricPartId", "facttypeSub",
@@ -601,41 +585,17 @@ export async function POST(request: NextRequest) {
              v.val->>'facttypeSub',
              (v.val->>'correctionReasonId')::int,
              (v.val->>'correctionVolume')::int,
-             (v.val->>'correctionColli')::int,
+             NULL,
              NOW(),
              NOW()
-           FROM jsonb_array_elements($1::jsonb) AS v(val)
-           ON CONFLICT ("lotId", "fabricPartId") DO UPDATE SET
-             "facttypeSub" = EXCLUDED."facttypeSub",
-             "correctionReasonId" = EXCLUDED."correctionReasonId",
-             "correctionVolume" = EXCLUDED."correctionVolume",
-             "correctionColli" = EXCLUDED."correctionColli",
-             "updatedAt" = NOW()`,
-          JSON.stringify(corrCreateData)
+           FROM jsonb_array_elements($1::jsonb) AS v(val)`,
+          JSON.stringify(corrInsertData)
         );
-      }
-
-      // Bulk update existing corrections
-      if (corrUpdateData.length > 0) {
-        await prisma.$executeRawUnsafe(
-          `UPDATE "LotCorrection" AS t
-           SET
-             "facttypeSub" = u.val->>'facttypeSub',
-             "correctionReasonId" = (u.val->>'correctionReasonId')::int,
-             "correctionVolume" = (u.val->>'correctionVolume')::int,
-             "correctionColli" = (u.val->>'correctionColli')::int,
-             "updatedAt" = NOW()
-           FROM jsonb_array_elements($1::jsonb) AS u(val)
-           WHERE t."fabricPartId" = (u.val->>'fabricPartId')::int`,
-          JSON.stringify(corrUpdateData)
-        );
+        correctionsCreated = corrInsertData.length;
       }
 
       // Update aggregate correctionVolume on parent lots
-      const affectedLotIds = [...new Set([
-        ...corrCreateData.map((d: { lotId: string }) => d.lotId),
-        ...corrUpdateData.map((d: { lotId: string }) => d.lotId),
-      ])];
+      const affectedLotIds = [...new Set(corrInsertData.map((d: { lotId: string }) => d.lotId))];
 
       if (affectedLotIds.length > 0) {
         await prisma.$executeRawUnsafe(
@@ -662,14 +622,14 @@ export async function POST(request: NextRequest) {
             status: "success",
             recordsReceived: partijen.length,
             recordsCreated: lotCreated + correctionsCreated,
-            recordsUpdated: lotUpdated + correctionsUpdated,
+            recordsUpdated: lotUpdated,
             recordsSkipped: skipped + correctionsSkipped,
             durationMs: Date.now() - startTime,
             completedAt: new Date(),
             details: {
               salesSheets: { created: ssCreated, updated: ssUpdated },
               lots: { created: lotCreated, updated: lotUpdated },
-              corrections: { created: correctionsCreated, updated: correctionsUpdated, skipped: correctionsSkipped },
+              corrections: { created: correctionsCreated, deleted: correctionsDeleted, skipped: correctionsSkipped },
             },
           },
         });
@@ -682,7 +642,7 @@ export async function POST(request: NextRequest) {
       received: partijen.length,
       salesSheets: { created: ssCreated, updated: ssUpdated },
       lots: { created: lotCreated, updated: lotUpdated },
-      corrections: { created: correctionsCreated, updated: correctionsUpdated, skipped: correctionsSkipped },
+      corrections: { created: correctionsCreated, deleted: correctionsDeleted, skipped: correctionsSkipped },
       skipped,
     });
   } catch (err) {

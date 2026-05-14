@@ -21,7 +21,7 @@ import path from "path";
 
 const API_BASE = "https://growerportal.test.apps.coloriginz.com";
 const API_KEY = "grp_import_2026_kX9mQ4wT7nR2vL8pF3jH6cY1dA5sE0bG";
-const BATCH_SIZE = 3000;
+const BATCH_SIZE = 10000;
 const INPUT_DIR = path.resolve(__dirname, "../private_input/PBI/backfill");
 
 // ---------------------------------------------------------------------------
@@ -68,6 +68,65 @@ async function readCsv(filePath: string): Promise<Record<string, string>[]> {
   });
 }
 
+/**
+ * Split records into batches, optionally keeping rows with the same groupKey
+ * value together in the same batch to avoid partial deletes on the server.
+ */
+function splitIntoBatches(
+  records: unknown[],
+  batchSize: number,
+  groupKey: string | null
+): unknown[][] {
+  if (!groupKey) {
+    // Simple fixed-size batches
+    const batches: unknown[][] = [];
+    for (let i = 0; i < records.length; i += batchSize) {
+      batches.push(records.slice(i, i + batchSize));
+    }
+    return batches;
+  }
+
+  // Group-aware batching: never split rows with the same groupKey across batches
+  const batches: unknown[][] = [];
+  let current: unknown[] = [];
+
+  // Sort by groupKey so same-key rows are adjacent
+  const sorted = [...records].sort((a, b) => {
+    const aKey = (a as Record<string, unknown>)[groupKey];
+    const bKey = (b as Record<string, unknown>)[groupKey];
+    if (aKey == null && bKey == null) return 0;
+    if (aKey == null) return -1;
+    if (bKey == null) return 1;
+    return aKey < bKey ? -1 : aKey > bKey ? 1 : 0;
+  });
+
+  let i = 0;
+  while (i < sorted.length) {
+    const keyValue = (sorted[i] as Record<string, unknown>)[groupKey];
+    // Collect all rows with the same key
+    let j = i;
+    while (j < sorted.length && (sorted[j] as Record<string, unknown>)[groupKey] === keyValue) {
+      j++;
+    }
+    const group = sorted.slice(i, j);
+
+    // If adding this group would exceed batchSize and current is non-empty, flush
+    if (current.length > 0 && current.length + group.length > batchSize) {
+      batches.push(current);
+      current = [];
+    }
+
+    current.push(...group);
+    i = j;
+  }
+
+  if (current.length > 0) {
+    batches.push(current);
+  }
+
+  return batches;
+}
+
 // ---------------------------------------------------------------------------
 // Row transformers — CSV row → API JSON shape
 // ---------------------------------------------------------------------------
@@ -100,7 +159,7 @@ function transformPartij(row: Record<string, string>) {
     reden_id_correctie: parseInt2(row["reden_id_correctie"]),
     "Inkoopfactuur colli": parseInt2(row["Inkoopfactuur colli"]),
     "Inkoopfactuur volume": parseInt2(row["Inkoopfactuur volume"]),
-    "Inslagcorrectie volume": parseInt2(row["Inslagcorrectie volume"]),
+    "Inslag aantal correctie": parseInt2(row["Inslag aantal correctie"]),
     "Facttype Sub": parseStr(row["Facttype Sub"]),
   };
 }
@@ -250,15 +309,15 @@ async function processFile(config: FileConfig, dryRun: boolean) {
     return;
   }
 
-  // Send in batches
-  const totalBatches = Math.ceil(valid.length / BATCH_SIZE);
+  // Split into batches — for lots, keep rows with the same part_id together
+  const batches = splitIntoBatches(valid, BATCH_SIZE, config.endpoint === "lots" ? "part_id" : null);
+  const totalBatches = batches.length;
   let totalCreated = 0;
   let totalUpdated = 0;
   let totalErrors = 0;
 
-  for (let i = 0; i < valid.length; i += BATCH_SIZE) {
-    const batch = valid.slice(i, i + BATCH_SIZE);
-    const batchNum = Math.floor(i / BATCH_SIZE) + 1;
+  for (let batchNum = 1; batchNum <= totalBatches; batchNum++) {
+    const batch = batches[batchNum - 1];
 
     const result = await sendBatch(
       config.endpoint,
