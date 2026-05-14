@@ -304,19 +304,58 @@ export async function POST(request: NextRequest) {
     }
 
     if (txCreateData.length > 0) {
-      try {
-        await prisma.transaction.createMany({ data: txCreateData });
-      } catch {
-        // Fallback to individual creates
-        for (const data of txCreateData) {
-          try {
-            await prisma.transaction.create({ data });
-          } catch {
-            txSkipped++;
-            txCreated--;
-          }
-        }
+      // Deduplicate by fabricOrdregId — PostgreSQL INSERT ON CONFLICT cannot affect the same row twice
+      const createDedupMap = new Map<number, (typeof txCreateData)[0]>();
+      for (const d of txCreateData) {
+        createDedupMap.set(d.fabricOrdregId as number, d);
       }
+      const dedupedCreateData = [...createDedupMap.values()];
+      const dupCount = txCreateData.length - dedupedCreateData.length;
+      if (dupCount > 0) {
+        txCreated -= dupCount;
+        txSkipped += dupCount;
+      }
+
+      const txJsonData = dedupedCreateData.map((d: Record<string, unknown>) => ({
+        lotId: d.lotId,
+        fabricOrdregId: d.fabricOrdregId,
+        fabricGrowerId: d.fabricGrowerId,
+        date: d.date instanceof Date ? d.date.toISOString() : d.date,
+        salesType: d.salesType,
+        stems: d.stems ?? 0,
+        pricePerStem: d.pricePerStem ?? 0,
+        amount: d.amount ?? 0,
+      }));
+
+      await prisma.$executeRawUnsafe(
+        `INSERT INTO "Transaction" (
+           id, "lotId", "fabricOrdregId", "fabricGrowerId",
+           date, "salesType", stems, "pricePerStem", amount,
+           "createdAt", "updatedAt"
+         )
+         SELECT
+           gen_random_uuid()::text,
+           v.val->>'lotId',
+           (v.val->>'fabricOrdregId')::int,
+           (v.val->>'fabricGrowerId')::int,
+           (v.val->>'date')::timestamp,
+           v.val->>'salesType',
+           COALESCE((v.val->>'stems')::int, 0),
+           COALESCE((v.val->>'pricePerStem')::numeric, 0),
+           COALESCE((v.val->>'amount')::numeric, 0),
+           NOW(),
+           NOW()
+         FROM jsonb_array_elements($1::jsonb) AS v(val)
+         ON CONFLICT ("fabricOrdregId") DO UPDATE SET
+           date = EXCLUDED.date,
+           "salesType" = EXCLUDED."salesType",
+           stems = EXCLUDED.stems,
+           "pricePerStem" = EXCLUDED."pricePerStem",
+           amount = EXCLUDED.amount,
+           "fabricGrowerId" = EXCLUDED."fabricGrowerId",
+           "updatedAt" = NOW()`,
+        JSON.stringify(txJsonData)
+      );
     }
 
     // Phase 5: Recalculate lot aggregates via single raw SQL
