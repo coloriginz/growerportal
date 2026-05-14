@@ -213,8 +213,45 @@ export async function POST(request: NextRequest) {
     }
 
     if (ssCreateData.length > 0) {
-      await prisma.salesSheet.createMany({ data: ssCreateData });
-      // Fetch new salessheet IDs
+      // Use raw SQL INSERT ... ON CONFLICT for bulk upsert + RETURNING to get IDs
+      const ssJsonData = ssCreateData.map((d: Record<string, unknown>) => ({
+        invoiceNumber: d.invoiceNumber,
+        fabricParthdrId: d.fabricParthdrId,
+        supplierId: d.supplierId,
+        invoiceDate: d.invoiceDate instanceof Date ? d.invoiceDate.toISOString() : d.invoiceDate,
+        deliveryDate: d.deliveryDate instanceof Date ? d.deliveryDate.toISOString() : d.deliveryDate,
+        totalTurnover: d.totalTurnover ?? 0,
+        totalCosts: d.totalCosts ?? 0,
+        netResult: d.netResult ?? 0,
+      }));
+
+      // Insert with ON CONFLICT on fabricParthdrId (unique)
+      await prisma.$executeRawUnsafe(
+        `INSERT INTO "SalesSheet" (
+           id, "invoiceNumber", "fabricParthdrId", "supplierId",
+           "invoiceDate", "deliveryDate", "totalTurnover", "totalCosts", "netResult",
+           "createdAt", "updatedAt"
+         )
+         SELECT
+           gen_random_uuid()::text,
+           v.val->>'invoiceNumber',
+           (v.val->>'fabricParthdrId')::int,
+           v.val->>'supplierId',
+           (v.val->>'invoiceDate')::timestamp,
+           (v.val->>'deliveryDate')::timestamp,
+           COALESCE((v.val->>'totalTurnover')::numeric, 0),
+           COALESCE((v.val->>'totalCosts')::numeric, 0),
+           COALESCE((v.val->>'netResult')::numeric, 0),
+           NOW(),
+           NOW()
+         FROM jsonb_array_elements($1::jsonb) AS v(val)
+         ON CONFLICT ("fabricParthdrId") DO UPDATE SET
+           "deliveryDate" = EXCLUDED."deliveryDate",
+           "updatedAt" = NOW()`,
+        JSON.stringify(ssJsonData)
+      );
+
+      // Fetch all salessheet IDs (both new and existing) for lot creation
       const newSalesSheets = await prisma.salesSheet.findMany({
         where: {
           fabricParthdrId: {
@@ -331,18 +368,98 @@ export async function POST(request: NextRequest) {
     }
 
     if (lotCreateData.length > 0) {
-      try {
-        await prisma.lot.createMany({ data: lotCreateData });
-      } catch {
-        // Fallback to individual creates if batch fails (e.g. unique constraint)
-        for (const data of lotCreateData) {
-          try {
-            await prisma.lot.create({ data });
-          } catch {
-            skipped++;
-            lotCreated--;
-          }
-        }
+      // Use raw SQL INSERT ... ON CONFLICT for bulk upsert (single roundtrip)
+      // This handles both new inserts and duplicate fabricPartId/lotNumber+supplierId gracefully
+      const lotJsonData = lotCreateData.map((d: Record<string, unknown>) => ({
+        lotNumber: d.lotNumber,
+        refNumber: d.refNumber,
+        fabricPartId: d.fabricPartId,
+        fabricParthdrId: d.fabricParthdrId,
+        supplierId: d.supplierId,
+        salesSheetId: d.salesSheetId,
+        articleCode: d.articleCode,
+        productName: d.productName,
+        articleGroup: d.articleGroup,
+        purchaseType: d.purchaseType,
+        fabricArticleId: d.fabricArticleId,
+        colli: d.colli ?? 0,
+        stemLength: d.stemLength ?? 0,
+        totalStems: d.totalStems ?? 0,
+        avgPrice: d.avgPrice ?? 0,
+        totalAmount: d.totalAmount ?? 0,
+        deliveryDate: d.deliveryDate instanceof Date ? d.deliveryDate.toISOString() : d.deliveryDate,
+        status: d.status ?? "sold",
+        s1: d.s1,
+        s2: d.s2,
+        s3: d.s3,
+        correctionReasonId: d.correctionReasonId,
+        invoicedColli: d.invoicedColli,
+        invoicedVolume: d.invoicedVolume,
+        correctionVolume: d.correctionVolume,
+      }));
+
+      const insertResult = await prisma.$executeRawUnsafe(
+        `INSERT INTO "Lot" (
+           id, "lotNumber", "refNumber", "fabricPartId", "fabricParthdrId",
+           "supplierId", "salesSheetId", "articleCode", "productName", "articleGroup",
+           "purchaseType", "fabricArticleId", colli, "stemLength", "totalStems",
+           "avgPrice", "totalAmount", "deliveryDate", status,
+           s1, s2, s3, "correctionReasonId", "invoicedColli", "invoicedVolume", "correctionVolume",
+           "createdAt", "updatedAt"
+         )
+         SELECT
+           gen_random_uuid()::text,
+           v.val->>'lotNumber',
+           v.val->>'refNumber',
+           (v.val->>'fabricPartId')::int,
+           (v.val->>'fabricParthdrId')::int,
+           v.val->>'supplierId',
+           v.val->>'salesSheetId',
+           v.val->>'articleCode',
+           v.val->>'productName',
+           v.val->>'articleGroup',
+           v.val->>'purchaseType',
+           (v.val->>'fabricArticleId')::int,
+           COALESCE((v.val->>'colli')::int, 0),
+           COALESCE((v.val->>'stemLength')::int, 0),
+           COALESCE((v.val->>'totalStems')::int, 0),
+           COALESCE((v.val->>'avgPrice')::numeric, 0),
+           COALESCE((v.val->>'totalAmount')::numeric, 0),
+           (v.val->>'deliveryDate')::timestamp,
+           COALESCE(v.val->>'status', 'sold'),
+           v.val->>'s1',
+           v.val->>'s2',
+           v.val->>'s3',
+           (v.val->>'correctionReasonId')::int,
+           (v.val->>'invoicedColli')::int,
+           (v.val->>'invoicedVolume')::int,
+           (v.val->>'correctionVolume')::int,
+           NOW(),
+           NOW()
+         FROM jsonb_array_elements($1::jsonb) AS v(val)
+         ON CONFLICT ("fabricPartId") DO UPDATE SET
+           "lotNumber" = EXCLUDED."lotNumber",
+           "productName" = EXCLUDED."productName",
+           "articleGroup" = EXCLUDED."articleGroup",
+           "articleCode" = EXCLUDED."articleCode",
+           "purchaseType" = EXCLUDED."purchaseType",
+           s1 = EXCLUDED.s1,
+           s2 = EXCLUDED.s2,
+           s3 = EXCLUDED.s3,
+           "correctionReasonId" = EXCLUDED."correctionReasonId",
+           "invoicedColli" = EXCLUDED."invoicedColli",
+           "invoicedVolume" = EXCLUDED."invoicedVolume",
+           "correctionVolume" = EXCLUDED."correctionVolume",
+           "updatedAt" = NOW()`,
+        JSON.stringify(lotJsonData)
+      );
+      // insertResult = number of rows affected (inserts + updates)
+      // Adjust counts: if some were actually updates (ON CONFLICT), our lotCreated count is too high
+      const actualAffected = Number(insertResult);
+      if (actualAffected < lotCreateData.length) {
+        const diff = lotCreateData.length - actualAffected;
+        lotCreated -= diff;
+        skipped += diff;
       }
     }
 
