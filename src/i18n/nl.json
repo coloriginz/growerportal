@@ -182,7 +182,8 @@
     "netResult": "Nettoresultaat",
     "costType": "Kostentype",
     "lotsInShipment": "Partijen in Levering",
-    "searchPlaceholder": "Zoek op factuurnummer..."
+    "searchPlaceholder": "Zoek op factuurnummer...",
+    "correction": "Correctie"
   },
   "documents": {
     "title": "Documenten",

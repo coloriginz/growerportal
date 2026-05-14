@@ -96,7 +96,7 @@ interface ShipmentDetailProps {
 }
 
 export function ShipmentDetail({ shipment }: ShipmentDetailProps) {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const [expandedLots, setExpandedLots] = useState<Set<string>>(new Set());
 
   const totalTurnover = parseFloat(shipment.totalTurnover);
@@ -243,8 +243,9 @@ export function ShipmentDetail({ shipment }: ShipmentDetailProps) {
                       <TableRow key={corr.id} className="bg-red-50 dark:bg-red-950/20">
                         <TableCell></TableCell>
                         <TableCell colSpan={3} className="text-red-600 dark:text-red-400 text-sm">
+                          <span className="font-medium">{t("shipments.correction")}:</span>{" "}
                           {corr.correctionReason
-                            ? corr.correctionReason.nameNl
+                            ? (language === "en" && corr.correctionReason.nameEn) || corr.correctionReason.nameNl
                             : corr.facttypeSub}
                           {corr.correctionReason && (
                             <span className="text-muted-foreground ml-2">({corr.correctionReason.code})</span>

@@ -182,7 +182,8 @@
     "netResult": "Net Result",
     "costType": "Cost Type",
     "lotsInShipment": "Lots in Shipment",
-    "searchPlaceholder": "Search by invoice number..."
+    "searchPlaceholder": "Search by invoice number...",
+    "correction": "Correction"
   },
   "documents": {
     "title": "Documents",
