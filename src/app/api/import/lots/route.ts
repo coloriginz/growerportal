@@ -660,9 +660,9 @@ export async function POST(request: NextRequest) {
           data: {
             status: "success",
             recordsReceived: partijen.length,
-            recordsCreated: lotCreated,
-            recordsUpdated: lotUpdated,
-            recordsSkipped: skipped,
+            recordsCreated: lotCreated + correctionsCreated,
+            recordsUpdated: lotUpdated + correctionsUpdated,
+            recordsSkipped: skipped + correctionsSkipped,
             durationMs: Date.now() - startTime,
             completedAt: new Date(),
             details: {
