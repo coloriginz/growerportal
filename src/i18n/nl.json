@@ -31,7 +31,9 @@
     "selected": "Geselecteerd",
     "type": "Type",
     "preferredLanguage": "Communicatietaal",
-    "preferredLanguageDescription": "Taal die gebruikt wordt voor e-mails naar deze leverancier."
+    "preferredLanguageDescription": "Taal die gebruikt wordt voor e-mails naar deze leverancier.",
+    "showMore": "Meer tonen",
+    "showLess": "Minder tonen"
   },
   "auth": {
     "login": "Inloggen",
@@ -110,7 +112,29 @@
     "fustOrders": "Fustbestellingen",
     "pendingFustOrders": "Openstaande Fustbestellingen",
     "selectSupplierTitle": "Selecteer een leverancier om het dashboard te bekijken",
-    "selectSupplierDescription": "Gebruik de leverancierselectie in de zijbalk om een leverancier te kiezen."
+    "selectSupplierDescription": "Gebruik de leverancierselectie in de zijbalk om een leverancier te kiezen.",
+    "adminOverviewTitle": "Data-overzicht",
+    "countSuppliers": "Leveranciers",
+    "countGrowers": "Kwekers",
+    "countLots": "Partijen",
+    "countTransactions": "Transacties",
+    "countSalesSheets": "Salessheets",
+    "lastSyncRuns": "Laatste Sync Runs",
+    "syncEndpoint": "Endpoint",
+    "syncStatus": "Status",
+    "syncTime": "Tijdstip",
+    "syncReceived": "Ontvangen",
+    "syncCreated": "Aangemaakt",
+    "syncUpdated": "Bijgewerkt",
+    "syncDuration": "Duur",
+    "recentOrders": "Recente Orders",
+    "orderDate": "Orderdatum",
+    "syncSalesType": "Verkooptype",
+    "syncAddedAt": "Toegevoegd",
+    "recentSuppliersTitle": "Nieuwste Leveranciers",
+    "recentGrowersTitle": "Nieuwste Kwekers",
+    "syncCode": "Code",
+    "syncName": "Naam"
   },
   "sales": {
     "title": "Verkopen",

@@ -4,11 +4,7 @@ import { requireAuth, resolveSupplierId } from "@/lib/api-helpers";
 import {
   startOfDay,
   subDays,
-  startOfYear,
-  subYears,
   format,
-  getISOWeek,
-  getISOWeekYear,
 } from "date-fns";
 import { getSeasonStart, getPreviousSeasonDates } from "@/lib/season";
 
@@ -195,171 +191,155 @@ export async function GET(request: NextRequest) {
   });
 }
 
-// ─── AGGREGATE DASHBOARD (no supplier selected) ─────────
+// ─── ADMIN OVERVIEW DASHBOARD (no supplier selected) ─────────
 
 async function getAggregateDashboard() {
-  const now = new Date();
-  const todayStart = startOfDay(now);
-  const yesterdayStart = startOfDay(subDays(now, 1));
-  const ytdStart = startOfYear(now);
-  const lastYearYtdStart = startOfYear(subYears(now, 1));
-  const lastYearSameDate = subYears(now, 1);
-  // ── Parallel batch 1: KPIs + top products (single groupBy, reused for suppliers) + forecasts ──
-  const [todayAgg, yesterdayAgg, ytdAgg, lastYearYtdAgg, transactionsByLot, upcomingForecasts] = await Promise.all([
-    prisma.transaction.aggregate({
-      where: { date: { gte: todayStart } },
-      _sum: { stems: true, amount: true },
+  const [
+    recentImports,
+    recentTransactions,
+    recentLots,
+    recentSuppliers,
+    recentGrowers,
+    counts,
+  ] = await Promise.all([
+    // Last sync runs per endpoint
+    prisma.importBatch.findMany({
+      orderBy: { startedAt: "desc" },
+      take: 20,
+      select: {
+        id: true,
+        endpoint: true,
+        status: true,
+        recordsReceived: true,
+        recordsCreated: true,
+        recordsUpdated: true,
+        recordsSkipped: true,
+        durationMs: true,
+        startedAt: true,
+        completedAt: true,
+        errorMessage: true,
+      },
     }),
-    prisma.transaction.aggregate({
-      where: { date: { gte: yesterdayStart, lt: todayStart } },
-      _sum: { stems: true },
+    // 20 most recent transactions (orders)
+    prisma.transaction.findMany({
+      orderBy: { createdAt: "desc" },
+      take: 20,
+      select: {
+        id: true,
+        lotId: true,
+        date: true,
+        salesType: true,
+        stems: true,
+        amount: true,
+        createdAt: true,
+        lot: {
+          select: {
+            lotNumber: true,
+            productName: true,
+            supplier: { select: { code: true, name: true } },
+          },
+        },
+      },
     }),
-    prisma.transaction.aggregate({
-      where: { date: { gte: ytdStart } },
-      _sum: { stems: true, amount: true },
-    }),
-    prisma.transaction.aggregate({
-      where: { date: { gte: lastYearYtdStart, lte: lastYearSameDate } },
-      _sum: { stems: true, amount: true },
-    }),
-    // Single groupBy reused for both top products AND top suppliers
-    prisma.transaction.groupBy({
-      by: ["lotId"],
-      where: { date: { gte: ytdStart } },
-      _sum: { stems: true, amount: true },
-    }),
-    // Upcoming forecasts
-    (() => {
-      const currentWeek = getISOWeek(now);
-      const currentYear = getISOWeekYear(now);
-      const forecastWeeks: { year: number; week: number }[] = [];
-      let fy = currentYear;
-      let fw = currentWeek;
-      for (let i = 0; i < 4; i++) {
-        forecastWeeks.push({ year: fy, week: fw });
-        fw++;
-        if (fw > 52) { fw = 1; fy++; }
-      }
-      return prisma.shipmentForecast.groupBy({
-        by: ["year", "week"],
-        where: { OR: forecastWeeks.map((w) => ({ year: w.year, week: w.week })) },
-        _sum: { stems: true },
-        _count: { supplierId: true },
-      }).then((results) => ({ results, forecastWeeks }));
-    })(),
-  ]);
-
-  const stemsYTD = ytdAgg._sum.stems || 0;
-  const turnoverYTD = Number(ytdAgg._sum.amount) || 0;
-  const stemsYTDLastYear = lastYearYtdAgg._sum.stems || 0;
-  const turnoverYTDLastYear = Number(lastYearYtdAgg._sum.amount) || 0;
-
-  // ── Parallel batch 2: monthly sales (all months at once) + lot details for top products/suppliers ──
-  const monthQueries: Promise<{ month: string; stems: number; turnover: number; lastYearStems: number; lastYearTurnover: number }>[] = [];
-  for (let month = 0; month < 12; month++) {
-    const monthStart = new Date(now.getFullYear(), month, 1);
-    const monthEnd = new Date(now.getFullYear(), month + 1, 1);
-    const lastYearMonthStart = new Date(now.getFullYear() - 1, month, 1);
-    const lastYearMonthEnd = new Date(now.getFullYear() - 1, month + 1, 1);
-
-    if (monthStart > now) break;
-
-    const monthLabel = format(monthStart, "MMM");
-    monthQueries.push(
-      Promise.all([
-        prisma.transaction.aggregate({
-          where: { date: { gte: monthStart, lt: monthEnd } },
-          _sum: { stems: true, amount: true },
-        }),
-        prisma.transaction.aggregate({
-          where: { date: { gte: lastYearMonthStart, lt: lastYearMonthEnd } },
-          _sum: { stems: true, amount: true },
-        }),
-      ]).then(([current, lastYear]) => ({
-        month: monthLabel,
-        stems: current._sum.stems || 0,
-        turnover: Number(current._sum.amount) || 0,
-        lastYearStems: lastYear._sum.stems || 0,
-        lastYearTurnover: Number(lastYear._sum.amount) || 0,
-      }))
-    );
-  }
-
-  // Single lot fetch with both articleGroup and supplierId (reused for products + suppliers)
-  const lotIds = transactionsByLot.map((tp) => tp.lotId);
-  const [monthlySales, allLots] = await Promise.all([
-    Promise.all(monthQueries),
+    // 20 most recent lots
     prisma.lot.findMany({
-      where: { id: { in: lotIds } },
-      select: { id: true, articleGroup: true, supplierId: true },
+      orderBy: { createdAt: "desc" },
+      take: 20,
+      select: {
+        id: true,
+        lotNumber: true,
+        productName: true,
+        deliveryDate: true,
+        totalStems: true,
+        createdAt: true,
+        supplier: { select: { code: true, name: true } },
+      },
     }),
+    // 10 newest suppliers
+    prisma.supplier.findMany({
+      orderBy: { createdAt: "desc" },
+      take: 10,
+      select: {
+        id: true,
+        code: true,
+        name: true,
+        createdAt: true,
+        _count: { select: { lots: true } },
+      },
+    }),
+    // 10 newest growers
+    prisma.grower.findMany({
+      orderBy: { createdAt: "desc" },
+      take: 10,
+      select: {
+        id: true,
+        name: true,
+        fabricId: true,
+        createdAt: true,
+        supplier: { select: { code: true, name: true } },
+      },
+    }),
+    // Total counts
+    Promise.all([
+      prisma.supplier.count(),
+      prisma.grower.count(),
+      prisma.lot.count(),
+      prisma.transaction.count(),
+      prisma.salesSheet.count(),
+    ]).then(([suppliers, growers, lots, transactions, salesSheets]) => ({
+      suppliers,
+      growers,
+      lots,
+      transactions,
+      salesSheets,
+    })),
   ]);
-
-  // Build top products from shared data
-  const lotArticleMap = new Map(allLots.map((l) => [l.id, l.articleGroup]));
-  const productMap = new Map<string, { stems: number; turnover: number }>();
-  for (const tp of transactionsByLot) {
-    const group = lotArticleMap.get(tp.lotId) || "Other";
-    const existing = productMap.get(group) || { stems: 0, turnover: 0 };
-    existing.stems += tp._sum.stems || 0;
-    existing.turnover += Number(tp._sum.amount) || 0;
-    productMap.set(group, existing);
-  }
-  const topProducts = Array.from(productMap.entries())
-    .map(([name, d]) => ({ name, ...d }))
-    .sort((a, b) => b.stems - a.stems)
-    .slice(0, 8);
-
-  // Build top suppliers from shared data (no duplicate query!)
-  const lotSupplierMap = new Map(allLots.map((l) => [l.id, l.supplierId]));
-  const supplierMap = new Map<string, { stems: number; turnover: number }>();
-  for (const tp of transactionsByLot) {
-    const sId = lotSupplierMap.get(tp.lotId);
-    if (!sId) continue;
-    const existing = supplierMap.get(sId) || { stems: 0, turnover: 0 };
-    existing.stems += tp._sum.stems || 0;
-    existing.turnover += Number(tp._sum.amount) || 0;
-    supplierMap.set(sId, existing);
-  }
-
-  const suppliers = await prisma.supplier.findMany({
-    where: { id: { in: Array.from(supplierMap.keys()) } },
-    select: { id: true, code: true, name: true },
-  });
-  const supplierInfoMap = new Map(suppliers.map((g) => [g.id, g]));
-
-  const topSuppliers = Array.from(supplierMap.entries())
-    .map(([id, d]) => {
-      const info = supplierInfoMap.get(id);
-      return { id, code: info?.code || "", name: info?.name || "", ...d };
-    })
-    .sort((a, b) => b.stems - a.stems)
-    .slice(0, 10);
-
-  // Format forecast data
-  const forecastData = upcomingForecasts.forecastWeeks.map((w) => {
-    const match = upcomingForecasts.results.find((f) => f.year === w.year && f.week === w.week);
-    return {
-      week: `W${w.week}`,
-      year: w.year,
-      stems: match?._sum.stems || 0,
-      suppliers: match?._count.supplierId || 0,
-    };
-  });
 
   return NextResponse.json({
     aggregate: true,
-    stemsToday: todayAgg._sum.stems || 0,
-    stemsYesterday: yesterdayAgg._sum.stems || 0,
-    stemsYTD,
-    stemsYTDLastYear,
-    turnoverYTD,
-    turnoverYTDLastYear,
-    avgPriceYTD: stemsYTD > 0 ? turnoverYTD / stemsYTD : 0,
-    avgPriceYTDLastYear: stemsYTDLastYear > 0 ? turnoverYTDLastYear / stemsYTDLastYear : 0,
-    monthlySales,
-    topProducts,
-    topSuppliers,
-    upcomingForecasts: forecastData,
+    recentImports: recentImports.map((b) => ({
+      ...b,
+      startedAt: b.startedAt.toISOString(),
+      completedAt: b.completedAt?.toISOString() || null,
+    })),
+    recentTransactions: recentTransactions.map((tx) => ({
+      id: tx.id,
+      lotId: tx.lotId,
+      date: tx.date.toISOString(),
+      salesType: tx.salesType,
+      stems: tx.stems,
+      amount: Number(tx.amount),
+      createdAt: tx.createdAt.toISOString(),
+      lotNumber: tx.lot.lotNumber,
+      productName: tx.lot.productName,
+      supplierCode: tx.lot.supplier.code,
+      supplierName: tx.lot.supplier.name,
+    })),
+    recentLots: recentLots.map((l) => ({
+      id: l.id,
+      lotNumber: l.lotNumber,
+      productName: l.productName,
+      deliveryDate: l.deliveryDate?.toISOString() || null,
+      totalStems: l.totalStems,
+      createdAt: l.createdAt.toISOString(),
+      supplierCode: l.supplier.code,
+      supplierName: l.supplier.name,
+    })),
+    recentSuppliers: recentSuppliers.map((s) => ({
+      id: s.id,
+      code: s.code,
+      name: s.name,
+      createdAt: s.createdAt.toISOString(),
+      lotCount: s._count.lots,
+    })),
+    recentGrowers: recentGrowers.map((g) => ({
+      id: g.id,
+      name: g.name,
+      fabricId: g.fabricId,
+      createdAt: g.createdAt.toISOString(),
+      supplierCode: g.supplier.code,
+      supplierName: g.supplier.name,
+    })),
+    counts,
   });
 }

@@ -31,7 +31,9 @@
     "selected": "Selected",
     "type": "Type",
     "preferredLanguage": "Communication Language",
-    "preferredLanguageDescription": "Language used for emails sent to this supplier."
+    "preferredLanguageDescription": "Language used for emails sent to this supplier.",
+    "showMore": "Show more",
+    "showLess": "Show less"
   },
   "auth": {
     "login": "Sign In",
@@ -110,7 +112,29 @@
     "fustOrders": "Fust Orders",
     "pendingFustOrders": "Pending Fust Orders",
     "selectSupplierTitle": "Select a supplier to view the dashboard",
-    "selectSupplierDescription": "Use the supplier selector in the sidebar to pick a supplier."
+    "selectSupplierDescription": "Use the supplier selector in the sidebar to pick a supplier.",
+    "adminOverviewTitle": "Data Overview",
+    "countSuppliers": "Suppliers",
+    "countGrowers": "Growers",
+    "countLots": "Lots",
+    "countTransactions": "Transactions",
+    "countSalesSheets": "Sales Sheets",
+    "lastSyncRuns": "Last Sync Runs",
+    "syncEndpoint": "Endpoint",
+    "syncStatus": "Status",
+    "syncTime": "Time",
+    "syncReceived": "Received",
+    "syncCreated": "Created",
+    "syncUpdated": "Updated",
+    "syncDuration": "Duration",
+    "recentOrders": "Recent Orders",
+    "orderDate": "Order Date",
+    "syncSalesType": "Sales Type",
+    "syncAddedAt": "Added",
+    "recentSuppliersTitle": "Newest Suppliers",
+    "recentGrowersTitle": "Newest Growers",
+    "syncCode": "Code",
+    "syncName": "Name"
   },
   "sales": {
     "title": "Sales",
