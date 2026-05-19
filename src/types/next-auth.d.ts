@@ -6,6 +6,8 @@ declare module "next-auth" {
     supplierId?: string | null;
     supplierCode?: string | null;
     transporterId?: string | null;
+    kbtCode?: string | null;
+    companyIds?: string[];
   }
 
   interface Session {
@@ -17,6 +19,8 @@ declare module "next-auth" {
       supplierId: string | null;
       supplierCode: string | null;
       transporterId: string | null;
+      kbtCode: string | null;
+      companyIds: string[];
     };
   }
 }
@@ -27,6 +31,8 @@ declare module "next-auth/jwt" {
     supplierId?: string | null;
     supplierCode?: string | null;
     transporterId?: string | null;
+    kbtCode?: string | null;
+    companyIds?: string[];
     originalRole?: string;
   }
 }

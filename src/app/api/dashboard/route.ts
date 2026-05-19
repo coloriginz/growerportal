@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { requireAuth, resolveSupplierId } from "@/lib/api-helpers";
+import { requireAuth, resolveSupplierId, buildSupplierScope } from "@/lib/api-helpers";
 import {
   startOfDay,
   subDays,
@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
 
   // Aggregate dashboard for admin/commercie without supplier selected
   if (!supplierId && session!.user.role !== "supplier") {
-    return getAggregateDashboard();
+    return getAggregateDashboard(session!);
   }
 
   if (!supplierId) {
@@ -32,19 +32,19 @@ export async function GET(request: NextRequest) {
       avgPriceYTDLastYear: 0,
       netYieldPerStem: 0,
       qualityRate: 100,
-      monthlySales: [],
       topProducts: [],
-      recentLots: [],
+      recentShipments: [],
       seasonStartMonth: 1,
     });
   }
 
-  // Fetch supplier's season start month
+  // Fetch supplier's season start month and feature flags
   const supplierRecord = await prisma.supplier.findUnique({
     where: { id: supplierId },
-    select: { seasonStartMonth: true },
+    select: { seasonStartMonth: true, featureQuality: true },
   });
   const seasonStartMonth = supplierRecord?.seasonStartMonth ?? 1;
+  const featureQuality = supplierRecord?.featureQuality ?? true;
 
   const now = new Date();
   const todayStart = startOfDay(now);
@@ -55,7 +55,7 @@ export async function GET(request: NextRequest) {
 
   const supplierFilter = { lot: { supplierId } };
 
-  // ── Parallel batch 1: all KPIs + costs + quality + recent lots + top products ──
+  // ── Parallel batch 1: all KPIs + costs + quality + recent shipments + top products ──
   const [
     todayAgg,
     yesterdayAgg,
@@ -64,7 +64,7 @@ export async function GET(request: NextRequest) {
     topProducts,
     costsAgg,
     qualityStemsAgg,
-    recentLots,
+    recentShipments,
   ] = await Promise.all([
     prisma.transaction.aggregate({
       where: { ...supplierFilter, date: { gte: todayStart } },
@@ -95,13 +95,15 @@ export async function GET(request: NextRequest) {
       where: { supplierId, date: { gte: ytdStart } },
       _sum: { stems: true },
     }),
-    prisma.lot.findMany({
+    prisma.salesSheet.findMany({
       where: { supplierId },
-      orderBy: { deliveryDate: "desc" },
+      orderBy: { invoiceDate: "desc" },
       take: 5,
       select: {
-        id: true, lotNumber: true, productName: true,
-        totalStems: true, avgPrice: true, deliveryDate: true, status: true,
+        id: true, invoiceNumber: true, invoiceDate: true,
+        totalTurnover: true, totalCosts: true, netResult: true,
+        _count: { select: { lots: true } },
+        lots: { select: { totalStems: true } },
       },
     }),
   ]);
@@ -114,40 +116,6 @@ export async function GET(request: NextRequest) {
   const netYieldPerStem = stemsYTD > 0 ? (turnoverYTD - totalCostsYTD) / stemsYTD : 0;
   const qualityStems = qualityStemsAgg._sum.stems || 0;
   const qualityRate = stemsYTD > 0 ? ((stemsYTD - qualityStems) / stemsYTD) * 100 : 100;
-
-  // ── Parallel batch 2: monthly sales (all months at once) ──
-  const monthQueries: Promise<{ month: string; stems: number; turnover: number; lastYearStems: number; lastYearTurnover: number } | null>[] = [];
-  for (let i = 0; i < 12; i++) {
-    const monthIdx = (seasonStartMonth - 1 + i) % 12;
-    const yearOffset = (seasonStartMonth - 1 + i) >= 12 ? 1 : 0;
-    const monthStart = new Date(ytdStart.getFullYear() + yearOffset, monthIdx, 1);
-    const monthEnd = new Date(ytdStart.getFullYear() + yearOffset, monthIdx + 1, 1);
-    const lastYearMonthStart = new Date(monthStart.getFullYear() - 1, monthIdx, 1);
-    const lastYearMonthEnd = new Date(monthStart.getFullYear() - 1, monthIdx + 1, 1);
-
-    if (monthStart > now) break;
-
-    const monthLabel = format(monthStart, "MMM");
-    monthQueries.push(
-      Promise.all([
-        prisma.transaction.aggregate({
-          where: { ...supplierFilter, date: { gte: monthStart, lt: monthEnd } },
-          _sum: { stems: true, amount: true },
-        }),
-        prisma.transaction.aggregate({
-          where: { ...supplierFilter, date: { gte: lastYearMonthStart, lt: lastYearMonthEnd } },
-          _sum: { stems: true, amount: true },
-        }),
-      ]).then(([current, lastYear]) => ({
-        month: monthLabel,
-        stems: current._sum.stems || 0,
-        turnover: Number(current._sum.amount) || 0,
-        lastYearStems: lastYear._sum.stems || 0,
-        lastYearTurnover: Number(lastYear._sum.amount) || 0,
-      }))
-    );
-  }
-  const monthlySales = (await Promise.all(monthQueries)).filter(Boolean) as NonNullable<(typeof monthQueries)[number] extends Promise<infer T> ? T : never>[];
 
   // ── Top products: enrich with article groups ──
   const lotIds = topProducts.map((tp) => tp.lotId);
@@ -180,20 +148,30 @@ export async function GET(request: NextRequest) {
     avgPriceYTDLastYear: stemsYTDLastYear > 0 ? turnoverYTDLastYear / stemsYTDLastYear : 0,
     netYieldPerStem,
     qualityRate,
-    monthlySales,
     topProducts: topProductsList,
-    recentLots: recentLots.map((l) => ({
-      ...l,
-      avgPrice: Number(l.avgPrice),
-      deliveryDate: l.deliveryDate.toISOString(),
+    recentShipments: recentShipments.map((s) => ({
+      id: s.id,
+      invoiceNumber: s.invoiceNumber,
+      invoiceDate: s.invoiceDate?.toISOString() || null,
+      totalTurnover: Number(s.totalTurnover),
+      netResult: Number(s.netResult),
+      lotCount: s._count.lots,
+      totalStems: s.lots.reduce((sum, l) => sum + (l.totalStems || 0), 0),
     })),
     seasonStartMonth,
+    featureQuality,
   });
 }
 
 // ─── ADMIN OVERVIEW DASHBOARD (no supplier selected) ─────────
 
-async function getAggregateDashboard() {
+async function getAggregateDashboard(session: { user: { role: string; supplierId: string | null; kbtCode: string | null; companyIds: string[] } }) {
+  const scope = buildSupplierScope(session);
+  // Scope filters for different model levels
+  const supplierWhere = scope ? { ...scope } : undefined;
+  const lotWhere = scope ? { supplier: scope } : undefined;
+  const txWhere = scope ? { lot: { supplier: scope } } : undefined;
+
   const [
     recentImports,
     recentTransactions,
@@ -222,6 +200,7 @@ async function getAggregateDashboard() {
     }),
     // 20 most recent transactions (orders)
     prisma.transaction.findMany({
+      where: txWhere,
       orderBy: { createdAt: "desc" },
       take: 20,
       select: {
@@ -236,6 +215,7 @@ async function getAggregateDashboard() {
           select: {
             lotNumber: true,
             productName: true,
+            supplierId: true,
             supplier: { select: { code: true, name: true } },
           },
         },
@@ -243,6 +223,7 @@ async function getAggregateDashboard() {
     }),
     // 20 most recent lots
     prisma.lot.findMany({
+      where: lotWhere,
       orderBy: { createdAt: "desc" },
       take: 20,
       select: {
@@ -251,12 +232,14 @@ async function getAggregateDashboard() {
         productName: true,
         deliveryDate: true,
         totalStems: true,
+        supplierId: true,
         createdAt: true,
         supplier: { select: { code: true, name: true } },
       },
     }),
     // 10 newest suppliers
     prisma.supplier.findMany({
+      where: supplierWhere,
       orderBy: { createdAt: "desc" },
       take: 10,
       select: {
@@ -269,6 +252,7 @@ async function getAggregateDashboard() {
     }),
     // 10 newest growers
     prisma.grower.findMany({
+      where: scope ? { supplier: scope } : undefined,
       orderBy: { createdAt: "desc" },
       take: 10,
       select: {
@@ -281,11 +265,11 @@ async function getAggregateDashboard() {
     }),
     // Total counts
     Promise.all([
-      prisma.supplier.count(),
-      prisma.grower.count(),
-      prisma.lot.count(),
-      prisma.transaction.count(),
-      prisma.salesSheet.count(),
+      prisma.supplier.count({ where: supplierWhere }),
+      prisma.grower.count({ where: scope ? { supplier: scope } : undefined }),
+      prisma.lot.count({ where: lotWhere }),
+      prisma.transaction.count({ where: txWhere }),
+      prisma.salesSheet.count({ where: scope ? { supplier: scope } : undefined }),
     ]).then(([suppliers, growers, lots, transactions, salesSheets]) => ({
       suppliers,
       growers,
@@ -312,6 +296,7 @@ async function getAggregateDashboard() {
       createdAt: tx.createdAt.toISOString(),
       lotNumber: tx.lot.lotNumber,
       productName: tx.lot.productName,
+      supplierId: tx.lot.supplierId,
       supplierCode: tx.lot.supplier.code,
       supplierName: tx.lot.supplier.name,
     })),
@@ -321,6 +306,7 @@ async function getAggregateDashboard() {
       productName: l.productName,
       deliveryDate: l.deliveryDate?.toISOString() || null,
       totalStems: l.totalStems,
+      supplierId: l.supplierId,
       createdAt: l.createdAt.toISOString(),
       supplierCode: l.supplier.code,
       supplierName: l.supplier.name,

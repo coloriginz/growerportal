@@ -18,8 +18,10 @@ export async function PATCH(
     name: z.string().min(1).optional(),
     email: z.string().email().optional(),
     role: z.enum(ROLES as unknown as [string, ...string[]]).optional(),
+    kbtCode: z.string().nullable().optional(),
     isActive: z.boolean().optional(),
     transporterId: z.string().uuid().nullable().optional(),
+    companyIds: z.array(z.string().uuid()).optional(),
   });
 
   const parsed = schema.safeParse(body);
@@ -48,9 +50,15 @@ export async function PATCH(
   }
 
   // Clear transporterId if switching away from transporteur
-  const updateData: Record<string, unknown> = { ...data };
+  const { companyIds, ...rest } = data;
+  const updateData: Record<string, unknown> = { ...rest };
   if (data.role && data.role !== "transporteur") {
     updateData.transporterId = null;
+  }
+
+  // Handle company (label) access
+  if (companyIds !== undefined) {
+    updateData.companies = { set: companyIds.map((cid) => ({ id: cid })) };
   }
 
   const user = await prisma.user.update({

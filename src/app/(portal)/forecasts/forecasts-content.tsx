@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import { getISOWeek, getISOWeekYear } from "date-fns";
+import { SelectSupplierPrompt } from "@/components/ui/select-supplier-prompt";
 import { useFetch } from "@/hooks/use-fetch";
 import { useLanguage } from "@/components/providers/language-provider";
 import { ErrorState } from "@/components/ui/error-state";
@@ -55,6 +56,7 @@ interface WeekKey {
 type CellStatus = "idle" | "saving" | "saved" | "error";
 
 export function ForecastsContent({ supplierId }: { supplierId: string | null }) {
+  if (!supplierId) return <SelectSupplierPrompt />;
   const { t } = useLanguage();
   const now = new Date();
   const currentISOWeek = getISOWeek(now);

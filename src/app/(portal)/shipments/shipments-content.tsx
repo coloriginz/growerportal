@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from "react";
 import Link from "next/link";
+import { SelectSupplierPrompt } from "@/components/ui/select-supplier-prompt";
 import { useRouter } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -40,6 +41,7 @@ interface ShipmentRow {
 }
 
 export function ShipmentsContent({ supplierId }: { supplierId: string | null }) {
+  if (!supplierId) return <SelectSupplierPrompt />;
   const [search, setSearch] = useState("");
   const { t } = useLanguage();
   const router = useRouter();

@@ -23,6 +23,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   RiArrowLeftLine,
   RiSaveLine,
@@ -52,8 +53,15 @@ interface SupplierData {
   commercieId: string | null;
   companyId: string | null;
   companyEntity: CompanyOption | null;
+  accountManagerCode: string | null;
+  accountManagerName: string | null;
+  accountManagerUser: { id: string; name: string; email: string } | null;
   preferredLanguage: string;
   seasonStartMonth: number;
+  featureSales: boolean;
+  featureQuality: boolean;
+  featureForecasts: boolean;
+  fustEnabled: boolean;
   commercie: { id: string; name: string; email: string } | null;
   growers: {
     id: string;
@@ -77,15 +85,8 @@ interface SupplierData {
   }[];
 }
 
-interface CommercieUser {
-  id: string;
-  name: string;
-  email: string;
-}
-
 export function SupplierDetail({ supplierId }: { supplierId: string }) {
   const [supplier, setSupplier] = useState<SupplierData | null>(null);
-  const [commercieUsers, setCommercieUsers] = useState<CommercieUser[] | null>(null);
   const [companies, setCompanies] = useState<CompanyOption[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -107,15 +108,17 @@ export function SupplierDetail({ supplierId }: { supplierId: string }) {
     phone: "",
     vatNumber: "",
     ggn: "",
-    commercieId: "",
     companyId: "",
     preferredLanguage: "en",
     seasonStartMonth: "1",
+    featureSales: true,
+    featureQuality: true,
+    featureForecasts: true,
+    fustEnabled: false,
   });
 
   useEffect(() => {
     fetchSupplier();
-    fetchCommercieUsers();
     fetchCompanies();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [supplierId]);
@@ -136,25 +139,19 @@ export function SupplierDetail({ supplierId }: { supplierId: string }) {
           phone: data.phone || "",
           vatNumber: data.vatNumber || "",
           ggn: data.ggn || "",
-          commercieId: data.commercieId || "",
           companyId: data.companyId || "",
           preferredLanguage: data.preferredLanguage || "en",
           seasonStartMonth: String(data.seasonStartMonth ?? 1),
+          featureSales: data.featureSales ?? true,
+          featureQuality: data.featureQuality ?? true,
+          featureForecasts: data.featureForecasts ?? true,
+          fustEnabled: data.fustEnabled ?? false,
         });
       } else {
         router.push("/suppliers");
       }
     } finally {
       setLoading(false);
-    }
-  }
-
-  async function fetchCommercieUsers() {
-    const res = await fetch("/api/admin/commercie");
-    if (res.ok) {
-      setCommercieUsers(await res.json());
-    } else {
-      setCommercieUsers([]);
     }
   }
 
@@ -184,10 +181,13 @@ export function SupplierDetail({ supplierId }: { supplierId: string }) {
           phone: form.phone || null,
           vatNumber: form.vatNumber || null,
           ggn: form.ggn || null,
-          commercieId: form.commercieId || null,
           companyId: form.companyId || null,
           preferredLanguage: form.preferredLanguage,
           seasonStartMonth: parseInt(form.seasonStartMonth),
+          featureSales: form.featureSales,
+          featureQuality: form.featureQuality,
+          featureForecasts: form.featureForecasts,
+          fustEnabled: form.fustEnabled,
         }),
       });
       if (res.ok) {
@@ -393,149 +393,167 @@ export function SupplierDetail({ supplierId }: { supplierId: string }) {
           </CardContent>
         </Card>
 
-        {/* Account Manager Section */}
+        {/* Settings Card */}
         <Card>
           <CardHeader>
-            <CardTitle>{t("suppliers.accountManager")}</CardTitle>
+            <CardTitle>{t("suppliers.settings")}</CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="max-w-sm space-y-2">
-              <Label>{t("suppliers.accountManager")}</Label>
-              {commercieUsers !== null ? (
-                <Select
-                  key={`cm-${commercieUsers.length}`}
-                  value={form.commercieId || "none"}
-                  onValueChange={(v) => {
-                    if (v !== null) setForm({ ...form, commercieId: v === "none" ? "" : v });
-                  }}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder={t("suppliers.selectCommercie")} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">
-                      {t("suppliers.noCommercieAssigned")}
-                    </SelectItem>
-                    {commercieUsers.map((u) => (
-                      <SelectItem key={u.id} value={u.id}>
-                        {u.name}
-                      </SelectItem>
-                    ))}
-                    {/* Show assigned user if not in the active list */}
-                    {supplier.commercie && !commercieUsers.some((u) => u.id === supplier.commercie!.id) && (
-                      <SelectItem value={supplier.commercie.id}>
-                        {supplier.commercie.name} (inactive)
-                      </SelectItem>
-                    )}
-                  </SelectContent>
-                </Select>
-              ) : (
-                <div className="bg-muted h-10 animate-pulse rounded-md" />
-              )}
+          <CardContent className="space-y-6">
+            {/* Account Manager */}
+            <div>
+              <h3 className="text-sm font-semibold mb-3">{t("suppliers.accountManager")}</h3>
+              <div className="grid gap-4 sm:grid-cols-2 max-w-2xl">
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">{t("suppliers.amCode")}</Label>
+                  <p className="text-sm font-medium tabular-nums">
+                    {supplier.accountManagerCode || "-"}
+                  </p>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">{t("suppliers.amName")}</Label>
+                  <p className="text-sm">
+                    {supplier.accountManagerName || "-"}
+                  </p>
+                </div>
+                <div className="space-y-1 sm:col-span-2">
+                  <Label className="text-xs text-muted-foreground">{t("suppliers.linkedAccount")}</Label>
+                  {supplier.accountManagerUser ? (
+                    <p className="text-sm">
+                      <span className="font-medium">{supplier.accountManagerUser.name}</span>
+                      <span className="ml-2 text-muted-foreground">{supplier.accountManagerUser.email}</span>
+                    </p>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">{t("suppliers.noLinkedAccount")}</p>
+                  )}
+                </div>
+              </div>
             </div>
-          </CardContent>
-        </Card>
 
-        {/* Company / Brand */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Brand</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="max-w-sm space-y-2">
-              <Label>Company</Label>
-              {companies !== null ? (
-                <Select
-                  key={`co-${companies.length}`}
-                  value={form.companyId || "none"}
-                  onValueChange={(v) => {
-                    if (v !== null) setForm({ ...form, companyId: v === "none" ? "" : v });
-                  }}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select company" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">No company assigned</SelectItem>
-                    {companies.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>
-                        {c.name}
-                      </SelectItem>
-                    ))}
-                    {/* Show assigned company if not in the list */}
-                    {supplier.companyEntity && !companies.some((c) => c.id === supplier.companyEntity!.id) && (
-                      <SelectItem value={supplier.companyEntity.id}>
-                        {supplier.companyEntity.name}
-                      </SelectItem>
-                    )}
-                  </SelectContent>
-                </Select>
-              ) : (
-                <div className="bg-muted h-10 animate-pulse rounded-md" />
-              )}
-              <p className="text-xs text-muted-foreground">
-                Determines the branding (logo, emails) for this supplier.
-              </p>
+            <Separator />
+
+            {/* Brand / Company */}
+            <div>
+              <h3 className="text-sm font-semibold mb-3">{t("suppliers.owner")}</h3>
+              <div className="max-w-sm space-y-2">
+                {companies !== null ? (
+                  <Select
+                    value={form.companyId || "none"}
+                    onValueChange={(v) => {
+                      if (v !== null) setForm({ ...form, companyId: v === "none" ? "" : v });
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue>
+                        {form.companyId
+                          ? companies.find((c) => c.id === form.companyId)?.name
+                            ?? supplier.companyEntity?.name
+                            ?? form.companyId
+                          : t("suppliers.noCompanyAssigned")}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">{t("suppliers.noCompanyAssigned")}</SelectItem>
+                      {companies.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <div className="bg-muted h-10 animate-pulse rounded-md" />
+                )}
+                <p className="text-xs text-muted-foreground">
+                  {t("suppliers.companyDescription")}
+                </p>
+              </div>
             </div>
-          </CardContent>
-        </Card>
 
-        {/* Communication Language */}
-        <Card>
-          <CardHeader>
-            <CardTitle>{t("common.preferredLanguage")}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="max-w-sm space-y-2">
-              <Label>{t("common.preferredLanguage")}</Label>
-              <Select
-                value={form.preferredLanguage}
-                onValueChange={(v) => { if (v) setForm({ ...form, preferredLanguage: v }); }}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="en">English</SelectItem>
-                  <SelectItem value="nl">Nederlands</SelectItem>
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">
-                {t("common.preferredLanguageDescription")}
-              </p>
+            <Separator />
+
+            {/* Communication Language + Season */}
+            <div className="grid gap-6 sm:grid-cols-2 max-w-2xl">
+              <div>
+                <h3 className="text-sm font-semibold mb-3">{t("common.preferredLanguage")}</h3>
+                <div className="space-y-2">
+                  <Select
+                    value={form.preferredLanguage}
+                    onValueChange={(v) => { if (v) setForm({ ...form, preferredLanguage: v }); }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="en">English</SelectItem>
+                      <SelectItem value="nl">Nederlands</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    {t("common.preferredLanguageDescription")}
+                  </p>
+                </div>
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold mb-3">{t("suppliers.seasonSettings")}</h3>
+                <div className="space-y-2">
+                  <Select
+                    value={form.seasonStartMonth}
+                    onValueChange={(v) => { if (v) setForm({ ...form, seasonStartMonth: v }); }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {[
+                        "January", "February", "March", "April", "May", "June",
+                        "July", "August", "September", "October", "November", "December",
+                      ].map((name, idx) => (
+                        <SelectItem key={idx + 1} value={String(idx + 1)}>
+                          {name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    {t("suppliers.seasonStartMonthDescription")}
+                  </p>
+                </div>
+              </div>
             </div>
-          </CardContent>
-        </Card>
 
-        {/* Season Settings */}
-        <Card>
-          <CardHeader>
-            <CardTitle>{t("suppliers.seasonSettings")}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="max-w-sm space-y-2">
-              <Label>{t("suppliers.seasonStartMonth")}</Label>
-              <Select
-                value={form.seasonStartMonth}
-                onValueChange={(v) => { if (v) setForm({ ...form, seasonStartMonth: v }); }}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {[
-                    "January", "February", "March", "April", "May", "June",
-                    "July", "August", "September", "October", "November", "December",
-                  ].map((name, idx) => (
-                    <SelectItem key={idx + 1} value={String(idx + 1)}>
-                      {name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">
-                {t("suppliers.seasonStartMonthDescription")}
-              </p>
+            <Separator />
+
+            {/* Features */}
+            <div>
+              <h3 className="text-sm font-semibold mb-3">{t("suppliers.features")}</h3>
+              <p className="text-xs text-muted-foreground mb-3">{t("suppliers.featuresDescription")}</p>
+              <div className="grid gap-2 sm:grid-cols-2 max-w-md">
+                {/* Always-on features (disabled checkboxes) */}
+                {([
+                  { label: t("suppliers.featureDashboard") },
+                  { label: t("suppliers.featureDocuments") },
+                ]).map(({ label }) => (
+                  <label key={label} className="flex items-center gap-2 opacity-60 cursor-not-allowed">
+                    <Checkbox checked={true} disabled />
+                    <span className="text-sm">{label}</span>
+                  </label>
+                ))}
+                {/* Togglable features */}
+                {([
+                  { key: "featureSales" as const, label: t("suppliers.featureSales") },
+                  { key: "featureQuality" as const, label: t("suppliers.featureQuality") },
+                  { key: "featureForecasts" as const, label: t("suppliers.featureForecasts") },
+                  { key: "fustEnabled" as const, label: t("suppliers.featureFust") },
+                ]).map(({ key, label }) => (
+                  <label key={key} className="flex items-center gap-2 cursor-pointer">
+                    <Checkbox
+                      checked={form[key]}
+                      onCheckedChange={(checked: boolean) => setForm({ ...form, [key]: checked })}
+                    />
+                    <span className="text-sm">{label}</span>
+                  </label>
+                ))}
+              </div>
             </div>
           </CardContent>
         </Card>

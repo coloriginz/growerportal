@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { requireAuth, resolveSupplierId } from "@/lib/api-helpers";
+import { requireAuth, resolveSupplierId, buildSupplierScope } from "@/lib/api-helpers";
 import { startOfDay, subDays, startOfWeek, startOfMonth, startOfYear, format, getISOWeek, setISOWeek, setYear, endOfISOWeek, startOfISOWeek } from "date-fns";
 import { getSeasonStart } from "@/lib/season";
 
@@ -14,6 +14,7 @@ export async function GET(request: NextRequest) {
   const weekNumber = params.get("week") ? parseInt(params.get("week")!) : null;
   const yearParam = params.get("year") ? parseInt(params.get("year")!) : null;
   const supplierId = resolveSupplierId(session!, requestedSupplierId);
+  const scope = buildSupplierScope(session!);
 
   // Multi-select filters
   const filterProducts = params.getAll("product");
@@ -21,7 +22,7 @@ export async function GET(request: NextRequest) {
   const filterStemLengths = params.getAll("stemLength").map((s) => parseInt(s));
   const filterGrowerIds = params.getAll("grower");
 
-  if (!supplierId) {
+  if (!supplierId && !scope) {
     return NextResponse.json({
       totalStems: 0, totalTurnover: 0, avgPrice: 0,
       bySalesType: [], byProduct: [], byGrower: [], daily: [],
@@ -82,7 +83,9 @@ export async function GET(request: NextRequest) {
     : { gte: dateFrom };
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const lotFilter: Record<string, any> = { supplierId };
+  const lotFilter: Record<string, any> = supplierId
+    ? { supplierId }
+    : { supplier: scope };
   if (filterProducts.length > 0) lotFilter.productName = { in: filterProducts };
   if (filterStemLengths.length > 0) lotFilter.stemLength = { in: filterStemLengths };
   if (filterGrowerIds.length > 0) lotFilter.growerId = { in: filterGrowerIds };
@@ -185,7 +188,7 @@ export async function GET(request: NextRequest) {
     lyTo.setFullYear(lyTo.getFullYear() - 1);
     const lyTotals = await prisma.transaction.aggregate({
       where: {
-        lot: { supplierId },
+        lot: supplierId ? { supplierId } : { supplier: scope },
         date: { gte: lyFrom, lte: lyTo },
       },
       _sum: { stems: true, amount: true },

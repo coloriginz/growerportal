@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
@@ -74,11 +75,14 @@ interface LotDetailProps {
 
 export function LotDetail({ lot }: LotDetailProps) {
   const { t } = useLanguage();
+  const searchParams = useSearchParams();
+  const supplierId = searchParams.get("supplierId");
+  const backHref = supplierId ? `/lots?supplierId=${supplierId}` : "/lots";
   return (
     <div className="page-content">
       {/* Header */}
       <div className="flex items-center gap-4">
-        <Link href="/lots">
+        <Link href={backHref}>
           <Button variant="ghost" size="icon" className="shrink-0">
             <RiArrowLeftLine className="h-5 w-5" />
           </Button>

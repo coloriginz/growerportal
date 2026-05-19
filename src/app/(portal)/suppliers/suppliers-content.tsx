@@ -30,7 +30,17 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { RiAddLine, RiSearchLine, RiPlantLine } from "@remixicon/react";
+import {
+  RiAddLine,
+  RiSearchLine,
+  RiPlantLine,
+  RiLineChartLine,
+  RiShieldCheckLine,
+  RiCalendarScheduleLine,
+  RiInboxArchiveLine,
+  RiUserLine,
+} from "@remixicon/react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useLanguage } from "@/components/providers/language-provider";
 import { toast } from "sonner";
 import { FabricRelationsTab } from "./fabric-relations-tab";
@@ -48,7 +58,12 @@ interface SupplierRow {
   company: string | null;
   country: string | null;
   companyEntity: { id: string; name: string; slug: string } | null;
-  commercie: { id: string; name: string } | null;
+  accountManagerName: string | null;
+  accountManagerLinked: boolean;
+  featureSales: boolean;
+  featureQuality: boolean;
+  featureForecasts: boolean;
+  fustEnabled: boolean;
   loginStatus: "active" | "pending" | "none";
   userCount: number;
   growerCount: number;
@@ -166,9 +181,10 @@ export function SuppliersContent({ isAdmin }: { isAdmin?: boolean }) {
                 <TableHead>{t("suppliers.code")}</TableHead>
                 <TableHead>{t("suppliers.name")}</TableHead>
                 <TableHead>{t("suppliers.company")}</TableHead>
-                <TableHead>Brand</TableHead>
+                <TableHead>{t("suppliers.owner")}</TableHead>
                 <TableHead>{t("suppliers.country")}</TableHead>
                 <TableHead>{t("suppliers.accountManager")}</TableHead>
+                <TableHead>{t("suppliers.features")}</TableHead>
                 <TableHead>Growers</TableHead>
                 <TableHead>{t("common.status")}</TableHead>
               </TableRow>
@@ -191,8 +207,32 @@ export function SuppliersContent({ isAdmin }: { isAdmin?: boolean }) {
                   <TableCell className="text-muted-foreground">
                     {supplier.country || "-"}
                   </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {supplier.commercie ? supplier.commercie.name : "-"}
+                  <TableCell>
+                    {supplier.accountManagerName ? (
+                      <span className={`flex items-center gap-1.5 ${supplier.accountManagerLinked ? "text-muted-foreground" : "text-muted-foreground/50"}`}>
+                        {supplier.accountManagerName}
+                        <RiUserLine className={`h-3.5 w-3.5 ${supplier.accountManagerLinked ? "text-foreground" : "text-muted-foreground/30"}`} />
+                      </span>
+                    ) : <span className="text-muted-foreground">-</span>}
+                  </TableCell>
+                  <TableCell>
+                    <TooltipProvider delay={200}>
+                      <div className="flex items-center gap-1">
+                        {([
+                          { icon: RiLineChartLine, active: supplier.featureSales, label: t("suppliers.featureSales") },
+                          { icon: RiShieldCheckLine, active: supplier.featureQuality, label: t("suppliers.featureQuality") },
+                          { icon: RiCalendarScheduleLine, active: supplier.featureForecasts, label: t("suppliers.featureForecasts") },
+                          { icon: RiInboxArchiveLine, active: supplier.fustEnabled, label: t("suppliers.featureFust") },
+                        ]).map(({ icon: Icon, active, label }) => (
+                          <Tooltip key={label}>
+                            <TooltipTrigger render={<span />}>
+                              <Icon className={`h-4 w-4 ${active ? "text-foreground" : "text-muted-foreground/30"}`} />
+                            </TooltipTrigger>
+                            <TooltipContent>{label}</TooltipContent>
+                          </Tooltip>
+                        ))}
+                      </div>
+                    </TooltipProvider>
                   </TableCell>
                   <TableCell className="text-muted-foreground">
                     {supplier.growerCount || "-"}
@@ -202,7 +242,7 @@ export function SuppliersContent({ isAdmin }: { isAdmin?: boolean }) {
               ))}
               {filtered.length === 0 && !loading && (
                 <TableRow className="hover:bg-transparent">
-                  <TableCell colSpan={8} className="py-0">
+                  <TableCell colSpan={9} className="py-0">
                     <div className="empty-state">
                       <div className="empty-state-icon">
                         <RiPlantLine />
@@ -264,7 +304,7 @@ export function SuppliersContent({ isAdmin }: { isAdmin?: boolean }) {
               </div>
               {companies.length > 0 && (
                 <div className="space-y-2">
-                  <Label>Brand</Label>
+                  <Label>{t("suppliers.owner")}</Label>
                   <Select
                     value={formData.companyId || "none"}
                     onValueChange={(v) => { if (v !== null) setFormData({ ...formData, companyId: v === "none" ? "" : v }); }}

@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from "react";
 import Link from "next/link";
+import { SelectSupplierPrompt } from "@/components/ui/select-supplier-prompt";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   Table,
@@ -60,6 +61,7 @@ const statusVariant: Record<LotStatus, "default" | "secondary" | "destructive" |
 };
 
 export function LotsContent({ supplierId }: { supplierId: string | null }) {
+  if (!supplierId) return <SelectSupplierPrompt />;
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const { t } = useLanguage();

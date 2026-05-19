@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { SelectSupplierPrompt } from "@/components/ui/select-supplier-prompt";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
@@ -42,6 +43,7 @@ interface SupplierProfile {
 }
 
 export function ProfileContent({ supplierId }: { supplierId: string | null }) {
+  if (!supplierId) return <SelectSupplierPrompt />;
   const [profile, setProfile] = useState<SupplierProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [changeMessage, setChangeMessage] = useState("");

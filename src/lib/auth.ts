@@ -18,7 +18,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
         const user = await prisma.user.findUnique({
           where: { email: credentials.email as string },
-          include: { supplier: true },
+          include: { supplier: true, companies: { select: { id: true } } },
         });
 
         if (!user || !user.passwordHash || !user.isActive) {
@@ -42,6 +42,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           supplierId: user.supplierId,
           supplierCode: user.supplier?.code,
           transporterId: user.transporterId,
+          kbtCode: user.kbtCode,
+          companyIds: user.companies.map((c) => c.id),
         };
       },
     }),
@@ -56,18 +58,22 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         token.supplierId = user.supplierId;
         token.supplierCode = user.supplierCode;
         token.transporterId = user.transporterId;
+        token.kbtCode = user.kbtCode;
+        token.companyIds = user.companyIds;
       }
       // Re-read from DB when client calls update() (e.g. after profile change)
       if (trigger === "update" && updateData?.refreshFromDb) {
         const dbUser = await prisma.user.findUnique({
           where: { id: token.sub! },
-          include: { supplier: true },
+          include: { supplier: true, companies: { select: { id: true } } },
         });
         if (dbUser) {
           token.role = dbUser.role;
           token.supplierId = dbUser.supplierId;
           token.supplierCode = dbUser.supplier?.code ?? null;
           token.transporterId = dbUser.transporterId;
+          token.kbtCode = dbUser.kbtCode;
+          token.companyIds = dbUser.companies.map((c) => c.id);
         }
       }
       // Test mode role override — only stored in JWT, not in DB.
@@ -102,6 +108,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         session.user.supplierId = token.supplierId as string | null;
         session.user.supplierCode = token.supplierCode as string | null;
         session.user.transporterId = token.transporterId as string | null;
+        session.user.kbtCode = (token.kbtCode as string) || null;
+        session.user.companyIds = (token.companyIds as string[]) || [];
       }
       return session;
     },

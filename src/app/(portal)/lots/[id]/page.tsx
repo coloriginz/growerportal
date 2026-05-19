@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { auth } from "@/lib/auth";
@@ -42,5 +43,5 @@ export default async function LotDetailPage({ params }: Props) {
     return notFound();
   }
 
-  return <LotDetail lot={JSON.parse(JSON.stringify(lot))} />;
+  return <Suspense><LotDetail lot={JSON.parse(JSON.stringify(lot))} /></Suspense>;
 }

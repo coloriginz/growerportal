@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { put } from "@vercel/blob";
 import { prisma } from "@/lib/db";
-import { requireAuth, resolveSupplierId } from "@/lib/api-helpers";
+import { requireAuth, resolveSupplierId, buildSupplierScope } from "@/lib/api-helpers";
 import { DOCUMENT_TYPES } from "@/types";
 
 export async function GET(request: NextRequest) {
@@ -10,13 +10,16 @@ export async function GET(request: NextRequest) {
 
   const requestedSupplierId = request.nextUrl.searchParams.get("supplierId");
   const supplierId = resolveSupplierId(session!, requestedSupplierId);
+  const scope = buildSupplierScope(session!);
 
-  if (!supplierId) {
+  if (!supplierId && !scope) {
     return NextResponse.json([]);
   }
 
+  const docWhere = supplierId ? { supplierId } : { supplier: scope };
+
   const documents = await prisma.document.findMany({
-    where: { supplierId },
+    where: docWhere,
     orderBy: { createdAt: "desc" },
   });
 

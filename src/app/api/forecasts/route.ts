@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
-import { requireAuth, resolveSupplierId } from "@/lib/api-helpers";
+import { requireAuth, resolveSupplierId, buildSupplierScope } from "@/lib/api-helpers";
 
 const forecastSchema = z.object({
   productName: z.string().min(1),
@@ -30,8 +30,9 @@ export async function GET(request: NextRequest) {
   const params = request.nextUrl.searchParams;
   const requestedSupplierId = params.get("supplierId");
   const supplierId = resolveSupplierId(session!, requestedSupplierId);
+  const scope = buildSupplierScope(session!);
 
-  if (!supplierId) {
+  if (!supplierId && !scope) {
     return NextResponse.json({ forecasts: [], products: [] });
   }
 
@@ -48,9 +49,12 @@ export async function GET(request: NextRequest) {
   }
 
   // Fetch forecasts in the given week range
+  const forecastBaseWhere = supplierId
+    ? { supplierId }
+    : { supplier: scope };
   const forecasts = await prisma.shipmentForecast.findMany({
     where: {
-      supplierId,
+      ...forecastBaseWhere,
       OR: [
         // Same year: week between from and to
         {
@@ -73,8 +77,9 @@ export async function GET(request: NextRequest) {
   });
 
   // Get distinct product names from historical lots for autocomplete
+  const lotWhere = supplierId ? { supplierId } : { supplier: scope };
   const lotProducts = await prisma.lot.findMany({
-    where: { supplierId },
+    where: lotWhere,
     select: { productName: true, articleGroup: true },
     distinct: ["productName"],
     orderBy: { productName: "asc" },
@@ -82,7 +87,7 @@ export async function GET(request: NextRequest) {
 
   // Also include products from existing forecasts
   const forecastProducts = await prisma.shipmentForecast.findMany({
-    where: { supplierId },
+    where: forecastBaseWhere,
     select: { productName: true, articleGroup: true },
     distinct: ["productName"],
     orderBy: { productName: "asc" },

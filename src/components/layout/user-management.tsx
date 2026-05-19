@@ -23,6 +23,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -44,9 +45,18 @@ interface UserRow {
   name: string;
   email: string;
   role: string;
+  kbtCode: string | null;
   isActive: boolean;
   transporterId: string | null;
   transporterName: string | null;
+  companyIds: string[];
+  companyNames: string[];
+}
+
+interface CompanyOption {
+  id: string;
+  name: string;
+  slug: string;
 }
 
 interface Transporter {
@@ -86,6 +96,9 @@ export function UserManagement({ allowedRoles, transporters: externalTransporter
   );
   const transporters = externalTransporters ?? fetchedTransporters?.transporters ?? [];
 
+  // Fetch companies (labels)
+  const { data: companies } = useFetch<CompanyOption[]>("/api/companies");
+
   const [saving, setSaving] = useState(false);
   const [editDialog, setEditDialog] = useState<UserRow | "new" | null>(null);
   const [deleteDialog, setDeleteDialog] = useState<UserRow | null>(null);
@@ -94,19 +107,25 @@ export function UserManagement({ allowedRoles, transporters: externalTransporter
   const [formName, setFormName] = useState("");
   const [formEmail, setFormEmail] = useState("");
   const [formRole, setFormRole] = useState<string>(allowedRoles[0]);
+  const [formKbtCode, setFormKbtCode] = useState("");
   const [formTransporterId, setFormTransporterId] = useState<string | null>(null);
+  const [formCompanyIds, setFormCompanyIds] = useState<string[]>([]);
 
   const openDialog = (user: UserRow | "new") => {
     if (user === "new") {
       setFormName("");
       setFormEmail("");
       setFormRole(allowedRoles[0]);
+      setFormKbtCode("");
       setFormTransporterId(null);
+      setFormCompanyIds([]);
     } else {
       setFormName(user.name);
       setFormEmail(user.email);
       setFormRole(user.role);
+      setFormKbtCode(user.kbtCode || "");
       setFormTransporterId(user.transporterId);
+      setFormCompanyIds(user.companyIds);
     }
     setEditDialog(user);
   };
@@ -130,6 +149,8 @@ export function UserManagement({ allowedRoles, transporters: externalTransporter
         name: formName.trim(),
         email: formEmail.trim(),
         role: formRole,
+        kbtCode: formKbtCode.trim() || null,
+        companyIds: formCompanyIds,
       };
       if (formRole === "transporteur") {
         body.transporterId = formTransporterId;
@@ -219,6 +240,8 @@ export function UserManagement({ allowedRoles, transporters: externalTransporter
               <TableHead>{t("fust.name")}</TableHead>
               <TableHead>{t("fust.email")}</TableHead>
               <TableHead>{t("admin.role")}</TableHead>
+              <TableHead>{t("admin.kbtCode")}</TableHead>
+              <TableHead>{t("admin.labels")}</TableHead>
               {showTransporter && <TableHead>{t("fust.transporter")}</TableHead>}
               <TableHead>{t("common.status")}</TableHead>
               <TableHead className="w-28" />
@@ -235,6 +258,14 @@ export function UserManagement({ allowedRoles, transporters: externalTransporter
                 <TableCell className="text-muted-foreground">{user.email}</TableCell>
                 <TableCell>
                   <Badge variant="secondary">{ROLE_LABELS[user.role as Role] ?? user.role}</Badge>
+                </TableCell>
+                <TableCell className="text-muted-foreground">{user.kbtCode || "-"}</TableCell>
+                <TableCell>
+                  {user.companyNames.length > 0
+                    ? user.companyNames.map((name) => (
+                        <Badge key={name} variant="outline" className="mr-1">{name}</Badge>
+                      ))
+                    : "-"}
                 </TableCell>
                 {showTransporter && (
                   <TableCell>{user.transporterName || "-"}</TableCell>
@@ -287,7 +318,7 @@ export function UserManagement({ allowedRoles, transporters: externalTransporter
             ))}
             {users.length === 0 && (
               <TableRow>
-                <TableCell colSpan={showTransporter ? 6 : 5} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={showTransporter ? 8 : 7} className="text-center text-muted-foreground py-8">
                   No users found
                 </TableCell>
               </TableRow>
@@ -339,6 +370,37 @@ export function UserManagement({ allowedRoles, transporters: externalTransporter
                 </SelectContent>
               </Select>
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="user-kbtcode">{t("admin.kbtCode")}</Label>
+              <Input
+                id="user-kbtcode"
+                value={formKbtCode}
+                onChange={(e) => setFormKbtCode(e.target.value)}
+                placeholder=""
+              />
+            </div>
+            {companies && companies.length > 0 && (
+              <div className="space-y-2">
+                <Label>{t("admin.labels")}</Label>
+                <div className="space-y-2">
+                  {companies.map((company) => (
+                    <label key={company.id} className="flex items-center gap-2 cursor-pointer">
+                      <Checkbox
+                        checked={formCompanyIds.includes(company.id)}
+                        onCheckedChange={(checked: boolean) => {
+                          setFormCompanyIds((prev) =>
+                            checked
+                              ? [...prev, company.id]
+                              : prev.filter((cid) => cid !== company.id)
+                          );
+                        }}
+                      />
+                      <span className="text-sm">{company.name}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
             {formRole === "transporteur" && (
               <div className="space-y-2">
                 <Label>

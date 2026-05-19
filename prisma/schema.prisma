@@ -23,6 +23,7 @@ model Company {
   updatedAt  DateTime @updatedAt
 
   suppliers Supplier[]
+  users     User[]     @relation("UserCompanies")
 }
 
 // ─── USERS & AUTH ────────────────────────────────────────
@@ -33,6 +34,7 @@ model User {
   passwordHash   String?
   name           String
   role           String   @default("supplier") // supplier, commercie, admin, transporteur, finance
+  kbtCode        String?  // KBT identifier for account linking
   isActive       Boolean  @default(false)
   activationToken    String?   @unique
   resetToken         String?   @unique
@@ -45,6 +47,9 @@ model User {
   supplier       Supplier? @relation(fields: [supplierId], references: [id])
 
   @@index([supplierId])
+
+  // Label access: which companies/labels this user can see
+  companies      Company[] @relation("UserCompanies")
 
   // Commercie: suppliers assigned to this user
   assignedSuppliers Supplier[] @relation("CommercieSuppliers")
@@ -83,6 +88,11 @@ model Supplier {
   commercie      User?    @relation("CommercieSuppliers", fields: [commercieId], references: [id])
   commercieId    String?
   seasonStartMonth Int @default(1) // 1=Jan, 10=Oct, etc.
+
+  // Feature toggles (which sections suppliers can see)
+  featureSales     Boolean @default(true)  // Verkopen + Leveringen
+  featureQuality   Boolean @default(true)  // Kwaliteit
+  featureForecasts Boolean @default(true)  // Aanvoerplanning
 
   // Company branding
   companyId      String?

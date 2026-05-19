@@ -44,6 +44,16 @@ export async function GET(
     return NextResponse.json({ error: "Supplier not found" }, { status: 404 });
   }
 
+  // Look up linked user account for the account manager code
+  let accountManagerUser: { id: string; name: string; email: string } | null = null;
+  if (supplier.accountManagerCode) {
+    const matched = await prisma.user.findFirst({
+      where: { kbtCode: supplier.accountManagerCode },
+      select: { id: true, name: true, email: true },
+    });
+    accountManagerUser = matched;
+  }
+
   return NextResponse.json({
     id: supplier.id,
     code: supplier.code,
@@ -61,7 +71,14 @@ export async function GET(
     commercieId: supplier.commercieId,
     companyId: supplier.companyId,
     companyEntity: supplier.companyEntity,
+    accountManagerCode: supplier.accountManagerCode,
+    accountManagerName: supplier.accountManagerName,
+    accountManagerUser,
     seasonStartMonth: supplier.seasonStartMonth,
+    featureSales: supplier.featureSales,
+    featureQuality: supplier.featureQuality,
+    featureForecasts: supplier.featureForecasts,
+    fustEnabled: supplier.fustEnabled,
     certificates: supplier.certificates.map((c) => ({
       id: c.id,
       type: c.type,
@@ -99,6 +116,10 @@ const updateSupplierSchema = z.object({
   companyId: z.string().nullable().optional(),
   seasonStartMonth: z.number().int().min(1).max(12).optional(),
   preferredLanguage: z.enum(["en", "nl"]).optional(),
+  featureSales: z.boolean().optional(),
+  featureQuality: z.boolean().optional(),
+  featureForecasts: z.boolean().optional(),
+  fustEnabled: z.boolean().optional(),
 });
 
 export async function PUT(

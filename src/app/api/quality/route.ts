@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { requireAuth, resolveSupplierId } from "@/lib/api-helpers";
+import { requireAuth, resolveSupplierId, buildSupplierScope } from "@/lib/api-helpers";
 import { getSeasonStart } from "@/lib/season";
 
 export async function GET(request: NextRequest) {
@@ -9,16 +9,19 @@ export async function GET(request: NextRequest) {
 
   const requestedSupplierId = request.nextUrl.searchParams.get("supplierId");
   const supplierId = resolveSupplierId(session!, requestedSupplierId);
+  const scope = buildSupplierScope(session!);
 
-  if (!supplierId) {
+  if (!supplierId && !scope) {
     return NextResponse.json({
       summary: { totalIssues: 0, totalAffectedStems: 0, qualityRate: 100, mostCommonIssue: null },
       issues: [],
     });
   }
 
+  const issueWhere = supplierId ? { supplierId } : { supplier: scope };
+
   const issues = await prisma.qualityIssue.findMany({
-    where: { supplierId },
+    where: issueWhere,
     include: {
       lot: { select: { id: true, lotNumber: true, productName: true } },
     },
@@ -26,18 +29,21 @@ export async function GET(request: NextRequest) {
   });
 
   // Summary stats (Season to Date)
-  const supplierRecord = await prisma.supplier.findUnique({
-    where: { id: supplierId },
-    select: { seasonStartMonth: true },
-  });
+  const supplierRecord = supplierId
+    ? await prisma.supplier.findUnique({
+        where: { id: supplierId },
+        select: { seasonStartMonth: true },
+      })
+    : null;
   const ytdStart = getSeasonStart(new Date(), supplierRecord?.seasonStartMonth ?? 1);
   const ytdIssues = issues.filter((i) => i.date >= ytdStart);
   const totalAffectedStems = ytdIssues.reduce((sum, i) => sum + i.stems, 0);
 
   // Total stems YTD for quality rate
+  const txWhere = supplierId ? { lot: { supplierId } } : { lot: { supplier: scope } };
   const totalStemsAgg = await prisma.transaction.aggregate({
     where: {
-      lot: { supplierId },
+      ...txWhere,
       date: { gte: ytdStart },
     },
     _sum: { stems: true },

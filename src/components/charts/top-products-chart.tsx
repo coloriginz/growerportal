@@ -52,7 +52,7 @@ export function TopProductsChart({ data }: TopProductsChartProps) {
           width={120}
           tick={{ fill: "currentColor" }} className="text-muted-foreground"
         />
-        <Tooltip content={<CustomTooltip />} />
+        <Tooltip content={<CustomTooltip />} cursor={{ fill: "rgba(0,0,0,0.04)" }} />
         <Bar
           dataKey="stems"
           name="Stems"

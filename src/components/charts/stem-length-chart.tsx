@@ -51,7 +51,7 @@ export function StemLengthChart({ data }: StemLengthChartProps) {
           tick={{ fill: "currentColor" }}
           className="text-muted-foreground"
         />
-        <Tooltip content={<CustomTooltip />} />
+        <Tooltip content={<CustomTooltip />} cursor={{ fill: "rgba(0,0,0,0.04)" }} />
         <Bar dataKey="stems" name="Stems" radius={[4, 4, 0, 0]}>
           {data.map((_, index) => (
             <Cell key={index} fill={getChartColor(index)} />

@@ -22,6 +22,7 @@ export async function GET(request: NextRequest) {
     },
     include: {
       transporter: { select: { id: true, name: true } },
+      companies: { select: { id: true, name: true } },
     },
     orderBy: { createdAt: "desc" },
   });
@@ -32,9 +33,12 @@ export async function GET(request: NextRequest) {
       name: u.name,
       email: u.email,
       role: u.role,
+      kbtCode: u.kbtCode,
       isActive: u.isActive,
       transporterId: u.transporterId,
       transporterName: u.transporter?.name ?? null,
+      companyIds: u.companies.map((c) => c.id),
+      companyNames: u.companies.map((c) => c.name),
     }))
   );
 }
@@ -43,7 +47,9 @@ const createUserSchema = z.object({
   name: z.string().min(1),
   email: z.string().email(),
   role: z.enum(ROLES as unknown as [string, ...string[]]),
+  kbtCode: z.string().nullable().optional(),
   transporterId: z.string().uuid().nullable().optional(),
+  companyIds: z.array(z.string().uuid()).optional(),
 });
 
 export async function POST(request: NextRequest) {
@@ -57,7 +63,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  const { name, email, role, transporterId } = parsed.data;
+  const { name, email, role, kbtCode, transporterId, companyIds } = parsed.data;
 
   // Transporteur role requires a transporter link
   if (role === "transporteur" && !transporterId) {
@@ -77,9 +83,11 @@ export async function POST(request: NextRequest) {
       name,
       email,
       role,
+      kbtCode: kbtCode || null,
       transporterId: role === "transporteur" ? transporterId : null,
       activationToken,
       isActive: false,
+      companies: companyIds?.length ? { connect: companyIds.map((id) => ({ id })) } : undefined,
     },
   });
 

@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import Link from "next/link";
+import { SelectSupplierPrompt } from "@/components/ui/select-supplier-prompt";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
@@ -55,6 +56,7 @@ interface QualityData {
 }
 
 export function QualityContent({ supplierId }: { supplierId: string | null }) {
+  if (!supplierId) return <SelectSupplierPrompt />;
   const { t } = useLanguage();
 
   const url = useMemo(() => {

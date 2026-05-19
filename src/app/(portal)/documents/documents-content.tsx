@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
+import { SelectSupplierPrompt } from "@/components/ui/select-supplier-prompt";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   Table,
@@ -53,6 +54,7 @@ interface DocumentRow {
 }
 
 export function DocumentsContent({ supplierId }: { supplierId: string | null }) {
+  if (!supplierId) return <SelectSupplierPrompt />;
   const [documents, setDocuments] = useState<DocumentRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [typeFilter, setTypeFilter] = useState<string>("all");

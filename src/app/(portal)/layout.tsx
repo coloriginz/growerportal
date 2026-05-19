@@ -15,21 +15,33 @@ export default async function PortalLayout({
     redirect("/login");
   }
 
-  // Check fustEnabled and company branding for supplier users
+  // Check feature flags and company branding for supplier users
   let fustEnabled = false;
+  let featureSales = true;
+  let featureQuality = true;
+  let featureForecasts = true;
   let companySlug: string | null = null;
   if (session.user.role === "supplier" && session.user.supplierId) {
     const supplier = await prisma.supplier.findUnique({
       where: { id: session.user.supplierId },
-      select: { fustEnabled: true, companyEntity: { select: { slug: true } } },
+      select: {
+        fustEnabled: true,
+        featureSales: true,
+        featureQuality: true,
+        featureForecasts: true,
+        companyEntity: { select: { slug: true } },
+      },
     });
     fustEnabled = supplier?.fustEnabled ?? false;
+    featureSales = supplier?.featureSales ?? true;
+    featureQuality = supplier?.featureQuality ?? true;
+    featureForecasts = supplier?.featureForecasts ?? true;
     companySlug = supplier?.companyEntity?.slug ?? null;
   }
 
   return (
     <Suspense>
-      <AppShell user={{ ...session.user, fustEnabled, companySlug }}>{children}</AppShell>
+      <AppShell user={{ ...session.user, fustEnabled, featureSales, featureQuality, featureForecasts, companySlug }}>{children}</AppShell>
     </Suspense>
   );
 }

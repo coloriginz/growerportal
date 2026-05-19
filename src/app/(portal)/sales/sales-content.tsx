@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import { SelectSupplierPrompt } from "@/components/ui/select-supplier-prompt";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -42,10 +43,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useRef } from "react";
 import { getISOWeek } from "date-fns";
 import { MultiSelectFilter } from "@/components/ui/multi-select-filter";
 import { RiFilterOffLine } from "@remixicon/react";
 import { PriceTrendChart } from "@/components/charts/price-trend-chart";
+import { getChartColor } from "@/lib/chart-colors";
 import { StemLengthChart } from "@/components/charts/stem-length-chart";
 import { ChannelDistributionChart } from "@/components/charts/channel-distribution-chart";
 
@@ -78,6 +81,7 @@ interface SalesData {
 type Period = "today" | "yesterday" | "week" | "month" | "ytd" | "weeknr" | "custom";
 
 export function SalesContent({ supplierId }: { supplierId: string | null }) {
+  if (!supplierId) return <SelectSupplierPrompt />;
   const [period, setPeriod] = useState<Period>("ytd");
   const currentWeek = getISOWeek(new Date());
   const currentYear = new Date().getFullYear();
@@ -89,6 +93,9 @@ export function SalesContent({ supplierId }: { supplierId: string | null }) {
   const [filterSalesTypes, setFilterSalesTypes] = useState<string[]>([]);
   const [filterStemLengths, setFilterStemLengths] = useState<string[]>([]);
   const [filterGrowers, setFilterGrowers] = useState<string[]>([]);
+  const [trendGranularity, setTrendGranularity] = useState<"week" | "month" | "year">("week");
+  const [selectedTrendProducts, setSelectedTrendProducts] = useState<string[]>([]);
+  const prevTrendsKey = useRef("");
   const { t } = useLanguage();
 
   // Fetch available filter options
@@ -133,6 +140,7 @@ export function SalesContent({ supplierId }: { supplierId: string | null }) {
   const trendsUrl = useMemo(() => {
     const params = new URLSearchParams();
     if (supplierId) params.set("supplierId", supplierId);
+    params.set("granularity", trendGranularity);
     for (const p of filterProducts) params.append("product", p);
     for (const s of filterSalesTypes) params.append("salesType", s);
     for (const l of filterStemLengths) params.append("stemLength", l.replace(" cm", ""));
@@ -141,8 +149,15 @@ export function SalesContent({ supplierId }: { supplierId: string | null }) {
       if (g) params.append("grower", g.id);
     }
     return `/api/sales/trends?${params}`;
-  }, [supplierId, filterProducts, filterSalesTypes, filterStemLengths, filterGrowers, filterOptions]);
+  }, [supplierId, trendGranularity, filterProducts, filterSalesTypes, filterStemLengths, filterGrowers, filterOptions]);
   const { data: trends } = useFetch<TrendsData>(trendsUrl);
+
+  // Auto-select top 3 products when product list changes
+  const trendsProductsKey = trends?.products?.join(",") ?? "";
+  if (trendsProductsKey !== prevTrendsKey.current && trendsProductsKey !== "") {
+    prevTrendsKey.current = trendsProductsKey;
+    setSelectedTrendProducts((trends?.products ?? []).slice(0, 3));
+  }
 
   if (error) {
     return (
@@ -472,29 +487,75 @@ export function SalesContent({ supplierId }: { supplierId: string | null }) {
         </>
       )}
 
-      {/* Yearly trends section */}
+      {/* Trends section */}
       {trends && (
         <>
-          <h2 className="text-lg font-semibold mt-4">{t("sales.yearlyTrends")}</h2>
+          <div className="flex items-center justify-between mt-4">
+            <h2 className="text-lg font-semibold">{t("sales.yearlyTrends")}</h2>
+            <Tabs value={trendGranularity} onValueChange={(v) => setTrendGranularity(v as "week" | "month" | "year")}>
+              <TabsList className="h-8">
+                <TabsTrigger value="week" className="text-xs px-3 h-6">{t("sales.granularityWeek")}</TabsTrigger>
+                <TabsTrigger value="month" className="text-xs px-3 h-6">{t("sales.granularityMonth")}</TabsTrigger>
+                <TabsTrigger value="year" className="text-xs px-3 h-6">{t("sales.granularityYear")}</TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </div>
 
           {trends.priceTrend.length > 0 && trends.products.length > 0 && (
             <Card>
               <CardHeader>
-                <CardTitle>{t("sales.priceTrend")}</CardTitle>
+                <div className="flex items-center justify-between">
+                  <CardTitle>{t("sales.priceTrend")}</CardTitle>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setSelectedTrendProducts(trends.products.slice(0, 3))}
+                      className={`text-xs px-2 py-0.5 rounded-md transition-colors ${selectedTrendProducts.length <= 3 && selectedTrendProducts.every(p => trends.products.slice(0, 3).includes(p)) ? "bg-accent text-accent-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                    >
+                      {t("sales.topProducts")}
+                    </button>
+                    <button
+                      onClick={() => setSelectedTrendProducts([...trends.products])}
+                      className={`text-xs px-2 py-0.5 rounded-md transition-colors ${selectedTrendProducts.length === trends.products.length ? "bg-accent text-accent-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                    >
+                      {t("sales.allProducts")}
+                    </button>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  {trends.products.map((product, index) => {
+                    const isSelected = selectedTrendProducts.includes(product);
+                    const color = getChartColor(index);
+                    return (
+                      <button
+                        key={product}
+                        onClick={() => {
+                          setSelectedTrendProducts((prev) =>
+                            prev.includes(product)
+                              ? prev.filter((p) => p !== product)
+                              : [...prev, product]
+                          );
+                        }}
+                        className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium transition-all border ${
+                          isSelected
+                            ? "text-white border-transparent"
+                            : "bg-transparent border-border text-muted-foreground opacity-60 hover:opacity-100"
+                        }`}
+                        style={isSelected ? { backgroundColor: color } : undefined}
+                      >
+                        {!isSelected && (
+                          <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: color }} />
+                        )}
+                        {product}
+                      </button>
+                    );
+                  })}
+                </div>
               </CardHeader>
               <CardContent>
-                <PriceTrendChart data={trends.priceTrend} products={trends.products} />
-              </CardContent>
-            </Card>
-          )}
-
-          {trends.stemLengthBreakdown.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle>{t("sales.stemLengthBreakdown")}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <StemLengthChart data={trends.stemLengthBreakdown} />
+                <PriceTrendChart
+                  data={trends.priceTrend}
+                  products={selectedTrendProducts.filter((p) => trends.products.includes(p))}
+                />
               </CardContent>
             </Card>
           )}
@@ -506,6 +567,17 @@ export function SalesContent({ supplierId }: { supplierId: string | null }) {
               </CardHeader>
               <CardContent>
                 <ChannelDistributionChart data={trends.channelDistribution} channels={trends.channels} />
+              </CardContent>
+            </Card>
+          )}
+
+          {trends.stemLengthBreakdown.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle>{t("sales.stemLengthBreakdown")}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <StemLengthChart data={trends.stemLengthBreakdown} />
               </CardContent>
             </Card>
           )}

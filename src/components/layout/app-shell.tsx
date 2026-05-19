@@ -53,6 +53,9 @@ interface AppShellProps {
     role: string;
     supplierId: string | null;
     fustEnabled?: boolean;
+    featureSales?: boolean;
+    featureQuality?: boolean;
+    featureForecasts?: boolean;
     companySlug?: string | null;
   };
   children: React.ReactNode;
@@ -142,6 +145,12 @@ export function AppShell({ user, children }: AppShellProps) {
   ).filter((item) => {
     // Transporteur only sees fust items, no main portal pages
     if (!portalRoles.includes(userRole)) return false;
+    // Feature flag filtering for supplier users
+    if (userRole === "supplier") {
+      if ((item.href === "/sales" || item.href === "/shipments") && !user.featureSales) return false;
+      if (item.href === "/quality" && !user.featureQuality) return false;
+      if (item.href === "/forecasts" && !user.featureForecasts) return false;
+    }
     return true;
   });
 

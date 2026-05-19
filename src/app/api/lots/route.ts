@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { requireAuth, resolveSupplierId } from "@/lib/api-helpers";
+import { requireAuth, resolveSupplierId, buildSupplierScope } from "@/lib/api-helpers";
 
 export async function GET(request: NextRequest) {
   const { error, session } = await requireAuth();
@@ -8,13 +8,16 @@ export async function GET(request: NextRequest) {
 
   const requestedSupplierId = request.nextUrl.searchParams.get("supplierId");
   const supplierId = resolveSupplierId(session!, requestedSupplierId);
+  const scope = buildSupplierScope(session!);
 
-  if (!supplierId) {
+  if (!supplierId && !scope) {
     return NextResponse.json([]);
   }
 
+  const lotWhere = supplierId ? { supplierId } : { supplier: scope };
+
   const lots = await prisma.lot.findMany({
-    where: { supplierId },
+    where: lotWhere,
     include: {
       qualityIssues: { select: { id: true } },
     },

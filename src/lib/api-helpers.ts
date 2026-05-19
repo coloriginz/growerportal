@@ -29,3 +29,33 @@ export function resolveSupplierId(
   }
   return requestedSupplierId;
 }
+
+/**
+ * Builds a Prisma where-clause filter to scope queries to the user's allowed suppliers.
+ * - Admin/finance with company labels: only suppliers belonging to those companies
+ * - Commercie with kbtCode: only suppliers where they are account manager
+ * - Supplier role: only their own supplier
+ * - Admin/finance without labels: no restriction (returns undefined)
+ *
+ * Usage examples:
+ *   On Supplier model:  { ...buildSupplierScope(session) }
+ *   On Lot model:       { supplier: buildSupplierScope(session) }
+ *   On Transaction:     { lot: { supplier: buildSupplierScope(session) } }
+ *   On FustOrder:       { supplier: buildSupplierScope(session) }
+ */
+export function buildSupplierScope(
+  session: { user: { role: string; supplierId: string | null; kbtCode: string | null; companyIds: string[] } }
+): Record<string, unknown> | undefined {
+  const { role, supplierId, kbtCode, companyIds } = session.user;
+
+  if (role === "supplier") {
+    return supplierId ? { id: supplierId } : undefined;
+  }
+  if ((role === "admin" || role === "finance") && companyIds.length > 0) {
+    return { companyId: { in: companyIds } };
+  }
+  if (role === "commercie" && kbtCode) {
+    return { accountManagerCode: kbtCode };
+  }
+  return undefined;
+}

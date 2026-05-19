@@ -40,10 +40,11 @@ export function ChannelDistributionChart({ data, channels }: ChannelDistribution
       <AreaChart data={data}>
         <CartesianGrid strokeDasharray="3 3" vertical={false} className="stroke-border/50" />
         <XAxis
-          dataKey="month"
+          dataKey="period"
           fontSize={12}
           tickLine={false}
           axisLine={false}
+          interval="preserveStartEnd"
           tick={{ fill: "currentColor" }}
           className="text-muted-foreground"
         />
@@ -55,7 +56,7 @@ export function ChannelDistributionChart({ data, channels }: ChannelDistribution
           tick={{ fill: "currentColor" }}
           className="text-muted-foreground"
         />
-        <Tooltip content={<CustomTooltip />} />
+        <Tooltip content={<CustomTooltip />} cursor={{ fill: "rgba(0,0,0,0.04)" }} />
         <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: "12px", paddingTop: "8px" }} />
         {channels.map((channel, index) => (
           <Area

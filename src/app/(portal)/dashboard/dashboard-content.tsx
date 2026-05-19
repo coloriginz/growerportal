@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   RiPlantLine,
   RiMoneyEuroCircleLine,
@@ -20,6 +21,8 @@ import {
   RiCalendarLine,
   RiArrowUpSLine,
   RiArrowDownSLine,
+  RiArrowLeftSLine,
+  RiArrowRightSLine,
   RiShieldCheckLine,
   RiRefreshLine,
   RiDatabase2Line,
@@ -30,8 +33,10 @@ import {
   RiErrorWarningLine,
   RiLoader4Line,
 } from "@remixicon/react";
+import { getISOWeek } from "date-fns";
 import { useLanguage } from "@/components/providers/language-provider";
 import { SalesChart } from "@/components/charts/sales-chart";
+import { TurnoverChart } from "@/components/charts/turnover-chart";
 import { TopProductsChart } from "@/components/charts/top-products-chart";
 import { formatCurrency, formatNumber, formatPrice, formatDate, formatTime } from "@/lib/format";
 import { getSeasonLabel } from "@/lib/season";
@@ -55,8 +60,8 @@ interface ImportBatch {
 interface AggregateData {
   aggregate: true;
   recentImports: ImportBatch[];
-  recentTransactions: { id: string; lotId: string; date: string; salesType: string; stems: number; amount: number; createdAt: string; lotNumber: string; productName: string; supplierCode: string; supplierName: string }[];
-  recentLots: { id: string; lotNumber: string; productName: string; deliveryDate: string | null; totalStems: number; createdAt: string; supplierCode: string; supplierName: string }[];
+  recentTransactions: { id: string; lotId: string; date: string; salesType: string; stems: number; amount: number; createdAt: string; lotNumber: string; productName: string; supplierId: string; supplierCode: string; supplierName: string }[];
+  recentLots: { id: string; lotNumber: string; productName: string; deliveryDate: string | null; totalStems: number; supplierId: string; createdAt: string; supplierCode: string; supplierName: string }[];
   recentSuppliers: { id: string; code: string; name: string; createdAt: string; lotCount: number }[];
   recentGrowers: { id: string; name: string; fabricId: number | null; createdAt: string; supplierCode: string; supplierName: string }[];
   counts: { suppliers: number; growers: number; lots: number; transactions: number; salesSheets: number };
@@ -74,10 +79,11 @@ interface SupplierDashboardData {
   avgPriceYTDLastYear: number;
   netYieldPerStem?: number;
   qualityRate?: number;
-  monthlySales: { month: string; stems: number; turnover: number; lastYearStems: number; lastYearTurnover: number }[];
+  featureQuality?: boolean;
+  // salesChart is fetched separately via /api/dashboard/chart
   topProducts: { name: string; stems: number; turnover: number }[];
   seasonStartMonth?: number;
-  recentLots?: { id: string; lotNumber: string; productName: string; totalStems: number; avgPrice: number; deliveryDate: string; status: string }[];
+  recentShipments?: { id: string; invoiceNumber: string; invoiceDate: string | null; totalTurnover: number; netResult: number; lotCount: number; totalStems: number }[];
 }
 
 type DashboardData = AggregateData | SupplierDashboardData;
@@ -321,7 +327,7 @@ function AdminOverview({ data, lastUpdated, refetch }: { data: AggregateData; la
                     <span className="ml-1.5 text-muted-foreground text-xs">{tx.supplierName}</span>
                   </TableCell>
                   <TableCell className="font-medium tabular-nums">
-                    <Link href={`/lots/${tx.lotId}`} className="text-primary hover:underline">{tx.lotNumber}</Link>
+                    <Link href={`/lots/${tx.lotId}?supplierId=${tx.supplierId}`} className="text-primary hover:underline">{tx.lotNumber}</Link>
                   </TableCell>
                   <TableCell>{tx.productName}</TableCell>
                   <TableCell><Badge variant="outline">{tx.salesType}</Badge></TableCell>
@@ -361,7 +367,7 @@ function AdminOverview({ data, lastUpdated, refetch }: { data: AggregateData; la
               {(lotsExpanded ? data.recentLots : data.recentLots.slice(0, COLLAPSED_ROWS)).map((lot) => (
                 <TableRow key={lot.id}>
                   <TableCell className="font-medium tabular-nums">
-                    <Link href={`/lots/${lot.id}`} className="text-primary hover:underline">{lot.lotNumber}</Link>
+                    <Link href={`/lots/${lot.id}?supplierId=${lot.supplierId}`} className="text-primary hover:underline">{lot.lotNumber}</Link>
                   </TableCell>
                   <TableCell>
                     <span className="font-medium">{lot.supplierCode}</span>
@@ -459,13 +465,41 @@ function formatRelativeTime(isoString: string): string {
   return formatDate(isoString);
 }
 
+type ChartData = { salesChart: { label: string; stems: number; turnover: number; lastYearStems: number; lastYearTurnover: number }[]; topProducts: { name: string; stems: number; turnover: number }[] };
+
 export function DashboardContent({ supplierId }: { supplierId: string | null }) {
   const { t } = useLanguage();
+  const nowWeek = getISOWeek(new Date());
+  const nowYear = new Date().getFullYear();
+  const [chartView, setChartView] = useState<"week" | "month" | "year">("week");
+  const [chartWeek, setChartWeek] = useState(nowWeek);
+  const [chartYear, setChartYear] = useState(nowYear);
+  const [chartMonth, setChartMonth] = useState(new Date().getMonth());
+
+  // KPI data — stable URL, doesn't change when chart navigates
   const url = useMemo(() => {
     const params = supplierId ? `?supplierId=${supplierId}` : "";
     return `/api/dashboard${params}`;
   }, [supplierId]);
   const { data, loading, error, lastUpdated, refetch } = useFetch<DashboardData>(url);
+
+  // Chart data — separate fetch, changes on chart navigation
+  const chartUrl = useMemo(() => {
+    const params = new URLSearchParams();
+    if (supplierId) params.set("supplierId", supplierId);
+    params.set("chartView", chartView);
+    if (chartView === "week") {
+      params.set("chartWeek", String(chartWeek));
+      params.set("chartYear", String(chartYear));
+    } else if (chartView === "month") {
+      params.set("chartWeek", String(chartMonth));
+      params.set("chartYear", String(chartYear));
+    } else {
+      params.set("chartYear", String(chartYear));
+    }
+    return `/api/dashboard/chart?${params}`;
+  }, [supplierId, chartView, chartWeek, chartYear, chartMonth]);
+  const { data: chartData } = useFetch<ChartData>(chartUrl);
 
   if (error) {
     return (
@@ -483,12 +517,112 @@ export function DashboardContent({ supplierId }: { supplierId: string | null }) 
     return <AdminOverview data={data as AggregateData} lastUpdated={lastUpdated} refetch={refetch} />;
   }
 
-  return <SupplierDashboard data={data as SupplierDashboardData} lastUpdated={lastUpdated} refetch={refetch} />;
+  const chartNav = {
+    view: chartView,
+    setView: setChartView,
+    week: chartWeek,
+    setWeek: setChartWeek,
+    year: chartYear,
+    setYear: setChartYear,
+    month: chartMonth,
+    setMonth: setChartMonth,
+    nowWeek,
+    nowYear,
+    nowMonth: new Date().getMonth(),
+  };
+
+  return <SupplierDashboard data={data as SupplierDashboardData} lastUpdated={lastUpdated} refetch={refetch} chartNav={chartNav} chartData={chartData?.salesChart ?? []} topProducts={chartData?.topProducts ?? []} supplierId={supplierId} />;
 }
 
 // ─── SUPPLIER DASHBOARD (existing) ────────────────────
 
-function SupplierDashboard({ data, lastUpdated, refetch }: { data: SupplierDashboardData; lastUpdated: Date | null; refetch: () => void }) {
+interface ChartNav {
+  view: "week" | "month" | "year";
+  setView: (v: "week" | "month" | "year") => void;
+  week: number;
+  setWeek: (w: number) => void;
+  year: number;
+  setYear: (y: number) => void;
+  month: number;
+  setMonth: (m: number) => void;
+  nowWeek: number;
+  nowYear: number;
+  nowMonth: number;
+}
+
+const MONTH_LABELS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+function ChartPeriodNav({ chartNav }: { chartNav: ChartNav }) {
+  const { view, week, setWeek, year, setYear, month, setMonth, nowWeek, nowYear, nowMonth } = chartNav;
+
+  const canGoForward = view === "week"
+    ? !(week >= nowWeek && year >= nowYear)
+    : view === "month"
+    ? !(month >= nowMonth && year >= nowYear)
+    : year < nowYear;
+
+  const goBack = () => {
+    if (view === "week") {
+      if (week <= 1) { setWeek(52); setYear(year - 1); }
+      else setWeek(week - 1);
+    } else if (view === "month") {
+      if (month <= 0) { setMonth(11); setYear(year - 1); }
+      else setMonth(month - 1);
+    } else {
+      setYear(year - 1);
+    }
+  };
+
+  const goForward = () => {
+    if (!canGoForward) return;
+    if (view === "week") {
+      if (week >= 52) { setWeek(1); setYear(year + 1); }
+      else setWeek(week + 1);
+    } else if (view === "month") {
+      if (month >= 11) { setMonth(0); setYear(year + 1); }
+      else setMonth(month + 1);
+    } else {
+      setYear(year + 1);
+    }
+  };
+
+  const goToNow = () => {
+    setYear(nowYear);
+    if (view === "week") setWeek(nowWeek);
+    if (view === "month") setMonth(nowMonth);
+  };
+
+  const label = view === "week"
+    ? `Wk ${week} — ${year}`
+    : view === "month"
+    ? `${MONTH_LABELS[month]} ${year}`
+    : String(year);
+
+  const isNow = view === "week"
+    ? week === nowWeek && year === nowYear
+    : view === "month"
+    ? month === nowMonth && year === nowYear
+    : year === nowYear;
+
+  return (
+    <div className="flex items-center gap-2 mt-1">
+      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={goBack}>
+        <RiArrowLeftSLine className="h-4 w-4" />
+      </Button>
+      <button
+        onClick={goToNow}
+        className={`text-sm font-medium tabular-nums min-w-[100px] text-center ${isNow ? "" : "text-muted-foreground hover:text-foreground cursor-pointer"}`}
+      >
+        {label}
+      </button>
+      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={goForward} disabled={!canGoForward}>
+        <RiArrowRightSLine className="h-4 w-4" />
+      </Button>
+    </div>
+  );
+}
+
+function SupplierDashboard({ data, lastUpdated, refetch, chartNav, chartData, topProducts, supplierId }: { data: SupplierDashboardData; lastUpdated: Date | null; refetch: () => void; chartNav: ChartNav; chartData: ChartData["salesChart"]; topProducts: ChartData["topProducts"]; supplierId: string | null }) {
   const { t } = useLanguage();
   const seasonMonth = data.seasonStartMonth ?? 1;
   const seasonLabel = getSeasonLabel(seasonMonth);
@@ -541,55 +675,73 @@ function SupplierDashboard({ data, lastUpdated, refetch }: { data: SupplierDashb
       </div>
 
       {/* Secondary KPI Cards */}
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className={`grid gap-4 ${data.featureQuality !== false ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
         <KpiCard title={t("dashboard.avgPrice")} value={formatPrice(data.avgPriceYTD)} icon={RiLineChartLine} change={priceChange} changeLabel={vsLabel} />
         <KpiCard title={t("dashboard.netYieldPerStem")} value={formatPrice(data.netYieldPerStem || 0)} icon={RiMoneyEuroCircleLine} />
-        <KpiCard title={t("dashboard.qualityRate")} value={`${(data.qualityRate || 100).toFixed(1)}%`} icon={RiShieldCheckLine} />
+        {data.featureQuality !== false && (
+          <KpiCard title={t("dashboard.qualityRate")} value={`${(data.qualityRate || 100).toFixed(1)}%`} icon={RiShieldCheckLine} />
+        )}
       </div>
 
-      {/* Charts */}
+      {/* Chart period selector */}
+      <div className="flex flex-wrap items-center justify-end gap-4">
+        <ChartPeriodNav chartNav={chartNav} />
+        <Tabs value={chartNav.view} onValueChange={(v) => chartNav.setView(v as "week" | "month" | "year")}>
+          <TabsList className="h-8">
+            <TabsTrigger value="week" className="text-xs px-3 h-6">{t("sales.granularityWeek")}</TabsTrigger>
+            <TabsTrigger value="month" className="text-xs px-3 h-6">{t("sales.granularityMonth")}</TabsTrigger>
+            <TabsTrigger value="year" className="text-xs px-3 h-6">{t("sales.granularityYear")}</TabsTrigger>
+          </TabsList>
+        </Tabs>
+      </div>
+
+      {/* Charts: Sales + Turnover side by side */}
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader><CardTitle>{t("dashboard.salesOverview")}</CardTitle></CardHeader>
-          <CardContent><SalesChart data={data.monthlySales} /></CardContent>
+          <CardContent><SalesChart data={chartData} /></CardContent>
         </Card>
         <Card>
-          <CardHeader><CardTitle>{t("dashboard.topProducts")}</CardTitle></CardHeader>
-          <CardContent><TopProductsChart data={data.topProducts} /></CardContent>
+          <CardHeader><CardTitle>{t("dashboard.turnoverOverview")}</CardTitle></CardHeader>
+          <CardContent><TurnoverChart data={chartData} /></CardContent>
         </Card>
       </div>
 
-      {/* Recent Lots */}
-      {data.recentLots && data.recentLots.length > 0 && (
+      {/* Top Products */}
+      <div className="grid gap-6 lg:grid-cols-2">
         <Card>
-          <CardHeader><CardTitle>{t("dashboard.recentLots")}</CardTitle></CardHeader>
+          <CardHeader><CardTitle>{t("dashboard.topProducts")}</CardTitle></CardHeader>
+          <CardContent><TopProductsChart data={topProducts} /></CardContent>
+        </Card>
+      </div>
+
+      {/* Recent Shipments */}
+      {data.recentShipments && data.recentShipments.length > 0 && (
+        <Card>
+          <CardHeader><CardTitle>{t("dashboard.recentShipments")}</CardTitle></CardHeader>
           <CardContent className="p-0">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>{t("lots.lotNumber")}</TableHead>
-                  <TableHead>{t("lots.product")}</TableHead>
-                  <TableHead className="text-right">{t("lots.totalStems")}</TableHead>
-                  <TableHead className="text-right">{t("lots.avgPrice")}</TableHead>
-                  <TableHead>{t("lots.deliveryDate")}</TableHead>
-                  <TableHead>{t("lots.status")}</TableHead>
+                  <TableHead>{t("shipments.invoiceNumber")}</TableHead>
+                  <TableHead>{t("shipments.deliveryDate")}</TableHead>
+                  <TableHead className="text-right">{t("sales.stems")}</TableHead>
+                  <TableHead className="text-right">{t("shipments.turnover")}</TableHead>
+                  <TableHead className="text-right">{t("shipments.netResult")}</TableHead>
+                  <TableHead className="text-right">{t("shipments.lots")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {data.recentLots.map((lot) => (
-                  <TableRow key={lot.id}>
+                {data.recentShipments.map((s) => (
+                  <TableRow key={s.id}>
                     <TableCell className="font-medium">
-                      <Link href={`/lots/${lot.id}`} className="text-primary hover:underline">{lot.lotNumber}</Link>
+                      <Link href={`/shipments/${s.id}${supplierId ? `?supplierId=${supplierId}` : ""}`} className="text-primary hover:underline">{s.invoiceNumber}</Link>
                     </TableCell>
-                    <TableCell>{lot.productName}</TableCell>
-                    <TableCell className="text-right tabular-nums">{formatNumber(lot.totalStems)}</TableCell>
-                    <TableCell className="text-right tabular-nums">{formatPrice(lot.avgPrice)}</TableCell>
-                    <TableCell className="text-muted-foreground">{formatDate(lot.deliveryDate)}</TableCell>
-                    <TableCell>
-                      <Badge variant={lot.status === "sold" ? "default" : lot.status === "selling" ? "secondary" : "outline"}>
-                        {t(`lots.${lot.status === "in_transit" ? "inTransit" : lot.status}` as Parameters<typeof t>[0])}
-                      </Badge>
-                    </TableCell>
+                    <TableCell className="text-muted-foreground">{s.invoiceDate ? formatDate(s.invoiceDate) : "-"}</TableCell>
+                    <TableCell className="text-right tabular-nums">{formatNumber(s.totalStems)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{formatCurrency(s.totalTurnover)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{formatCurrency(s.netResult)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{s.lotCount}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>

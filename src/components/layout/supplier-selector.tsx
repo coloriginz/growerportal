@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, useCallback, useEffect } from "react";
-import { useRouter, usePathname, useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { RiPlantLine, RiSearchLine, RiArrowUpDownLine, RiCheckLine } from "@remixicon/react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
@@ -22,7 +22,6 @@ function SupplierSelectorInner() {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const router = useRouter();
-  const pathname = usePathname();
   const searchParams = useSearchParams();
   const { t } = useLanguage();
 
@@ -65,17 +64,11 @@ function SupplierSelectorInner() {
       params.set("supplierId", supplierId);
     }
 
-    // If on a detail page (path has a UUID segment), navigate to the section root
-    // e.g. /shipments/abc-123 → /shipments, /lots/abc-123 → /lots
-    const uuidPattern = /\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
-    const targetPath = uuidPattern.test(pathname)
-      ? pathname.replace(uuidPattern, "")
-      : pathname;
-
-    router.push(`${targetPath}?${params.toString()}`);
+    // Always navigate to dashboard when selecting a (different) supplier
+    router.push(`/dashboard?${params.toString()}`);
     setOpen(false);
     setSearch("");
-  }, [searchParams, selectedSupplierId, router, pathname]);
+  }, [searchParams, selectedSupplierId, router]);
 
   if (loading) {
     return <div className="bg-muted h-10 animate-pulse rounded-md" />;
