@@ -56,7 +56,6 @@ interface WeekKey {
 type CellStatus = "idle" | "saving" | "saved" | "error";
 
 export function ForecastsContent({ supplierId }: { supplierId: string | null }) {
-  if (!supplierId) return <SelectSupplierPrompt />;
   const { t } = useLanguage();
   const now = new Date();
   const currentISOWeek = getISOWeek(now);
@@ -392,6 +391,8 @@ export function ForecastsContent({ supplierId }: { supplierId: string | null }) 
       return { year: y, week: w };
     });
   }, [data?.forecasts]);
+
+  if (!supplierId) return <SelectSupplierPrompt />;
 
   if (error) {
     return (

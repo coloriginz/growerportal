@@ -41,7 +41,6 @@ interface ShipmentRow {
 }
 
 export function ShipmentsContent({ supplierId }: { supplierId: string | null }) {
-  if (!supplierId) return <SelectSupplierPrompt />;
   const [search, setSearch] = useState("");
   const { t } = useLanguage();
   const router = useRouter();
@@ -52,6 +51,8 @@ export function ShipmentsContent({ supplierId }: { supplierId: string | null }) 
     return `/api/shipments?${params}`;
   }, [supplierId]);
   const { data: shipments, loading, error, lastUpdated, refetch } = useFetch<ShipmentRow[]>(url);
+
+  if (!supplierId) return <SelectSupplierPrompt />;
 
   if (error) {
     return (

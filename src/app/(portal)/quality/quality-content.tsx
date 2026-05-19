@@ -56,7 +56,6 @@ interface QualityData {
 }
 
 export function QualityContent({ supplierId }: { supplierId: string | null }) {
-  if (!supplierId) return <SelectSupplierPrompt />;
   const { t } = useLanguage();
 
   const url = useMemo(() => {
@@ -67,6 +66,8 @@ export function QualityContent({ supplierId }: { supplierId: string | null }) {
   const { data, loading, error, lastUpdated, refetch } = useFetch<QualityData>(url);
   const issues = data?.issues || [];
   const summary = data?.summary || null;
+
+  if (!supplierId) return <SelectSupplierPrompt />;
 
   if (error) {
     return (

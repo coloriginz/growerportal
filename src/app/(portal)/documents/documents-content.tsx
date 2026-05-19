@@ -54,7 +54,6 @@ interface DocumentRow {
 }
 
 export function DocumentsContent({ supplierId }: { supplierId: string | null }) {
-  if (!supplierId) return <SelectSupplierPrompt />;
   const [documents, setDocuments] = useState<DocumentRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [typeFilter, setTypeFilter] = useState<string>("all");
@@ -90,6 +89,8 @@ export function DocumentsContent({ supplierId }: { supplierId: string | null }) 
   useEffect(() => {
     fetchDocuments();
   }, [fetchDocuments]);
+
+  if (!supplierId) return <SelectSupplierPrompt />;
 
   const filtered =
     typeFilter === "all"

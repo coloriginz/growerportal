@@ -61,7 +61,6 @@ const statusVariant: Record<LotStatus, "default" | "secondary" | "destructive" |
 };
 
 export function LotsContent({ supplierId }: { supplierId: string | null }) {
-  if (!supplierId) return <SelectSupplierPrompt />;
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const { t } = useLanguage();
@@ -72,6 +71,8 @@ export function LotsContent({ supplierId }: { supplierId: string | null }) {
     return `/api/lots?${params}`;
   }, [supplierId]);
   const { data: lots, loading, error, lastUpdated, refetch } = useFetch<LotRow[]>(url);
+
+  if (!supplierId) return <SelectSupplierPrompt />;
 
   if (error) {
     return (

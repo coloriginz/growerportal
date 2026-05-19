@@ -14,7 +14,6 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { RiUserLine } from "@remixicon/react";
 import { useLanguage } from "@/components/providers/language-provider";
 import { formatDate } from "@/lib/format";
 import { toast } from "sonner";
@@ -43,7 +42,6 @@ interface SupplierProfile {
 }
 
 export function ProfileContent({ supplierId }: { supplierId: string | null }) {
-  if (!supplierId) return <SelectSupplierPrompt />;
   const [profile, setProfile] = useState<SupplierProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [changeMessage, setChangeMessage] = useState("");
@@ -68,6 +66,8 @@ export function ProfileContent({ supplierId }: { supplierId: string | null }) {
     fetchProfile();
   }, [supplierId]);
 
+  if (!supplierId) return <SelectSupplierPrompt />;
+
   async function handleChangeRequest() {
     if (!changeMessage.trim() || !supplierId) return;
     setSubmitting(true);
@@ -84,22 +84,6 @@ export function ProfileContent({ supplierId }: { supplierId: string | null }) {
     } finally {
       setSubmitting(false);
     }
-  }
-
-  if (!supplierId) {
-    return (
-      <div className="page-content">
-        <div className="page-header">
-          <h1>{t("profile.title")}</h1>
-        </div>
-        <div className="empty-state">
-          <div className="empty-state-icon">
-            <RiUserLine />
-          </div>
-          <p className="empty-state-text">{t("nav.selectSupplier")}</p>
-        </div>
-      </div>
-    );
   }
 
   if (loading || !profile) return null;

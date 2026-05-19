@@ -468,7 +468,6 @@ function formatRelativeTime(isoString: string): string {
 type ChartData = { salesChart: { label: string; stems: number; turnover: number; lastYearStems: number; lastYearTurnover: number }[]; topProducts: { name: string; stems: number; turnover: number }[] };
 
 export function DashboardContent({ supplierId }: { supplierId: string | null }) {
-  const { t } = useLanguage();
   const nowWeek = getISOWeek(new Date());
   const nowYear = new Date().getFullYear();
   const [chartView, setChartView] = useState<"week" | "month" | "year">("week");

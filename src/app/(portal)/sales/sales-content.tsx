@@ -81,7 +81,6 @@ interface SalesData {
 type Period = "today" | "yesterday" | "week" | "month" | "ytd" | "weeknr" | "custom";
 
 export function SalesContent({ supplierId }: { supplierId: string | null }) {
-  if (!supplierId) return <SelectSupplierPrompt />;
   const [period, setPeriod] = useState<Period>("ytd");
   const currentWeek = getISOWeek(new Date());
   const currentYear = new Date().getFullYear();
@@ -151,6 +150,8 @@ export function SalesContent({ supplierId }: { supplierId: string | null }) {
     return `/api/sales/trends?${params}`;
   }, [supplierId, trendGranularity, filterProducts, filterSalesTypes, filterStemLengths, filterGrowers, filterOptions]);
   const { data: trends } = useFetch<TrendsData>(trendsUrl);
+
+  if (!supplierId) return <SelectSupplierPrompt />;
 
   // Auto-select top 3 products when product list changes
   const trendsProductsKey = trends?.products?.join(",") ?? "";
