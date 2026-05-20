@@ -64,6 +64,7 @@ interface AggregateData {
   recentLots: { id: string; lotNumber: string; productName: string; deliveryDate: string | null; totalStems: number; supplierId: string; createdAt: string; supplierCode: string; supplierName: string }[];
   recentSuppliers: { id: string; code: string; name: string; createdAt: string; lotCount: number }[];
   recentGrowers: { id: string; name: string; fabricId: number | null; createdAt: string; supplierCode: string; supplierName: string }[];
+  recentSalesSheetUploads: { id: string; invoiceNumber: string; ourInvoiceNumber: string | null; deliveryDate: string | null; uploadedAt: string; supplierCode: string; supplierName: string }[];
   counts: { suppliers: number; growers: number; lots: number; transactions: number; salesSheets: number };
 }
 
@@ -391,6 +392,44 @@ function AdminOverview({ data, lastUpdated, refetch }: { data: AggregateData; la
           )}
         </CardContent>
       </Card>
+
+      {/* Recent sales sheet uploads */}
+      {data.recentSalesSheetUploads.length > 0 && (
+        <Card>
+          <CardHeader><CardTitle>Recent Sales Sheet Uploads</CardTitle></CardHeader>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Supplier</TableHead>
+                  <TableHead>Reference</TableHead>
+                  <TableHead>Invoice #</TableHead>
+                  <TableHead>Delivery Date</TableHead>
+                  <TableHead>Uploaded</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {data.recentSalesSheetUploads.map((s) => (
+                  <TableRow key={s.id}>
+                    <TableCell>
+                      <span className="font-medium">{s.supplierCode}</span>
+                      <span className="ml-1.5 text-muted-foreground text-xs">{s.supplierName}</span>
+                    </TableCell>
+                    <TableCell>
+                      <Link href={`/shipments/${s.id}`} className="font-medium text-primary hover:underline">
+                        {s.invoiceNumber}
+                      </Link>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">{s.ourInvoiceNumber || "—"}</TableCell>
+                    <TableCell className="text-muted-foreground">{s.deliveryDate ? formatDate(s.deliveryDate) : "—"}</TableCell>
+                    <TableCell className="text-muted-foreground">{formatRelativeTime(s.uploadedAt)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Recent suppliers + growers side by side */}
       <div className="grid gap-6 lg:grid-cols-2">

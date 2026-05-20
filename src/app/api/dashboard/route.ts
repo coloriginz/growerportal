@@ -178,6 +178,7 @@ async function getAggregateDashboard(session: { user: { role: string; supplierId
     recentLots,
     recentSuppliers,
     recentGrowers,
+    recentSalesSheetUploads,
     counts,
   ] = await Promise.all([
     // Last sync runs per endpoint
@@ -263,6 +264,23 @@ async function getAggregateDashboard(session: { user: { role: string; supplierId
         supplier: { select: { code: true, name: true } },
       },
     }),
+    // Recent sales sheet uploads (PDFs linked via import)
+    prisma.salesSheet.findMany({
+      where: {
+        ...( scope ? { supplier: scope } : undefined),
+        pdfDocumentId: { not: null },
+      },
+      orderBy: { updatedAt: "desc" },
+      take: 10,
+      select: {
+        id: true,
+        invoiceNumber: true,
+        ourInvoiceNumber: true,
+        deliveryDate: true,
+        updatedAt: true,
+        supplier: { select: { code: true, name: true } },
+      },
+    }),
     // Total counts
     Promise.all([
       prisma.supplier.count({ where: supplierWhere }),
@@ -325,6 +343,15 @@ async function getAggregateDashboard(session: { user: { role: string; supplierId
       createdAt: g.createdAt.toISOString(),
       supplierCode: g.supplier.code,
       supplierName: g.supplier.name,
+    })),
+    recentSalesSheetUploads: recentSalesSheetUploads.map((s) => ({
+      id: s.id,
+      invoiceNumber: s.invoiceNumber,
+      ourInvoiceNumber: s.ourInvoiceNumber,
+      deliveryDate: s.deliveryDate?.toISOString() || null,
+      uploadedAt: s.updatedAt.toISOString(),
+      supplierCode: s.supplier.code,
+      supplierName: s.supplier.name,
     })),
     counts,
   });
