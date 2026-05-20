@@ -143,15 +143,17 @@ export function ShipmentDetail({ shipment }: ShipmentDetailProps) {
             {t("shipments.deliveryDate")}: {formatDate(shipment.deliveryDate)}
           </p>
         </div>
-        {shipment.pdfDocument && (
-          <a href={shipment.pdfDocument.fileUrl} target="_blank" rel="noopener noreferrer">
-            <Button variant="outline" size="sm" className="gap-2">
-              <RiFileDownloadLine className="h-4 w-4" />
-              Sales Sheet
-            </Button>
-          </a>
-        )}
       </div>
+
+      {/* Sales Sheet PDF download */}
+      {shipment.pdfDocument && (
+        <a href={shipment.pdfDocument.fileUrl} target="_blank" rel="noopener noreferrer">
+          <Button variant="outline" className="gap-2 border-primary/30 bg-primary/5 text-primary hover:bg-primary/10">
+            <RiFileDownloadLine className="h-5 w-5" />
+            Download Sales Sheet
+          </Button>
+        </a>
+      )}
 
       {/* KPI cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
