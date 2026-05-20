@@ -8,6 +8,7 @@ import {
   Table,
   TableBody,
   TableCell,
+  TableFooter,
   TableHead,
   TableHeader,
   TableRow,
@@ -19,6 +20,7 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
+  Legend,
   ResponsiveContainer,
 } from "recharts";
 import { Button } from "@/components/ui/button";
@@ -75,13 +77,13 @@ interface SalesData {
   bySalesType: { salesType: string; stems: number; turnover: number; avgPrice: number }[];
   byProduct: { product: string; stems: number; turnover: number; avgPrice: number }[];
   byGrower: { grower: string; stems: number; turnover: number; avgPrice: number }[];
-  daily: { date: string; stems: number; turnover: number }[];
+  daily: { date: string; stems: number; turnover: number; lastYearStems: number; lastYearTurnover: number }[];
 }
 
 type Period = "today" | "yesterday" | "week" | "month" | "ytd" | "weeknr" | "custom";
 
 export function SalesContent({ supplierId }: { supplierId: string | null }) {
-  const [period, setPeriod] = useState<Period>("ytd");
+  const [period, setPeriod] = useState<Period>("week");
   const currentWeek = getISOWeek(new Date());
   const currentYear = new Date().getFullYear();
   const [selectedWeek, setSelectedWeek] = useState(currentWeek);
@@ -372,30 +374,67 @@ export function SalesContent({ supplierId }: { supplierId: string | null }) {
             </Card>
           </div>
 
-          {/* Daily chart */}
-          {data.daily.length > 1 && (
-            <Card>
-              <CardHeader>
-                <CardTitle>{t("dashboard.salesOverview")}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={data.daily}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} className="stroke-border/50" />
-                    <XAxis dataKey="date" fontSize={12} tickLine={false} axisLine={false} tick={{ fill: "currentColor" }} className="text-muted-foreground" />
-                    <YAxis fontSize={12} tickLine={false} axisLine={false} tick={{ fill: "currentColor" }} className="text-muted-foreground" />
-                    <Tooltip formatter={(value: unknown) => formatNumber(value as number)} />
-                    <Bar
-                      dataKey="stems"
-                      name={t("sales.stems")}
-                      fill="var(--chart-1)"
-                      radius={[4, 4, 0, 0]}
-                    />
-                  </BarChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
-          )}
+          {/* Volume + Turnover charts side by side */}
+          {data.daily.length > 1 && (() => {
+            const currentYear = new Date().getFullYear();
+            const lastYear = currentYear - 1;
+            return (
+            <div className="grid gap-6 lg:grid-cols-2">
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <CardTitle>{t("dashboard.salesOverview")}</CardTitle>
+                    <div className="text-right">
+                      <span className="text-sm font-semibold tabular-nums">{formatNumber(data.totalStems)}</span>
+                      {data.lastYearComparison && data.lastYearComparison.totalStems > 0 && (
+                        <span className="text-xs text-muted-foreground ml-2">({formatNumber(data.lastYearComparison.totalStems)})</span>
+                      )}
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <BarChart data={data.daily} barGap={2}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} className="stroke-border/50" />
+                      <XAxis dataKey="date" fontSize={12} tickLine={false} axisLine={false} tick={{ fill: "currentColor" }} className="text-muted-foreground" />
+                      <YAxis fontSize={12} tickLine={false} axisLine={false} tickFormatter={(v) => formatNumber(v)} tick={{ fill: "currentColor" }} className="text-muted-foreground" />
+                      <Tooltip formatter={(value: unknown) => formatNumber(value as number)} cursor={{ fill: "rgba(0,0,0,0.04)" }} />
+                      <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: "12px", paddingTop: "8px" }} />
+                      <Bar dataKey="lastYearStems" name={`Stems ${lastYear}`} fill="var(--chart-1)" fillOpacity={0.35} radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="stems" name={`Stems ${currentYear}`} fill="var(--chart-1)" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <CardTitle>{t("dashboard.turnoverOverview")}</CardTitle>
+                    <div className="text-right">
+                      <span className="text-sm font-semibold tabular-nums">{formatCurrency(data.totalTurnover)}</span>
+                      {data.lastYearComparison && data.lastYearComparison.totalTurnover > 0 && (
+                        <span className="text-xs text-muted-foreground ml-2">({formatCurrency(data.lastYearComparison.totalTurnover)})</span>
+                      )}
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <BarChart data={data.daily} barGap={2}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} className="stroke-border/50" />
+                      <XAxis dataKey="date" fontSize={12} tickLine={false} axisLine={false} tick={{ fill: "currentColor" }} className="text-muted-foreground" />
+                      <YAxis fontSize={12} tickLine={false} axisLine={false} tickFormatter={(v) => formatCurrency(v)} tick={{ fill: "currentColor" }} className="text-muted-foreground" />
+                      <Tooltip formatter={(value: unknown) => formatCurrency(value as number)} cursor={{ fill: "rgba(0,0,0,0.04)" }} />
+                      <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: "12px", paddingTop: "8px" }} />
+                      <Bar dataKey="lastYearTurnover" name={`Turnover ${lastYear}`} fill="var(--chart-2)" fillOpacity={0.35} radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="turnover" name={`Turnover ${currentYear}`} fill="var(--chart-2)" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+            </div>
+            );
+          })()}
 
           {/* Sales by channel */}
           <Card>
@@ -422,6 +461,14 @@ export function SalesContent({ supplierId }: { supplierId: string | null }) {
                     </TableRow>
                   ))}
                 </TableBody>
+                <TableFooter>
+                  <TableRow>
+                    <TableCell className="font-semibold">{t("common.total")}</TableCell>
+                    <TableCell className="text-right tabular-nums font-semibold">{formatNumber(data.totalStems)}</TableCell>
+                    <TableCell className="text-right tabular-nums font-semibold">{formatCurrencyDetailed(data.totalTurnover)}</TableCell>
+                    <TableCell className="text-right tabular-nums font-semibold">{formatPrice(data.avgPrice)}</TableCell>
+                  </TableRow>
+                </TableFooter>
               </Table>
             </CardContent>
           </Card>
@@ -451,6 +498,14 @@ export function SalesContent({ supplierId }: { supplierId: string | null }) {
                     </TableRow>
                   ))}
                 </TableBody>
+                <TableFooter>
+                  <TableRow>
+                    <TableCell className="font-semibold">{t("common.total")}</TableCell>
+                    <TableCell className="text-right tabular-nums font-semibold">{formatNumber(data.totalStems)}</TableCell>
+                    <TableCell className="text-right tabular-nums font-semibold">{formatCurrencyDetailed(data.totalTurnover)}</TableCell>
+                    <TableCell className="text-right tabular-nums font-semibold">{formatPrice(data.avgPrice)}</TableCell>
+                  </TableRow>
+                </TableFooter>
               </Table>
             </CardContent>
           </Card>
@@ -481,6 +536,14 @@ export function SalesContent({ supplierId }: { supplierId: string | null }) {
                       </TableRow>
                     ))}
                   </TableBody>
+                  <TableFooter>
+                    <TableRow>
+                      <TableCell className="font-semibold">{t("common.total")}</TableCell>
+                      <TableCell className="text-right tabular-nums font-semibold">{formatNumber(data.totalStems)}</TableCell>
+                      <TableCell className="text-right tabular-nums font-semibold">{formatCurrencyDetailed(data.totalTurnover)}</TableCell>
+                      <TableCell className="text-right tabular-nums font-semibold">{formatPrice(data.avgPrice)}</TableCell>
+                    </TableRow>
+                  </TableFooter>
                 </Table>
               </CardContent>
             </Card>

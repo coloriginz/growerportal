@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireAuth, resolveSupplierId, buildSupplierScope } from "@/lib/api-helpers";
-import { startOfDay, subDays, startOfWeek, startOfMonth, startOfYear, format, getISOWeek, setISOWeek, setYear, endOfISOWeek, startOfISOWeek } from "date-fns";
+import { startOfDay, subDays, startOfWeek, startOfMonth, startOfYear, endOfMonth, endOfWeek, format, getISOWeek, setISOWeek, setYear, endOfISOWeek, startOfISOWeek, addDays } from "date-fns";
 import { getSeasonStart } from "@/lib/season";
 
 export async function GET(request: NextRequest) {
@@ -163,43 +163,96 @@ export async function GET(request: NextRequest) {
     growerAggMap.set(growerName, existing);
   }
 
-  // Daily breakdown
+  // Daily breakdown — pre-fill all days in the period
   const transactions = await prisma.transaction.findMany({
     where: baseWhere,
     select: { date: true, stems: true, amount: true },
     orderBy: { date: "asc" },
   });
 
-  const dailyMap = new Map<string, { stems: number; turnover: number }>();
-  for (const tx of transactions) {
-    const day = format(tx.date, "dd-MM");
-    const existing = dailyMap.get(day) || { stems: 0, turnover: 0 };
-    existing.stems += tx.stems;
-    existing.turnover += Number(tx.amount);
-    dailyMap.set(day, existing);
+  // Determine the end of the period for pre-filling
+  let periodEnd: Date;
+  switch (period) {
+    case "today":
+      periodEnd = startOfDay(addDays(now, 1));
+      break;
+    case "yesterday":
+      periodEnd = startOfDay(now);
+      break;
+    case "week":
+      periodEnd = addDays(startOfWeek(now, { weekStartsOn: 1 }), 7);
+      break;
+    case "month":
+      periodEnd = startOfMonth(addDays(endOfMonth(now), 1));
+      break;
+    case "weeknr":
+      periodEnd = dateTo ? addDays(dateTo, 1) : addDays(dateFrom, 7);
+      break;
+    case "custom":
+      periodEnd = dateTo ? addDays(dateTo, 1) : addDays(now, 1);
+      break;
+    default: // ytd
+      periodEnd = addDays(now, 1);
+      break;
   }
 
-  // Year-over-year comparison for weeknr mode
-  let lastYearComparison = null;
-  if (period === "weeknr" && dateTo) {
-    const lyFrom = new Date(dateFrom);
-    lyFrom.setFullYear(lyFrom.getFullYear() - 1);
-    const lyTo = new Date(dateTo);
-    lyTo.setFullYear(lyTo.getFullYear() - 1);
-    const lyTotals = await prisma.transaction.aggregate({
-      where: {
-        lot: supplierId ? { supplierId } : { supplier: scope },
-        date: { gte: lyFrom, lte: lyTo },
-      },
+  const dailyMap = new Map<string, { stems: number; turnover: number; lastYearStems: number; lastYearTurnover: number }>();
+  // Pre-fill all days
+  const cursor = new Date(dateFrom);
+  while (cursor < periodEnd) {
+    dailyMap.set(format(cursor, "dd-MM"), { stems: 0, turnover: 0, lastYearStems: 0, lastYearTurnover: 0 });
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  for (const tx of transactions) {
+    const day = format(tx.date, "dd-MM");
+    const existing = dailyMap.get(day);
+    if (existing) {
+      existing.stems += tx.stems;
+      existing.turnover += Number(tx.amount);
+    }
+  }
+
+  // Year-over-year comparison — always compute for all periods
+  const lyFrom = new Date(dateFrom);
+  lyFrom.setFullYear(lyFrom.getFullYear() - 1);
+  const lyEnd = new Date(periodEnd);
+  lyEnd.setFullYear(lyEnd.getFullYear() - 1);
+  const lyDateFilter = { gte: lyFrom, lt: lyEnd };
+  const lyBaseWhere = {
+    lot: supplierId ? { supplierId } : { supplier: scope },
+    date: lyDateFilter,
+    ...(filterSalesTypes.length > 0 ? { salesType: { in: filterSalesTypes } } : {}),
+  };
+
+  const [lyTotals, lyTransactions] = await Promise.all([
+    prisma.transaction.aggregate({
+      where: lyBaseWhere,
       _sum: { stems: true, amount: true },
-    });
-    const lyStems = lyTotals._sum.stems || 0;
-    const lyTurnover = Number(lyTotals._sum.amount) || 0;
-    lastYearComparison = {
-      totalStems: lyStems,
-      totalTurnover: lyTurnover,
-      avgPrice: lyStems > 0 ? lyTurnover / lyStems : 0,
-    };
+    }),
+    prisma.transaction.findMany({
+      where: lyBaseWhere,
+      select: { date: true, stems: true, amount: true },
+    }),
+  ]);
+  const lyStems = lyTotals._sum.stems || 0;
+  const lyTurnover = Number(lyTotals._sum.amount) || 0;
+  const lastYearComparison = {
+    totalStems: lyStems,
+    totalTurnover: lyTurnover,
+    avgPrice: lyStems > 0 ? lyTurnover / lyStems : 0,
+  };
+
+  // Map last year transactions to same dd-MM keys
+  for (const tx of lyTransactions) {
+    // Shift date forward 1 year to align with current period labels
+    const shifted = new Date(tx.date);
+    shifted.setFullYear(shifted.getFullYear() + 1);
+    const day = format(shifted, "dd-MM");
+    const entry = dailyMap.get(day);
+    if (entry) {
+      entry.lastYearStems = (entry.lastYearStems || 0) + tx.stems;
+      entry.lastYearTurnover = (entry.lastYearTurnover || 0) + Number(tx.amount);
+    }
   }
 
   return NextResponse.json({

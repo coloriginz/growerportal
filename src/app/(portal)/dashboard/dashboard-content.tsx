@@ -695,16 +695,44 @@ function SupplierDashboard({ data, lastUpdated, refetch, chartNav, chartData, to
       </div>
 
       {/* Charts: Sales + Turnover side by side */}
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Card>
-          <CardHeader><CardTitle>{t("dashboard.salesOverview")}</CardTitle></CardHeader>
-          <CardContent><SalesChart data={chartData} /></CardContent>
-        </Card>
-        <Card>
-          <CardHeader><CardTitle>{t("dashboard.turnoverOverview")}</CardTitle></CardHeader>
-          <CardContent><TurnoverChart data={chartData} /></CardContent>
-        </Card>
-      </div>
+      {(() => {
+        const periodStems = chartData.reduce((sum, d) => sum + d.stems, 0);
+        const periodTurnover = chartData.reduce((sum, d) => sum + d.turnover, 0);
+        const periodStemsLy = chartData.reduce((sum, d) => sum + d.lastYearStems, 0);
+        const periodTurnoverLy = chartData.reduce((sum, d) => sum + d.lastYearTurnover, 0);
+        return (
+          <div className="grid gap-6 lg:grid-cols-2">
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle>{t("dashboard.salesOverview")}</CardTitle>
+                  <div className="text-right">
+                    <span className="text-sm font-semibold tabular-nums">{formatNumber(periodStems)}</span>
+                    {periodStemsLy > 0 && (
+                      <span className="text-xs text-muted-foreground ml-2">({formatNumber(periodStemsLy)})</span>
+                    )}
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent><SalesChart data={chartData} /></CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle>{t("dashboard.turnoverOverview")}</CardTitle>
+                  <div className="text-right">
+                    <span className="text-sm font-semibold tabular-nums">{formatCurrency(periodTurnover)}</span>
+                    {periodTurnoverLy > 0 && (
+                      <span className="text-xs text-muted-foreground ml-2">({formatCurrency(periodTurnoverLy)})</span>
+                    )}
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent><TurnoverChart data={chartData} /></CardContent>
+            </Card>
+          </div>
+        );
+      })()}
 
       {/* Top Products */}
       <div className="grid gap-6 lg:grid-cols-2">
