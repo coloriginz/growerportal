@@ -196,15 +196,27 @@ export async function GET(request: NextRequest) {
       break;
   }
 
+  // For week periods, use weekday names as keys and match by ISO week
+  const isWeekPeriod = period === "week" || period === "weeknr";
+  const weekdayLabels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  function getDayKey(date: Date): string {
+    if (isWeekPeriod) {
+      const jsDay = date.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
+      const isoDay = jsDay === 0 ? 6 : jsDay - 1; // 0=Mon, ..., 6=Sun
+      return weekdayLabels[isoDay];
+    }
+    return format(date, "dd-MM");
+  }
+
   const dailyMap = new Map<string, { stems: number; turnover: number; lastYearStems: number; lastYearTurnover: number }>();
   // Pre-fill all days
   const cursor = new Date(dateFrom);
   while (cursor < periodEnd) {
-    dailyMap.set(format(cursor, "dd-MM"), { stems: 0, turnover: 0, lastYearStems: 0, lastYearTurnover: 0 });
+    dailyMap.set(getDayKey(cursor), { stems: 0, turnover: 0, lastYearStems: 0, lastYearTurnover: 0 });
     cursor.setDate(cursor.getDate() + 1);
   }
   for (const tx of transactions) {
-    const day = format(tx.date, "dd-MM");
+    const day = getDayKey(tx.date);
     const existing = dailyMap.get(day);
     if (existing) {
       existing.stems += tx.stems;
@@ -213,10 +225,21 @@ export async function GET(request: NextRequest) {
   }
 
   // Year-over-year comparison — always compute for all periods
-  const lyFrom = new Date(dateFrom);
-  lyFrom.setFullYear(lyFrom.getFullYear() - 1);
-  const lyEnd = new Date(periodEnd);
-  lyEnd.setFullYear(lyEnd.getFullYear() - 1);
+  // For week periods: use the same ISO week number in the previous year
+  // For other periods: shift dates back by 1 calendar year
+  let lyFrom: Date, lyEnd: Date;
+  if (isWeekPeriod) {
+    const wk = getISOWeek(dateFrom);
+    const yr = dateFrom.getFullYear() - 1;
+    const lyWeekDate = setISOWeek(setYear(new Date(yr, 0, 4), yr), wk);
+    lyFrom = startOfISOWeek(lyWeekDate);
+    lyEnd = addDays(endOfISOWeek(lyWeekDate), 1);
+  } else {
+    lyFrom = new Date(dateFrom);
+    lyFrom.setFullYear(lyFrom.getFullYear() - 1);
+    lyEnd = new Date(periodEnd);
+    lyEnd.setFullYear(lyEnd.getFullYear() - 1);
+  }
   const lyDateFilter = { gte: lyFrom, lt: lyEnd };
   const lyBaseWhere = {
     lot: supplierId ? { supplierId } : { supplier: scope },
@@ -242,16 +265,22 @@ export async function GET(request: NextRequest) {
     avgPrice: lyStems > 0 ? lyTurnover / lyStems : 0,
   };
 
-  // Map last year transactions to same dd-MM keys
+  // Map last year transactions to daily keys
   for (const tx of lyTransactions) {
-    // Shift date forward 1 year to align with current period labels
-    const shifted = new Date(tx.date);
-    shifted.setFullYear(shifted.getFullYear() + 1);
-    const day = format(shifted, "dd-MM");
-    const entry = dailyMap.get(day);
+    // For week periods: match by weekday (same ISO week, so Mon→Mon, Tue→Tue)
+    // For other periods: shift date forward 1 year to align with current period labels
+    let dayKey: string;
+    if (isWeekPeriod) {
+      dayKey = getDayKey(tx.date);
+    } else {
+      const shifted = new Date(tx.date);
+      shifted.setFullYear(shifted.getFullYear() + 1);
+      dayKey = format(shifted, "dd-MM");
+    }
+    const entry = dailyMap.get(dayKey);
     if (entry) {
-      entry.lastYearStems = (entry.lastYearStems || 0) + tx.stems;
-      entry.lastYearTurnover = (entry.lastYearTurnover || 0) + Number(tx.amount);
+      entry.lastYearStems += tx.stems;
+      entry.lastYearTurnover += Number(tx.amount);
     }
   }
 
