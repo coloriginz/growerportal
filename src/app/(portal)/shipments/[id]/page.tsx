@@ -16,6 +16,7 @@ export default async function ShipmentDetailPage({ params }: Props) {
     where: { id },
     include: {
       supplier: { select: { id: true, code: true, name: true } },
+      pdfDocument: { select: { id: true, fileUrl: true, fileName: true } },
       lots: {
         orderBy: { lotNumber: "asc" },
         include: {

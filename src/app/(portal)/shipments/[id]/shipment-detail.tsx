@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { RiArrowLeftLine, RiArrowDownSLine, RiArrowRightSLine } from "@remixicon/react";
+import { RiArrowLeftLine, RiArrowDownSLine, RiArrowRightSLine, RiFileDownloadLine } from "@remixicon/react";
 import { useLanguage } from "@/components/providers/language-provider";
 import {
   formatCurrencyDetailed,
@@ -84,12 +84,14 @@ interface ShipmentDetailProps {
   shipment: {
     id: string;
     invoiceNumber: string;
+    ourInvoiceNumber: string | null;
     invoiceDate: string;
     deliveryDate: string;
     totalTurnover: string;
     totalCosts: string;
     netResult: string;
     supplier: { id: string; code: string; name: string };
+    pdfDocument: { id: string; fileUrl: string; fileName: string } | null;
     lots: Lot[];
     costs: Cost[];
   };
@@ -130,14 +132,25 @@ export function ShipmentDetail({ shipment }: ShipmentDetailProps) {
             <RiArrowLeftLine className="h-5 w-5" />
           </Button>
         </Link>
-        <div>
+        <div className="flex-1">
           <h1 className="text-2xl font-semibold tracking-tight">
             {t("shipments.details")}: {shipment.invoiceNumber}
+            {shipment.ourInvoiceNumber && (
+              <span className="ml-2 text-base font-normal text-muted-foreground">({shipment.ourInvoiceNumber})</span>
+            )}
           </h1>
           <p className="text-sm text-muted-foreground">
             {t("shipments.deliveryDate")}: {formatDate(shipment.deliveryDate)}
           </p>
         </div>
+        {shipment.pdfDocument && (
+          <a href={shipment.pdfDocument.fileUrl} target="_blank" rel="noopener noreferrer">
+            <Button variant="outline" size="sm" className="gap-2">
+              <RiFileDownloadLine className="h-4 w-4" />
+              Sales Sheet
+            </Button>
+          </a>
+        )}
       </div>
 
       {/* KPI cards */}
