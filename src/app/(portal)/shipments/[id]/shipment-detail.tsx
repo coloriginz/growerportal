@@ -126,34 +126,34 @@ export function ShipmentDetail({ shipment }: ShipmentDetailProps) {
   return (
     <div className="page-content">
       {/* Header */}
-      <div className="flex items-center gap-4">
+      <div className="flex items-start gap-4">
         <Link href={`/shipments?supplierId=${shipment.supplier.id}`}>
-          <Button variant="ghost" size="icon" className="shrink-0">
+          <Button variant="ghost" size="icon" className="mt-1 shrink-0">
             <RiArrowLeftLine className="h-5 w-5" />
           </Button>
         </Link>
-        <div className="flex-1">
-          <h1 className="text-2xl font-semibold tracking-tight">
-            {t("shipments.details")}: {shipment.invoiceNumber}
-            {shipment.ourInvoiceNumber && (
-              <span className="ml-2 text-base font-normal text-muted-foreground">({shipment.ourInvoiceNumber})</span>
-            )}
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            {t("shipments.deliveryDate")}: {formatDate(shipment.deliveryDate)}
-          </p>
+        <div className="flex-1 space-y-3">
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight">
+              {t("shipments.details")}: {shipment.invoiceNumber}
+              {shipment.ourInvoiceNumber && (
+                <span className="ml-2 text-base font-normal text-muted-foreground">({shipment.ourInvoiceNumber})</span>
+              )}
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              {t("shipments.deliveryDate")}: {formatDate(shipment.deliveryDate)}
+            </p>
+          </div>
+          {shipment.pdfDocument && (
+            <a href={shipment.pdfDocument.fileUrl} target="_blank" rel="noopener noreferrer" className="inline-block">
+              <Button variant="outline" className="gap-2 border-primary/30 bg-primary/5 text-primary hover:bg-primary/10">
+                <RiFileDownloadLine className="h-5 w-5" />
+                Download Sales Sheet
+              </Button>
+            </a>
+          )}
         </div>
       </div>
-
-      {/* Sales Sheet PDF download */}
-      {shipment.pdfDocument && (
-        <a href={shipment.pdfDocument.fileUrl} target="_blank" rel="noopener noreferrer">
-          <Button variant="outline" className="gap-2 border-primary/30 bg-primary/5 text-primary hover:bg-primary/10">
-            <RiFileDownloadLine className="h-5 w-5" />
-            Download Sales Sheet
-          </Button>
-        </a>
-      )}
 
       {/* KPI cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
