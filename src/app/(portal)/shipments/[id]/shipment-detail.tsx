@@ -132,7 +132,7 @@ export function ShipmentDetail({ shipment }: ShipmentDetailProps) {
             <RiArrowLeftLine className="h-5 w-5" />
           </Button>
         </Link>
-        <div className="flex-1 space-y-3">
+        <div className="flex-1 space-y-4">
           <div>
             <h1 className="text-2xl font-semibold tracking-tight">
               {t("shipments.details")}: {shipment.invoiceNumber}
