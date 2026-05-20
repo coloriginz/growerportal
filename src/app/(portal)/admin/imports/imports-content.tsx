@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useMemo, useEffect, useCallback } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
@@ -10,6 +12,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -32,6 +35,7 @@ import {
   RiLoader4Line,
   RiTimeLine,
   RiAlertLine,
+  RiMailLine,
 } from "@remixicon/react";
 import { useFetch } from "@/hooks/use-fetch";
 import { ErrorState } from "@/components/ui/error-state";
@@ -115,6 +119,34 @@ function StatusBadge({ status }: { status: ImportBatch["status"] }) {
 
 export function ImportsContent() {
   const { t } = useLanguage();
+
+  return (
+    <div className="page-content">
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold tracking-tight">
+          {t("imports.title")}
+        </h1>
+      </div>
+      <Tabs defaultValue="data-sync">
+        <TabsList>
+          <TabsTrigger value="data-sync">Data Sync</TabsTrigger>
+          <TabsTrigger value="sales-sheets">Sales Sheets</TabsTrigger>
+        </TabsList>
+        <TabsContent value="data-sync" className="mt-6">
+          <DataSyncTab />
+        </TabsContent>
+        <TabsContent value="sales-sheets" className="mt-6">
+          <SalesSheetImportsTab />
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+}
+
+// ─── Data Sync Tab (existing Fabric imports) ─────────────
+
+function DataSyncTab() {
+  const { t } = useLanguage();
   const [endpointFilter, setEndpointFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [page, setPage] = useState(1);
@@ -155,14 +187,9 @@ export function ImportsContent() {
   const pageEnd = Math.min(currentPage * 50, totalBatches);
 
   return (
-    <div className="page-content">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">
-            {t("imports.title")}
-          </h1>
-        </div>
+    <div className="space-y-8">
+      {/* Refresh */}
+      <div className="flex justify-end">
         <Button variant="outline" size="sm" onClick={refetch} disabled={loading}>
           <RiRefreshLine className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />
           {t("common.refresh")}
@@ -400,6 +427,176 @@ export function ImportsContent() {
           </div>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+// ─── Sales Sheet Imports Tab ─────────────
+
+interface SalesSheetIngestion {
+  id: string;
+  subject: string | null;
+  fromAddress: string | null;
+  receivedAt: string | null;
+  processedAt: string;
+  status: string;
+  attachmentCount: number;
+  processedCount: number;
+  skippedCount: number;
+  errors: string | null;
+  createdAt: string;
+  processed: { fileName: string; salesSheetId: string; invoiceNumber: string; ourInvoiceNumber: string; supplierCode: string }[];
+  skipped: { fileName: string; reason: string }[];
+}
+
+function IngestionStatusBadge({ status }: { status: string }) {
+  switch (status) {
+    case "PROCESSED":
+      return (
+        <Badge className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
+          <RiCheckLine className="mr-1 h-3 w-3" />
+          Processed
+        </Badge>
+      );
+    case "PARTIAL":
+      return (
+        <Badge className="bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400">
+          <RiAlertLine className="mr-1 h-3 w-3" />
+          Partial
+        </Badge>
+      );
+    case "ERROR":
+      return (
+        <Badge className="bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400">
+          <RiErrorWarningLine className="mr-1 h-3 w-3" />
+          Error
+        </Badge>
+      );
+    case "PROCESSING":
+      return (
+        <Badge className="bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
+          <RiLoader4Line className="mr-1 h-3 w-3 animate-spin" />
+          Processing
+        </Badge>
+      );
+    default:
+      return <Badge variant="outline">{status}</Badge>;
+  }
+}
+
+function SalesSheetImportsTab() {
+  const { t } = useLanguage();
+  const { data, loading, error, refetch } = useFetch<SalesSheetIngestion[]>("/api/shipments/ingestions");
+
+  const handleRetry = useCallback(() => {
+    refetch();
+  }, [refetch]);
+
+  if (error) return <ErrorState onRetry={handleRetry} />;
+
+  const ingestions = data || [];
+
+  return (
+    <div className="space-y-6">
+      {/* Refresh */}
+      <div className="flex justify-end">
+        <Button variant="outline" size="sm" onClick={refetch} disabled={loading}>
+          <RiRefreshLine className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+          {t("common.refresh")}
+        </Button>
+      </div>
+
+      {/* Ingestion list */}
+      <Table stickyHeader>
+        <TableHeader>
+          <TableRow>
+            <TableHead>{t("common.date")}</TableHead>
+            <TableHead>Email</TableHead>
+            <TableHead>{t("common.status")}</TableHead>
+            <TableHead className="text-right">Attachments</TableHead>
+            <TableHead className="text-right">Processed</TableHead>
+            <TableHead className="text-right">Skipped</TableHead>
+            <TableHead>Details</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {loading && !data ? (
+            <TableRow>
+              <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
+                {t("common.loading")}
+              </TableCell>
+            </TableRow>
+          ) : ingestions.length === 0 ? (
+            <TableRow>
+              <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
+                No sales sheet imports yet
+              </TableCell>
+            </TableRow>
+          ) : (
+            ingestions.map((ing) => (
+              <TableRow key={ing.id}>
+                <TableCell className="whitespace-nowrap">
+                  {formatDate(ing.createdAt)}{" "}
+                  <span className="text-muted-foreground">
+                    {formatTime(ing.createdAt)}
+                  </span>
+                </TableCell>
+                <TableCell>
+                  <div className="flex items-center gap-2">
+                    <RiMailLine className="h-4 w-4 text-muted-foreground shrink-0" />
+                    <div className="min-w-0">
+                      <div className="truncate max-w-[250px] text-sm">
+                        {ing.subject || "No subject"}
+                      </div>
+                      {ing.fromAddress && (
+                        <div className="text-xs text-muted-foreground truncate max-w-[250px]">
+                          {ing.fromAddress}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </TableCell>
+                <TableCell>
+                  <IngestionStatusBadge status={ing.status} />
+                </TableCell>
+                <TableCell className="text-right">
+                  {ing.attachmentCount}
+                </TableCell>
+                <TableCell className="text-right">
+                  {ing.processedCount}
+                </TableCell>
+                <TableCell className="text-right">
+                  {ing.skippedCount}
+                </TableCell>
+                <TableCell>
+                  <div className="space-y-1">
+                    {ing.processed.map((p) => (
+                      <Link
+                        key={p.salesSheetId}
+                        href={`/shipments/${p.salesSheetId}`}
+                        className="block text-xs text-primary hover:underline"
+                      >
+                        {p.supplierCode} &middot; {p.invoiceNumber}
+                        {p.ourInvoiceNumber && ` (${p.ourInvoiceNumber})`}
+                      </Link>
+                    ))}
+                    {ing.skipped.map((s, i) => (
+                      <div key={i} className="text-xs text-muted-foreground">
+                        {s.fileName}: {s.reason}
+                      </div>
+                    ))}
+                    {ing.errors && (
+                      <div className="text-xs text-red-600 dark:text-red-400">
+                        {ing.errors.length > 80 ? `${ing.errors.slice(0, 80)}...` : ing.errors}
+                      </div>
+                    )}
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))
+          )}
+        </TableBody>
+      </Table>
     </div>
   );
 }
