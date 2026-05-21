@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { put, del } from "@vercel/blob";
 import { requireImportAuth } from "@/lib/import-auth";
-import { parseSalesSheetFilename } from "@/lib/salessheet-filename-parser";
+import { parseSalesSheetFilename, parseSalesSheetFilenameSimple } from "@/lib/salessheet-filename-parser";
 import { parseSalesSheetPdf } from "@/lib/salessheet-pdf-parser";
 import { z } from "zod";
 
@@ -147,6 +147,13 @@ async function processAttachment(
   if (parsed) {
     reference = parsed.reference;
     ourInvoiceNumber = parsed.ourInvoiceNumber;
+  } else {
+    // Fallback: simple filename like "135-23-380914.pdf"
+    const simple = parseSalesSheetFilenameSimple(attachment.name);
+    if (simple) {
+      reference = simple.reference;
+      ourInvoiceNumber = simple.ourInvoiceNumber;
+    }
   }
 
   // Step 2: Try matching by filename reference

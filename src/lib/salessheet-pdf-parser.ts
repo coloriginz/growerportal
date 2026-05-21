@@ -40,9 +40,9 @@ export async function parseSalesSheetPdf(pdfBuffer: Buffer): Promise<ParsedSales
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     if (/Invoice number|Factuurnummer/i.test(line)) {
-      // Search nearby lines for standalone numbers
+      // Search nearby lines for standalone numbers (wide range for varied layouts)
       const candidates: string[] = [];
-      for (let j = Math.max(0, i - 5); j < Math.min(lines.length, i + 5); j++) {
+      for (let j = Math.max(0, i - 15); j < Math.min(lines.length, i + 5); j++) {
         const l = lines[j].trim();
         // Match patterns like "212-28", "5322744", "401546", "18108"
         // Exclude date patterns like "01-01-2026"
