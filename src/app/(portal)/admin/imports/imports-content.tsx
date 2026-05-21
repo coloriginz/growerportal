@@ -28,8 +28,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import {
   RiRefreshLine,
+  RiSearchLine,
   RiCheckLine,
   RiErrorWarningLine,
   RiLoader4Line,
@@ -484,9 +486,39 @@ function IngestionStatusBadge({ status }: { status: string }) {
   }
 }
 
+interface IngestionResponse {
+  items: SalesSheetIngestion[];
+  page: number;
+  totalPages: number;
+  total: number;
+}
+
 function SalesSheetImportsTab() {
   const { t } = useLanguage();
-  const { data, loading, error, refetch } = useFetch<SalesSheetIngestion[]>("/api/shipments/ingestions");
+  const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [page, setPage] = useState(1);
+
+  // Debounce search input
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+      setPage(1);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  const url = useMemo(() => {
+    const params = new URLSearchParams();
+    params.set("page", String(page));
+    params.set("limit", "25");
+    if (debouncedSearch) params.set("search", debouncedSearch);
+    if (statusFilter !== "all") params.set("status", statusFilter);
+    return `/api/shipments/ingestions?${params.toString()}`;
+  }, [page, debouncedSearch, statusFilter]);
+
+  const { data, loading, error, refetch } = useFetch<IngestionResponse>(url);
 
   const handleRetry = useCallback(() => {
     refetch();
@@ -494,19 +526,47 @@ function SalesSheetImportsTab() {
 
   if (error) return <ErrorState onRetry={handleRetry} />;
 
-  const ingestions = data || [];
+  const ingestions = data?.items || [];
+  const total = data?.total ?? 0;
+  const totalPages = data?.totalPages ?? 1;
+  const currentPage = data?.page ?? page;
+  const pageStart = total === 0 ? 0 : (currentPage - 1) * 25 + 1;
+  const pageEnd = Math.min(currentPage * 25, total);
 
   return (
     <div className="space-y-6">
-      {/* Refresh */}
-      <div className="flex justify-end">
-        <Button variant="outline" size="sm" onClick={refetch} disabled={loading}>
-          <RiRefreshLine className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-          {t("common.refresh")}
-        </Button>
+      {/* Filter bar */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative flex-1 min-w-[200px] max-w-[400px]">
+          <RiSearchLine className="text-muted-foreground absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2" />
+          <Input
+            placeholder="Search subject, sender, supplier..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-10"
+          />
+        </div>
+        <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v ?? "all"); setPage(1); }}>
+          <SelectTrigger className="w-[160px]">
+            <SelectValue placeholder={t("common.status")} />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">{t("common.all")}</SelectItem>
+            <SelectItem value="PROCESSED">Processed</SelectItem>
+            <SelectItem value="PARTIAL">Partial</SelectItem>
+            <SelectItem value="ERROR">Error</SelectItem>
+            <SelectItem value="PROCESSING">Processing</SelectItem>
+          </SelectContent>
+        </Select>
+        <div className="ml-auto">
+          <Button variant="outline" size="sm" onClick={refetch} disabled={loading}>
+            <RiRefreshLine className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+            {t("common.refresh")}
+          </Button>
+        </div>
       </div>
 
-      {/* Ingestion list */}
+      {/* Table */}
       <Table stickyHeader>
         <TableHeader>
           <TableRow>
@@ -529,7 +589,7 @@ function SalesSheetImportsTab() {
           ) : ingestions.length === 0 ? (
             <TableRow>
               <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
-                No sales sheet imports yet
+                {debouncedSearch || statusFilter !== "all" ? t("common.noResults") : "No sales sheet imports yet"}
               </TableCell>
             </TableRow>
           ) : (
@@ -597,6 +657,36 @@ function SalesSheetImportsTab() {
           )}
         </TableBody>
       </Table>
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-muted-foreground">
+            Showing {pageStart}-{pageEnd} of {formatNumber(total)}
+          </p>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={currentPage <= 1 || loading}
+            >
+              Previous
+            </Button>
+            <span className="text-sm text-muted-foreground">
+              Page {currentPage} of {totalPages}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={currentPage >= totalPages || loading}
+            >
+              Next
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
