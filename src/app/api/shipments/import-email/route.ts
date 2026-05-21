@@ -72,8 +72,11 @@ export async function POST(request: NextRequest) {
   });
 
   // Filter PDF attachments (skip inline, skip non-PDF)
+  // Also check filename extension — Power Automate may send PDFs as "application/octet-stream"
+  const isPdf = (a: { name: string; contentType: string }) =>
+    a.contentType.toLowerCase().includes("pdf") || a.name.toLowerCase().endsWith(".pdf");
   const pdfAttachments = attachments.filter(
-    (a) => a.contentType.toLowerCase().includes("pdf") && a.isInline !== true
+    (a) => isPdf(a) && a.isInline !== true
   );
 
   if (pdfAttachments.length === 0) {
@@ -105,7 +108,7 @@ export async function POST(request: NextRequest) {
 
   // Also count non-PDF attachments as skipped
   for (const a of attachments) {
-    if (!a.contentType.toLowerCase().includes("pdf") || a.isInline === true) {
+    if (!isPdf(a) || a.isInline === true) {
       skipped.push({ fileName: a.name, reason: "not_pdf" });
     }
   }
