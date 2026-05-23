@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireAuth, resolveSupplierId, buildSupplierScope } from "@/lib/api-helpers";
-import { startOfDay, subDays, startOfWeek, startOfMonth, startOfYear, endOfMonth, endOfWeek, format, getISOWeek, setISOWeek, setYear, endOfISOWeek, startOfISOWeek, addDays } from "date-fns";
+import { startOfDay, endOfDay, subDays, startOfWeek, startOfMonth, startOfYear, endOfMonth, endOfWeek, format, getISOWeek, setISOWeek, setYear, endOfISOWeek, startOfISOWeek, addDays } from "date-fns";
 import { getSeasonStart } from "@/lib/season";
 
 export async function GET(request: NextRequest) {
@@ -59,7 +59,7 @@ export async function GET(request: NextRequest) {
       const fromParam = params.get("dateFrom");
       const toParam = params.get("dateTo");
       dateFrom = fromParam ? startOfDay(new Date(fromParam)) : startOfYear(now);
-      dateTo = toParam ? startOfDay(new Date(toParam + "T23:59:59")) : undefined;
+      dateTo = toParam ? endOfDay(new Date(toParam)) : undefined;
       break;
     }
     case "ytd":
@@ -241,8 +241,16 @@ export async function GET(request: NextRequest) {
     lyEnd.setFullYear(lyEnd.getFullYear() - 1);
   }
   const lyDateFilter = { gte: lyFrom, lt: lyEnd };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const lyLotFilter: Record<string, any> = supplierId
+    ? { supplierId }
+    : { supplier: scope };
+  if (filterProducts.length > 0) lyLotFilter.productName = { in: filterProducts };
+  if (filterStemLengths.length > 0) lyLotFilter.stemLength = { in: filterStemLengths };
+  if (filterGrowerIds.length > 0) lyLotFilter.growerId = { in: filterGrowerIds };
+
   const lyBaseWhere = {
-    lot: supplierId ? { supplierId } : { supplier: scope },
+    lot: lyLotFilter,
     date: lyDateFilter,
     ...(filterSalesTypes.length > 0 ? { salesType: { in: filterSalesTypes } } : {}),
   };

@@ -62,7 +62,8 @@ export async function GET(request: NextRequest) {
     ytdAgg,
     lastYearYtdAgg,
     topProducts,
-    costsAgg,
+    salesSheetAgg,
+    salesSheetStemsAgg,
     qualityStemsAgg,
     recentShipments,
   ] = await Promise.all([
@@ -87,9 +88,15 @@ export async function GET(request: NextRequest) {
       where: { ...supplierFilter, date: { gte: ytdStart } },
       _sum: { stems: true, amount: true },
     }),
+    // Net yield: use SalesSheet as single source of truth (turnover + costs from same invoice)
     prisma.salesSheet.aggregate({
       where: { supplierId, invoiceDate: { gte: ytdStart } },
-      _sum: { totalCosts: true },
+      _sum: { totalCosts: true, netResult: true },
+    }),
+    // Stems from lots linked to YTD salessheets (consistent denominator for net yield)
+    prisma.lot.aggregate({
+      where: { supplierId, salesSheet: { invoiceDate: { gte: ytdStart } } },
+      _sum: { totalStems: true },
     }),
     prisma.qualityIssue.aggregate({
       where: { supplierId, date: { gte: ytdStart } },
@@ -112,8 +119,11 @@ export async function GET(request: NextRequest) {
   const turnoverYTD = Number(ytdAgg._sum.amount) || 0;
   const stemsYTDLastYear = lastYearYtdAgg._sum.stems || 0;
   const turnoverYTDLastYear = Number(lastYearYtdAgg._sum.amount) || 0;
-  const totalCostsYTD = Number(costsAgg._sum.totalCosts) || 0;
-  const netYieldPerStem = stemsYTD > 0 ? (turnoverYTD - totalCostsYTD) / stemsYTD : 0;
+  // Net yield per stem: use SalesSheet as single source for both turnover and costs
+  // (avoids mismatch between Transaction.date and SalesSheet.invoiceDate)
+  const ssNetResult = Number(salesSheetAgg._sum.netResult) || 0;
+  const ssStems = salesSheetStemsAgg._sum.totalStems || 0;
+  const netYieldPerStem = ssStems > 0 ? ssNetResult / ssStems : 0;
   const qualityStems = qualityStemsAgg._sum.stems || 0;
   const qualityRate = stemsYTD > 0 ? ((stemsYTD - qualityStems) / stemsYTD) * 100 : 100;
 

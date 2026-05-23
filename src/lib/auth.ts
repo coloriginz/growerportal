@@ -2,6 +2,7 @@ import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import { compare } from "bcryptjs";
 import { prisma } from "@/lib/db";
+import { isTest } from "@/lib/env";
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   providers: [
@@ -76,28 +77,30 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           token.companyIds = dbUser.companies.map((c) => c.id);
         }
       }
-      // Test mode role override — only stored in JWT, not in DB.
+      // Test mode overrides — only allowed in test/development environments.
       // On re-login the token is created fresh from DB (original role).
-      if (trigger === "update" && updateData?.switchRole) {
-        // Preserve original role on first switch so we can show it in banner
-        if (!token.originalRole) {
-          token.originalRole = token.role;
+      if (isTest && trigger === "update") {
+        if (updateData?.switchRole) {
+          // Preserve original role on first switch so we can show it in banner
+          if (!token.originalRole) {
+            token.originalRole = token.role;
+          }
+          token.role = updateData.switchRole;
         }
-        token.role = updateData.switchRole;
-      }
-      // Test mode: switch to a specific supplier entity
-      if (trigger === "update" && updateData?.switchSupplierId !== undefined) {
-        token.supplierId = updateData.switchSupplierId;
-        token.supplierCode = updateData.switchSupplierCode || null;
-        // Clear transporter when switching to supplier
-        token.transporterId = null;
-      }
-      // Test mode: switch to a specific transporter entity
-      if (trigger === "update" && updateData?.switchTransporterId !== undefined) {
-        token.transporterId = updateData.switchTransporterId;
-        // Clear supplier when switching to transporter
-        token.supplierId = null;
-        token.supplierCode = null;
+        // Switch to a specific supplier entity
+        if (updateData?.switchSupplierId !== undefined) {
+          token.supplierId = updateData.switchSupplierId;
+          token.supplierCode = updateData.switchSupplierCode || null;
+          // Clear transporter when switching to supplier
+          token.transporterId = null;
+        }
+        // Switch to a specific transporter entity
+        if (updateData?.switchTransporterId !== undefined) {
+          token.transporterId = updateData.switchTransporterId;
+          // Clear supplier when switching to transporter
+          token.supplierId = null;
+          token.supplierCode = null;
+        }
       }
       return token;
     },
