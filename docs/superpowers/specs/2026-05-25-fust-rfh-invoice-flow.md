@@ -247,9 +247,11 @@ Existing `fust-invoicing.tsx` adapted:
 - Suppliers with `fustEnabled` do NOT see fust navigation anymore (ordering deactivated)
 - The `fustEnabled` flag is repurposed: it means "this supplier can be selected as a grower when allocating vouchers"
 
-### Transporteur portal
-- The standalone fust-portal (`(fust-portal)`) has no functional purpose with ordering/pickups/deliveries hidden
-- Transporteur login and fust-portal navigation are deactivated (code kept latent)
+### Standalone fust-portal
+- The standalone fust-portal (`(fust-portal)`) remains active for admin/finance as a focused fust workspace
+- Shows the same simplified nav: RFH Facturen, Bonnen, Grower Facturatie, Activiteit, Emails, Instellingen
+- No grower portal navigation visible (dashboard, sales, lots, etc.)
+- Transporteur login (`/fust-login`) is deactivated (code kept latent)
 - If transporteur access is needed later, it can be re-enabled alongside the ordering flow
 
 ---
