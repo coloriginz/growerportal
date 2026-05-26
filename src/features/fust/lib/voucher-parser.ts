@@ -14,6 +14,7 @@ export interface ParsedVoucher {
   customerName: string | null;
   transporterName: string | null;
   cardNumber: string | null;
+  notes: string | null;
   items: ParsedVoucherItem[];
   _debugLines?: string[];
 }
@@ -176,6 +177,27 @@ export async function parseIssuanceVoucherPdf(
     cardNumber = cardMatch[1];
   }
 
+  // ─── Notes (Opmerkingen) ─────────────────────────────
+  // "Opmerkingen    Kunis Flowers en Bulbs B.V."
+  // Can be multi-line: everything between "Opmerkingen" and the footer
+  let notes: string | null = null;
+  const opmIdx = lines.findIndex((l) => /^Opmerkingen/i.test(l.trim()));
+  if (opmIdx >= 0) {
+    // First line: text after "Opmerkingen" label
+    const firstLine = lines[opmIdx].replace(/^Opmerkingen\s*/i, "").trim();
+    const noteLines: string[] = [];
+    if (firstLine) noteLines.push(firstLine);
+    // Subsequent lines until footer or end
+    for (let i = opmIdx + 1; i < lines.length; i++) {
+      const l = lines[i].trim();
+      if (!l || /^Neem voor vragen/i.test(l) || /^Deze bon/i.test(l)) break;
+      noteLines.push(l);
+    }
+    if (noteLines.length > 0) {
+      notes = noteLines.join("\n");
+    }
+  }
+
   // ─── Items ────────────────────────────────────────────
   const dataSection = text.split("Deze bon is het bewijs")[0] || text;
   const items = parseFustItems(dataSection);
@@ -190,6 +212,7 @@ export async function parseIssuanceVoucherPdf(
     customerName,
     transporterName,
     cardNumber,
+    notes,
     items,
     ...(!transactionNumber && { _debugLines: lines.slice(0, 30) }),
   };
@@ -206,6 +229,7 @@ function emptyResult(): ParsedVoucher {
     customerName: null,
     transporterName: null,
     cardNumber: null,
+    notes: null,
     items: [],
   };
 }
