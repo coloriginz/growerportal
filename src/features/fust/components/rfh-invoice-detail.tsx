@@ -231,6 +231,7 @@ function VoucherCard({
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead>{tAny("fust.rfh.date")}</TableHead>
                 <TableHead>Code</TableHead>
                 <TableHead>{tAny("fust.rfh.fustLines")}</TableHead>
                 <TableHead className="text-right">Qty</TableHead>
@@ -245,6 +246,9 @@ function VoucherCard({
             <TableBody>
               {group.lines.map((line) => (
                 <TableRow key={line.id}>
+                  <TableCell className="text-sm text-muted-foreground">
+                    {formatDate(line.date)}
+                  </TableCell>
                   <TableCell className="font-mono text-xs">
                     {line.fustCode}
                   </TableCell>
@@ -264,7 +268,7 @@ function VoucherCard({
               ))}
               {/* Total row */}
               <TableRow className="font-medium border-t-2">
-                <TableCell colSpan={3} className="text-right">
+                <TableCell colSpan={4} className="text-right">
                   {tAny("fust.rfh.total")}
                 </TableCell>
                 <TableCell className="text-right">

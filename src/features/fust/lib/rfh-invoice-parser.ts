@@ -384,14 +384,31 @@ export async function parseRfhInvoicePdf(
     }
   }
 
-  // Parse totals
+  // Parse totals from the "Totaal" line, then validate/fallback using line sums
   const totals = parseTotals(lines);
+
+  // Calculate totals from parsed lines as fallback
+  let calcStatiegeld = 0;
+  let calcFusthuur = 0;
+  for (const pl of parsedLines) {
+    calcStatiegeld += pl.statiegeldAmount ?? 0;
+    calcFusthuur += pl.fusthuurAmount ?? 0;
+  }
+
+  // Use calculated totals if parsed totals are missing or zero but lines have data
+  const totalStatiegeld = (totals.totalStatiegeld != null && totals.totalStatiegeld !== 0)
+    ? totals.totalStatiegeld
+    : calcStatiegeld || totals.totalStatiegeld;
+  const totalFusthuur = (totals.totalFusthuur != null && totals.totalFusthuur !== 0)
+    ? totals.totalFusthuur
+    : calcFusthuur || totals.totalFusthuur;
 
   // If no lines parsed successfully, include debug info
   const result: ParsedRfhInvoice = {
     ...header,
     lines: parsedLines,
-    ...totals,
+    totalStatiegeld,
+    totalFusthuur,
   };
 
   if (parsedLines.length === 0 && lines.length > 0) {

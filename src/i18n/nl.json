@@ -807,7 +807,8 @@
       "filterCompany": "Filter op bedrijf",
       "allStatuses": "Alle statussen",
       "allCompanies": "Alle bedrijven",
-      "voucherNotFound": "Bon niet gevonden in systeem"
+      "voucherNotFound": "Bon niet gevonden in systeem",
+      "date": "Datum"
     }
   }
 }

@@ -807,7 +807,8 @@
       "filterCompany": "Filter by company",
       "allStatuses": "All statuses",
       "allCompanies": "All companies",
-      "voucherNotFound": "Voucher not found in system"
+      "voucherNotFound": "Voucher not found in system",
+      "date": "Date"
     }
   }
 }
