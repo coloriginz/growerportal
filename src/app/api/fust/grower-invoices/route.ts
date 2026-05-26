@@ -70,7 +70,7 @@ export async function GET(request: NextRequest) {
           select: { id: true, code: true, name: true, company: true, companyEntity: { select: { name: true } } },
         },
         voucher: {
-          select: { id: true, transactionNumber: true },
+          select: { id: true, transactionNumber: true, notes: true },
         },
       },
     });

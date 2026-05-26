@@ -72,6 +72,7 @@ interface Allocation {
   voucher: {
     id: string;
     transactionNumber: string;
+    notes: string | null;
   } | null;
 }
 
@@ -492,6 +493,7 @@ export function FustInvoicing() {
                     <TableHead>{tAny("fust.supplier")}</TableHead>
                     <TableHead>{tAny("fust.rfhInvoices")}</TableHead>
                     <TableHead>{tAny("fust.vouchers")}</TableHead>
+                    <TableHead>{tAny("fust.rfh.voucherNotes")}</TableHead>
                     <TableHead className="text-right">{tAny("fust.allocations")}</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -547,6 +549,19 @@ export function FustInvoicing() {
                         </TableCell>
                         <TableCell className="text-muted-foreground">
                           {group.voucherNumbers.join(", ")}
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground max-w-xs">
+                          {(() => {
+                            const notes = group.allocations
+                              .map((a) => a.voucher?.notes)
+                              .filter(Boolean);
+                            const unique = [...new Set(notes)];
+                            return unique.length > 0
+                              ? unique.map((note, i) => (
+                                  <p key={i} className="whitespace-pre-line">{note}</p>
+                                ))
+                              : "-";
+                          })()}
                         </TableCell>
                         <TableCell className="text-right">
                           {group.allocations.length}

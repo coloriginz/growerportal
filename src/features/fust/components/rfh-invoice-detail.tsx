@@ -122,7 +122,7 @@ function VoucherCard({
 }) {
   const { t } = useLanguage();
   const tAny = t as (key: string) => string;
-  const [selectedSupplier, setSelectedSupplier] = useState<string>("");
+  const [selectedSupplier, setSelectedSupplier] = useState<string | null>(null);
   const [allocating, setAllocating] = useState(false);
   const [deallocating, setDeallocating] = useState(false);
 
@@ -144,8 +144,8 @@ function VoucherCard({
     if (!selectedSupplier) return;
     setAllocating(true);
     try {
-      await onAllocate(group.voucherNumber, selectedSupplier);
-      setSelectedSupplier("");
+      await onAllocate(group.voucherNumber, selectedSupplier!);
+      setSelectedSupplier(null);
     } finally {
       setAllocating(false);
     }
@@ -289,12 +289,19 @@ function VoucherCard({
               <>
                 <Select
                   value={selectedSupplier}
-                  onValueChange={(v) => setSelectedSupplier(v ?? "")}
+                  onValueChange={(v) => setSelectedSupplier(v)}
                 >
                   <SelectTrigger className="w-[280px]">
                     <SelectValue
                       placeholder={tAny("fust.rfh.selectGrower")}
-                    />
+                    >
+                      {selectedSupplier
+                        ? (() => {
+                            const s = suppliers.find((s) => s.id === selectedSupplier);
+                            return s ? `${s.code} — ${s.name}` : selectedSupplier;
+                          })()
+                        : null}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     {suppliers.map((s) => (
