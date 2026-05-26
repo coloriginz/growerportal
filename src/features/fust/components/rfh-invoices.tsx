@@ -3,6 +3,7 @@
 import { useState, useMemo, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useLanguage } from "@/components/providers/language-provider";
+import { isFustDomainClient, fustHref } from "@/lib/fust-hostname";
 import { useFetch } from "@/hooks/use-fetch";
 import { formatCurrencyDetailed, formatDate } from "@/lib/format";
 import { Button } from "@/components/ui/button";
@@ -88,6 +89,8 @@ function RfhStatusBadge({
 export function RfhInvoices() {
   const { t } = useLanguage();
   const router = useRouter();
+  const isStandalone = isFustDomainClient();
+  const href = (path: string) => fustHref(path, isStandalone);
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [companyFilter, setCompanyFilter] = useState<string>("all");
   const [uploading, setUploading] = useState(false);
@@ -246,7 +249,7 @@ export function RfhInvoices() {
                 <TableRow
                   key={invoice.id}
                   className="cursor-pointer"
-                  onClick={() => router.push(`/fust/rfh-invoices/${invoice.id}`)}
+                  onClick={() => router.push(href(`/fust-portal/rfh-invoices/${invoice.id}`))}
                 >
                   <TableCell>
                     <RfhStatusBadge
