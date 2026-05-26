@@ -657,6 +657,8 @@
     "sentInvoices": "Verzonden Facturen",
     "noReadyOrders": "Geen orders klaar voor facturatie",
     "linkedVouchers": "Gekoppelde Bonnen",
+    "rfhInvoices": "RFH Facturen",
+    "allocations": "Toewijzingen",
     "activity": "Activiteit",
     "auditLog": "Audit Log",
     "history": "Geschiedenis",

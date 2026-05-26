@@ -657,6 +657,8 @@
     "sentInvoices": "Sent Invoices",
     "noReadyOrders": "No orders ready for invoicing",
     "linkedVouchers": "Linked Vouchers",
+    "rfhInvoices": "RFH Invoices",
+    "allocations": "Allocations",
     "activity": "Activity",
     "auditLog": "Audit Log",
     "history": "History",
