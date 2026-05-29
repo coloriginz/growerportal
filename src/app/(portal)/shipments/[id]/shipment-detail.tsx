@@ -132,28 +132,32 @@ export function ShipmentDetail({ shipment, correctionReasons = {} }: ShipmentDet
   const lotStems = (lot: Lot) => lot.transactions.reduce((sum, tx) => sum + tx.stems, 0);
   const totalStems = shipment.lots.reduce((sum, l) => sum + lotStems(l), 0);
 
-  /** Group transactions by fabricOrdregId into merged display rows.
-   *  Transactions sharing an ordregId (origineel + correcties + prullenbak) become one row:
-   *  - stems from the origineel row
-   *  - amount = net sum of all rows
-   *  - correction badge + reason if any "correcties" row exists */
+  /** Channel category: Persoonlijk/VMP/Aurora → "Direct Sales", Veilen stays */
+  const DIRECT_TYPES = new Set(["Persoonlijk", "VMP", "Aurora"]);
+  const channelLabel = (salesType: string) =>
+    DIRECT_TYPES.has(salesType) ? "Direct Sales" : salesType;
+
+  /** Merge transactions in two passes:
+   *  1. Group by fabricOrdregId (collapse origineel+correcties+prullenbak into one)
+   *  2. Group by date + channel category (Direct Sales vs Veilen) */
   function mergeTransactions(transactions: Transaction[]): MergedTransaction[] {
-    const groups = new Map<string, Transaction[]>();
+    // --- Pass 1: merge by fabricOrdregId ---
+    const ordregGroups = new Map<string, Transaction[]>();
     const ungrouped: Transaction[] = [];
 
     for (const tx of transactions) {
       if (tx.fabricOrdregId != null) {
         const key = `${tx.fabricOrdregId}`;
-        if (!groups.has(key)) groups.set(key, []);
-        groups.get(key)!.push(tx);
+        if (!ordregGroups.has(key)) ordregGroups.set(key, []);
+        ordregGroups.get(key)!.push(tx);
       } else {
         ungrouped.push(tx);
       }
     }
 
-    const merged: MergedTransaction[] = [];
+    const pass1: MergedTransaction[] = [];
 
-    for (const txs of groups.values()) {
+    for (const txs of ordregGroups.values()) {
       const origineel = txs.find(t => t.bronFeitExtra === "origineel");
       const correctie = txs.find(t => t.bronFeitExtra === "correcties");
       const hasCorrection = txs.some(t => t.bronFeitExtra !== "origineel");
@@ -162,7 +166,7 @@ export function ShipmentDetail({ shipment, correctionReasons = {} }: ShipmentDet
       const stems = origineel ? origineel.stems : txs.reduce((s, t) => s + t.stems, 0);
       const netAmount = txs.reduce((s, t) => s + parseFloat(t.amount), 0);
 
-      merged.push({
+      pass1.push({
         id: base.id,
         date: base.date,
         salesType: base.salesType,
@@ -175,7 +179,7 @@ export function ShipmentDetail({ shipment, correctionReasons = {} }: ShipmentDet
     }
 
     for (const tx of ungrouped) {
-      merged.push({
+      pass1.push({
         id: tx.id,
         date: tx.date,
         salesType: tx.salesType,
@@ -187,9 +191,38 @@ export function ShipmentDetail({ shipment, correctionReasons = {} }: ShipmentDet
       });
     }
 
-    // Sort by date
-    merged.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-    return merged;
+    // --- Pass 2: group by date (day) + channel category ---
+    const dayGroups = new Map<string, MergedTransaction[]>();
+    for (const tx of pass1) {
+      const dayKey = new Date(tx.date).toISOString().slice(0, 10);
+      const channel = channelLabel(tx.salesType);
+      const key = `${dayKey}::${channel}`;
+      if (!dayGroups.has(key)) dayGroups.set(key, []);
+      dayGroups.get(key)!.push(tx);
+    }
+
+    const result: MergedTransaction[] = [];
+    for (const [key, txs] of dayGroups) {
+      const channel = key.split("::")[1];
+      const totalStems = txs.reduce((s, t) => s + t.stems, 0);
+      const totalAmount = txs.reduce((s, t) => s + t.amount, 0);
+      const hasCorrection = txs.some(t => t.hasCorrection);
+      const correctionReasonId = txs.find(t => t.correctionReasonId != null)?.correctionReasonId ?? null;
+
+      result.push({
+        id: txs[0].id,
+        date: txs[0].date,
+        salesType: channel,
+        stems: totalStems,
+        amount: totalAmount,
+        pricePerStem: totalStems !== 0 ? totalAmount / totalStems : 0,
+        hasCorrection,
+        correctionReasonId,
+      });
+    }
+
+    result.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    return result;
   }
 
   // Collect all corrections across all lots for the separate corrections section
