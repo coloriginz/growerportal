@@ -217,7 +217,8 @@
     "searchPlaceholder": "Search by invoice number...",
     "correction": "Correction",
     "corrections": "Corrections",
-    "correctionReason": "Reason"
+    "correctionReason": "Reason",
+    "deleted": "Deleted"
   },
   "documents": {
     "title": "Documents",

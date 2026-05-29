@@ -217,7 +217,8 @@
     "searchPlaceholder": "Zoek op factuurnummer...",
     "correction": "Correctie",
     "corrections": "Correcties",
-    "correctionReason": "Reden"
+    "correctionReason": "Reden",
+    "deleted": "Verwijderd"
   },
   "documents": {
     "title": "Documenten",

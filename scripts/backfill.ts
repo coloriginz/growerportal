@@ -177,6 +177,8 @@ function transformOrder(row: Record<string, string>) {
     Verkoop_colli: parseInt2(row["Verkoop_colli"]),
     Afrekenomzet: parseDecimal(row["Afrekenomzet"]),
     "Gem afrekenprijs": parseDecimal(row["Gem afrekenprijs"]),
+    bron_feit_extra: parseStr(row["bron_feit_extra"]),
+    reden_id: parseInt2(row["reden_id"]),
   };
 }
 
@@ -382,13 +384,13 @@ const FILES: FileConfig[] = [
     transform: transformPartij,
   },
   {
-    file: "orders_2025.csv",
+    file: "orders_2025 NIEUW incl bronfeit en reden.csv",
     endpoint: "orders",
     bodyKey: "orders",
     transform: transformOrder,
   },
   {
-    file: "orders_2026.csv",
+    file: "orders_2026 NIEUW incl bronfeit en reden.csv",
     endpoint: "orders",
     bodyKey: "orders",
     transform: transformOrder,

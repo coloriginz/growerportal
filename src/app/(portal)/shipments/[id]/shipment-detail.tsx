@@ -29,6 +29,15 @@ interface Transaction {
   stems: number;
   pricePerStem: string;
   amount: string;
+  bronFeitExtra: string;
+  correctionReasonId: number | null;
+}
+
+interface CorrectionReason {
+  id: number;
+  code: string;
+  nameNl: string;
+  nameEn: string | null;
 }
 
 interface QualityIssue {
@@ -95,9 +104,10 @@ interface ShipmentDetailProps {
     lots: Lot[];
     costs: Cost[];
   };
+  correctionReasons?: Record<number, CorrectionReason>;
 }
 
-export function ShipmentDetail({ shipment }: ShipmentDetailProps) {
+export function ShipmentDetail({ shipment, correctionReasons = {} }: ShipmentDetailProps) {
   const { t, language } = useLanguage();
   const [expandedLots, setExpandedLots] = useState<Set<string>>(new Set());
 
@@ -245,24 +255,49 @@ export function ShipmentDetail({ shipment }: ShipmentDetailProps) {
                       <TableCell className="text-right tabular-nums">{stems > 0 ? formatPrice(parseFloat(lot.avgPrice)) : "-"}</TableCell>
                       <TableCell className="text-right tabular-nums font-medium">{stems > 0 ? formatCurrencyDetailed(parseFloat(lot.totalAmount)) : "-"}</TableCell>
                     </TableRow>
-                    {isExpanded && lot.transactions.map((tx) => (
-                      <TableRow key={tx.id} className="bg-muted/30">
-                        <TableCell></TableCell>
-                        <TableCell colSpan={3} className="text-muted-foreground text-sm">
-                          {formatDate(tx.date)} &middot; {tx.salesType}
-                        </TableCell>
-                        <TableCell colSpan={3}></TableCell>
-                        <TableCell></TableCell>
-                        <TableCell></TableCell>
-                        <TableCell className="text-right tabular-nums text-sm">{tx.stems}</TableCell>
-                        <TableCell className="text-right tabular-nums text-sm">
-                          {parseFloat(tx.pricePerStem) > 0 ? formatPrice(parseFloat(tx.pricePerStem)) : "-"}
-                        </TableCell>
-                        <TableCell className="text-right tabular-nums text-sm">
-                          {parseFloat(tx.amount) > 0 ? formatCurrencyDetailed(parseFloat(tx.amount)) : "-"}
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                    {isExpanded && lot.transactions.map((tx) => {
+                      const isCorrection = tx.bronFeitExtra === "correcties";
+                      const isTrash = tx.bronFeitExtra === "prullenbak-factcor";
+                      const rowClass = isCorrection
+                        ? "bg-red-50/50 dark:bg-red-950/10"
+                        : isTrash
+                        ? "bg-muted/50 opacity-60"
+                        : "bg-muted/30";
+                      const valueClass = isCorrection ? "text-red-600 dark:text-red-400" : "";
+                      const reason = tx.correctionReasonId ? correctionReasons[tx.correctionReasonId] : null;
+                      const reasonLabel = reason
+                        ? (language === "en" && reason.nameEn) || reason.nameNl
+                        : null;
+                      return (
+                        <TableRow key={tx.id} className={rowClass}>
+                          <TableCell></TableCell>
+                          <TableCell colSpan={3} className="text-muted-foreground text-sm">
+                            {formatDate(tx.date)} &middot; {tx.salesType}
+                            {isCorrection && (
+                              <Badge variant="destructive" className="ml-2 text-xs">{t("shipments.correction")}</Badge>
+                            )}
+                            {isTrash && (
+                              <Badge variant="secondary" className="ml-2 text-xs">{t("shipments.deleted")}</Badge>
+                            )}
+                            {reasonLabel && (
+                              <span className="ml-2 text-xs text-red-600 dark:text-red-400">({reasonLabel})</span>
+                            )}
+                          </TableCell>
+                          <TableCell colSpan={3}></TableCell>
+                          <TableCell></TableCell>
+                          <TableCell></TableCell>
+                          <TableCell className={`text-right tabular-nums text-sm ${valueClass}`}>
+                            {formatNumber(tx.stems)}
+                          </TableCell>
+                          <TableCell className={`text-right tabular-nums text-sm ${valueClass}`}>
+                            {parseFloat(tx.pricePerStem) !== 0 ? formatPrice(parseFloat(tx.pricePerStem)) : "-"}
+                          </TableCell>
+                          <TableCell className={`text-right tabular-nums text-sm ${valueClass}`}>
+                            {parseFloat(tx.amount) !== 0 ? formatCurrencyDetailed(parseFloat(tx.amount)) : "-"}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
                   </>
                 );
               })}

@@ -15,6 +15,8 @@ const orderSchema = z.object({
   Verkoop_colli: z.number().nullable().optional(),
   Afrekenomzet: z.number().nullable().optional(),
   "Gem afrekenprijs": z.number().nullable().optional(),
+  bron_feit_extra: z.string().nullable().optional(),
+  reden_id: z.number().nullable().optional(),
 });
 
 const bodySchema = z.object({
@@ -94,6 +96,7 @@ export async function POST(request: NextRequest) {
       row.parthdr_id = Math.round(row.parthdr_id);
       row.rel_id_kweker = Math.round(row.rel_id_kweker);
       row.rel_id_leverancier = Math.round(row.rel_id_leverancier);
+      if (row.reden_id != null) row.reden_id = Math.round(row.reden_id);
     }
 
     // Build grower pairs: fabricKwekerId → supplierId
@@ -125,7 +128,7 @@ export async function POST(request: NextRequest) {
       }),
       prisma.transaction.findMany({
         where: { fabricOrdregId: { in: allOrdregIds } },
-        select: { id: true, fabricOrdregId: true, lotId: true },
+        select: { id: true, fabricOrdregId: true, lotId: true, bronFeitExtra: true },
       }),
     ]);
 
@@ -149,10 +152,10 @@ export async function POST(request: NextRequest) {
       if (l.fabricPartId) lotMap.set(l.fabricPartId, { id: l.id, supplierId: l.supplierId });
     }
 
-    // Track existing transactions by composite key (ordregId::lotId)
+    // Track existing transactions by composite key (ordregId::lotId::bronFeitExtra)
     const txExistsSet = new Set<string>();
     for (const t of existingTransactions) {
-      if (t.fabricOrdregId) txExistsSet.add(`${t.fabricOrdregId}::${t.lotId}`);
+      if (t.fabricOrdregId) txExistsSet.add(`${t.fabricOrdregId}::${t.lotId}::${t.bronFeitExtra}`);
     }
 
     // Phase 2: Upsert growers
@@ -226,7 +229,7 @@ export async function POST(request: NextRequest) {
       txSkipped = 0;
     const affectedLotIds = new Set<string>();
 
-    // Deduplicate updates by (ordreg_id, lotId) (last one wins, avoids non-deterministic UPDATE...FROM)
+    // Deduplicate updates by (ordreg_id, lotId, bronFeitExtra) (last one wins, avoids non-deterministic UPDATE...FROM)
     const txUpdateMap = new Map<string, {
       fabricOrdregId: number;
       lotId: string;
@@ -236,6 +239,8 @@ export async function POST(request: NextRequest) {
       pricePerStem: number;
       amount: number;
       fabricGrowerId: number;
+      bronFeitExtra: string;
+      correctionReasonId: number | null;
     }>();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const txCreateData: any[] = [];
@@ -258,8 +263,10 @@ export async function POST(request: NextRequest) {
       const stems = row.Verkoopvolume ?? 0;
       const amount = row.Afrekenomzet ?? 0;
       const pricePerStem = row["Gem afrekenprijs"] ?? 0;
+      const bronFeitExtra = row.bron_feit_extra?.trim() || "origineel";
+      const correctionReasonId = row.reden_id ?? null;
 
-      const compositeKey = `${ordregId}::${lotInfo.id}`;
+      const compositeKey = `${ordregId}::${lotInfo.id}::${bronFeitExtra}`;
       if (txExistsSet.has(compositeKey)) {
         txUpdateMap.set(compositeKey, {
           fabricOrdregId: ordregId,
@@ -270,6 +277,8 @@ export async function POST(request: NextRequest) {
           pricePerStem: Math.round(pricePerStem * 10000) / 10000,
           amount: Math.round(amount * 100) / 100,
           fabricGrowerId: row.rel_id_kweker,
+          bronFeitExtra,
+          correctionReasonId,
         });
         txUpdated++;
       } else {
@@ -282,6 +291,8 @@ export async function POST(request: NextRequest) {
           stems,
           pricePerStem: Math.round(pricePerStem * 10000) / 10000,
           amount: Math.round(amount * 100) / 100,
+          bronFeitExtra,
+          correctionReasonId,
         });
         txCreated++;
       }
@@ -300,19 +311,21 @@ export async function POST(request: NextRequest) {
            "pricePerStem" = (u.val->>'pricePerStem')::numeric,
            amount = (u.val->>'amount')::numeric,
            "fabricGrowerId" = (u.val->>'fabricGrowerId')::int,
+           "correctionReasonId" = (u.val->>'correctionReasonId')::int,
            "updatedAt" = NOW()
          FROM jsonb_array_elements($1::jsonb) AS u(val)
          WHERE t."fabricOrdregId" = (u.val->>'fabricOrdregId')::int
-           AND t."lotId" = u.val->>'lotId'`,
+           AND t."lotId" = u.val->>'lotId'
+           AND t."bronFeitExtra" = COALESCE(u.val->>'bronFeitExtra', 'origineel')`,
         JSON.stringify(txUpdateData)
       );
     }
 
     if (txCreateData.length > 0) {
-      // Deduplicate by (fabricOrdregId, lotId) — PostgreSQL INSERT ON CONFLICT cannot affect the same row twice
+      // Deduplicate by (fabricOrdregId, lotId, bronFeitExtra) — PostgreSQL INSERT ON CONFLICT cannot affect the same row twice
       const createDedupMap = new Map<string, (typeof txCreateData)[0]>();
       for (const d of txCreateData) {
-        createDedupMap.set(`${d.fabricOrdregId}::${d.lotId}`, d);
+        createDedupMap.set(`${d.fabricOrdregId}::${d.lotId}::${d.bronFeitExtra}`, d);
       }
       const dedupedCreateData = [...createDedupMap.values()];
       const dupCount = txCreateData.length - dedupedCreateData.length;
@@ -330,12 +343,15 @@ export async function POST(request: NextRequest) {
         stems: d.stems ?? 0,
         pricePerStem: d.pricePerStem ?? 0,
         amount: d.amount ?? 0,
+        bronFeitExtra: d.bronFeitExtra ?? "origineel",
+        correctionReasonId: d.correctionReasonId ?? null,
       }));
 
       await prisma.$executeRawUnsafe(
         `INSERT INTO "Transaction" (
            id, "lotId", "fabricOrdregId", "fabricGrowerId",
            date, "salesType", stems, "pricePerStem", amount,
+           "bronFeitExtra", "correctionReasonId",
            "createdAt", "updatedAt"
          )
          SELECT
@@ -348,16 +364,19 @@ export async function POST(request: NextRequest) {
            COALESCE((v.val->>'stems')::int, 0),
            COALESCE((v.val->>'pricePerStem')::numeric, 0),
            COALESCE((v.val->>'amount')::numeric, 0),
+           COALESCE(v.val->>'bronFeitExtra', 'origineel'),
+           (v.val->>'correctionReasonId')::int,
            NOW(),
            NOW()
          FROM jsonb_array_elements($1::jsonb) AS v(val)
-         ON CONFLICT ("fabricOrdregId", "lotId") DO UPDATE SET
+         ON CONFLICT ("fabricOrdregId", "lotId", "bronFeitExtra") DO UPDATE SET
            date = EXCLUDED.date,
            "salesType" = EXCLUDED."salesType",
            stems = EXCLUDED.stems,
            "pricePerStem" = EXCLUDED."pricePerStem",
            amount = EXCLUDED.amount,
            "fabricGrowerId" = EXCLUDED."fabricGrowerId",
+           "correctionReasonId" = EXCLUDED."correctionReasonId",
            "updatedAt" = NOW()`,
         JSON.stringify(txJsonData)
       );
