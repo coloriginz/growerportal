@@ -24,6 +24,7 @@ export default async function ShipmentDetailPage({ params }: Props) {
             orderBy: { date: "asc" },
             select: {
               id: true,
+              fabricOrdregId: true,
               date: true,
               salesType: true,
               stems: true,

@@ -24,6 +24,7 @@ import {
 
 interface Transaction {
   id: string;
+  fabricOrdregId: number | null;
   date: string;
   salesType: string;
   stems: number;
@@ -38,6 +39,18 @@ interface CorrectionReason {
   code: string;
   nameNl: string;
   nameEn: string | null;
+}
+
+/** Merged display row: groups transactions with the same fabricOrdregId */
+interface MergedTransaction {
+  id: string;
+  date: string;
+  salesType: string;
+  stems: number;
+  amount: number;
+  pricePerStem: number;
+  hasCorrection: boolean;
+  correctionReasonId: number | null;
 }
 
 interface QualityIssue {
@@ -118,6 +131,66 @@ export function ShipmentDetail({ shipment, correctionReasons = {} }: ShipmentDet
   // Calculate stems from transactions (sold stems), not from stored totalStems
   const lotStems = (lot: Lot) => lot.transactions.reduce((sum, tx) => sum + tx.stems, 0);
   const totalStems = shipment.lots.reduce((sum, l) => sum + lotStems(l), 0);
+
+  /** Group transactions by fabricOrdregId into merged display rows.
+   *  Transactions sharing an ordregId (origineel + correcties + prullenbak) become one row:
+   *  - stems from the origineel row
+   *  - amount = net sum of all rows
+   *  - correction badge + reason if any "correcties" row exists */
+  function mergeTransactions(transactions: Transaction[]): MergedTransaction[] {
+    const groups = new Map<string, Transaction[]>();
+    const ungrouped: Transaction[] = [];
+
+    for (const tx of transactions) {
+      if (tx.fabricOrdregId != null) {
+        const key = `${tx.fabricOrdregId}`;
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key)!.push(tx);
+      } else {
+        ungrouped.push(tx);
+      }
+    }
+
+    const merged: MergedTransaction[] = [];
+
+    for (const txs of groups.values()) {
+      const origineel = txs.find(t => t.bronFeitExtra === "origineel");
+      const correctie = txs.find(t => t.bronFeitExtra === "correcties");
+      const hasCorrection = txs.some(t => t.bronFeitExtra !== "origineel");
+
+      const base = origineel ?? txs[0];
+      const stems = origineel ? origineel.stems : txs.reduce((s, t) => s + t.stems, 0);
+      const netAmount = txs.reduce((s, t) => s + parseFloat(t.amount), 0);
+
+      merged.push({
+        id: base.id,
+        date: base.date,
+        salesType: base.salesType,
+        stems,
+        amount: netAmount,
+        pricePerStem: stems !== 0 ? netAmount / stems : 0,
+        hasCorrection,
+        correctionReasonId: correctie?.correctionReasonId ?? null,
+      });
+    }
+
+    for (const tx of ungrouped) {
+      merged.push({
+        id: tx.id,
+        date: tx.date,
+        salesType: tx.salesType,
+        stems: tx.stems,
+        amount: parseFloat(tx.amount),
+        pricePerStem: parseFloat(tx.pricePerStem),
+        hasCorrection: false,
+        correctionReasonId: null,
+      });
+    }
+
+    // Sort by date
+    merged.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    return merged;
+  }
 
   // Collect all corrections across all lots for the separate corrections section
   const allCorrections = shipment.lots.flatMap((lot) =>
@@ -255,15 +328,11 @@ export function ShipmentDetail({ shipment, correctionReasons = {} }: ShipmentDet
                       <TableCell className="text-right tabular-nums">{stems > 0 ? formatPrice(parseFloat(lot.avgPrice)) : "-"}</TableCell>
                       <TableCell className="text-right tabular-nums font-medium">{stems > 0 ? formatCurrencyDetailed(parseFloat(lot.totalAmount)) : "-"}</TableCell>
                     </TableRow>
-                    {isExpanded && lot.transactions.map((tx) => {
-                      const isCorrection = tx.bronFeitExtra === "correcties";
-                      const isTrash = tx.bronFeitExtra === "prullenbak-factcor";
-                      const rowClass = isCorrection
+                    {isExpanded && mergeTransactions(lot.transactions).map((tx) => {
+                      const rowClass = tx.hasCorrection
                         ? "bg-red-50/50 dark:bg-red-950/10"
-                        : isTrash
-                        ? "bg-muted/50 opacity-60"
                         : "bg-muted/30";
-                      const valueClass = isCorrection ? "text-red-600 dark:text-red-400" : "";
+                      const valueClass = tx.hasCorrection ? "text-red-600 dark:text-red-400" : "";
                       const reason = tx.correctionReasonId ? correctionReasons[tx.correctionReasonId] : null;
                       const reasonLabel = reason
                         ? (language === "en" && reason.nameEn) || reason.nameNl
@@ -273,11 +342,8 @@ export function ShipmentDetail({ shipment, correctionReasons = {} }: ShipmentDet
                           <TableCell></TableCell>
                           <TableCell colSpan={3} className="text-muted-foreground text-sm">
                             {formatDate(tx.date)} &middot; {tx.salesType}
-                            {isCorrection && (
+                            {tx.hasCorrection && (
                               <Badge variant="destructive" className="ml-2 text-xs">{t("shipments.correction")}</Badge>
-                            )}
-                            {isTrash && (
-                              <Badge variant="secondary" className="ml-2 text-xs">{t("shipments.deleted")}</Badge>
                             )}
                             {reasonLabel && (
                               <span className="ml-2 text-xs text-red-600 dark:text-red-400">({reasonLabel})</span>
@@ -290,10 +356,10 @@ export function ShipmentDetail({ shipment, correctionReasons = {} }: ShipmentDet
                             {formatNumber(tx.stems)}
                           </TableCell>
                           <TableCell className={`text-right tabular-nums text-sm ${valueClass}`}>
-                            {parseFloat(tx.pricePerStem) !== 0 ? formatPrice(parseFloat(tx.pricePerStem)) : "-"}
+                            {tx.pricePerStem !== 0 ? formatPrice(tx.pricePerStem) : "-"}
                           </TableCell>
                           <TableCell className={`text-right tabular-nums text-sm ${valueClass}`}>
-                            {parseFloat(tx.amount) !== 0 ? formatCurrencyDetailed(parseFloat(tx.amount)) : "-"}
+                            {tx.amount !== 0 ? formatCurrencyDetailed(tx.amount) : "-"}
                           </TableCell>
                         </TableRow>
                       );
