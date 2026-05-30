@@ -341,7 +341,6 @@ model Transaction {
   createdAt           DateTime @default(now())
   updatedAt           DateTime @default(now()) @updatedAt
 
-  @@unique([fabricOrdregId, lotId, bronFeitExtra])
   @@index([lotId])
   @@index([date])
   @@index([salesType])
