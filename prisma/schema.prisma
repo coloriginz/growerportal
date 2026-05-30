@@ -335,7 +335,7 @@ model Transaction {
   salesType           String   // "VMP", "Aurora", "Veilen", "Persoonlijk"
   stems               Int
   pricePerStem        Decimal  @db.Decimal(10, 4)
-  amount              Decimal  @db.Decimal(12, 2)
+  amount              Decimal  @db.Decimal(12, 3)
   bronFeitExtra       String   @default("origineel") // "origineel", "correcties", "prullenbak-factcor"
   correctionReasonId  Int?     // reden_id from Fabric (no FK — safe with missing codes)
   createdAt           DateTime @default(now())

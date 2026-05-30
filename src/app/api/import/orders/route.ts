@@ -275,7 +275,7 @@ export async function POST(request: NextRequest) {
           salesType,
           stems,
           pricePerStem: Math.round(pricePerStem * 10000) / 10000,
-          amount: Math.round(amount * 100) / 100,
+          amount: Math.round(amount * 1000) / 1000,
           fabricGrowerId: row.rel_id_kweker,
           bronFeitExtra,
           correctionReasonId,
@@ -290,7 +290,7 @@ export async function POST(request: NextRequest) {
           salesType,
           stems,
           pricePerStem: Math.round(pricePerStem * 10000) / 10000,
-          amount: Math.round(amount * 100) / 100,
+          amount: Math.round(amount * 1000) / 1000,
           bronFeitExtra,
           correctionReasonId,
         });
