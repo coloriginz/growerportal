@@ -311,8 +311,10 @@ async function processFile(config: FileConfig, dryRun: boolean) {
     return;
   }
 
-  // Split into batches — for lots, keep rows with the same part_id together
-  const batches = splitIntoBatches(valid, BATCH_SIZE, config.endpoint === "lots" ? "part_id" : null);
+  // Split into batches — for lots and orders, keep rows with the same part_id together
+  // (orders use delete+reinsert per lot, so splitting a lot across batches causes data loss)
+  const groupKey = (config.endpoint === "lots" || config.endpoint === "orders") ? "part_id" : null;
+  const batches = splitIntoBatches(valid, BATCH_SIZE, groupKey);
   const totalBatches = batches.length;
   let totalCreated = 0;
   let totalUpdated = 0;
