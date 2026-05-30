@@ -195,7 +195,7 @@ export function QualityContent({ supplierId }: { supplierId: string | null }) {
                   <TableCell>{translateQualityCode(issue.code, issue.description, t)}</TableCell>
                   <TableCell>
                     <Link
-                      href={`/lots/${issue.lot.id}`}
+                      href={`/lots/${issue.lot.id}${supplierId ? `?supplierId=${supplierId}` : ""}`}
                       className="text-primary font-medium hover:underline"
                     >
                       {issue.lot.lotNumber}

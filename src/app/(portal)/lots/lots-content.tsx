@@ -158,7 +158,7 @@ export function LotsContent({ supplierId }: { supplierId: string | null }) {
       {/* Mobile card list */}
       <div className="space-y-3 md:hidden">
         {filtered.map((lot) => (
-          <Link key={lot.id} href={`/lots/${lot.id}`} className="block">
+          <Link key={lot.id} href={`/lots/${lot.id}${supplierId ? `?supplierId=${supplierId}` : ""}`} className="block">
             <Card className="transition-colors hover:bg-accent/50">
               <CardContent className="p-4">
                 <div className="flex items-center justify-between mb-2">
@@ -229,7 +229,7 @@ export function LotsContent({ supplierId }: { supplierId: string | null }) {
                 <TableRow key={lot.id}>
                   <TableCell className="font-medium">
                     <Link
-                      href={`/lots/${lot.id}`}
+                      href={`/lots/${lot.id}${supplierId ? `?supplierId=${supplierId}` : ""}`}
                       className="text-primary hover:underline"
                     >
                       {lot.lotNumber}
