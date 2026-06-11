@@ -254,27 +254,53 @@ export async function POST(request: NextRequest) {
       affectedLotIds.add(lotInfo.id);
     }
 
-    // Phase 4: Delete existing transactions for affected lots, then bulk insert
+    // Phase 4: Delete+reinsert scoped to fabricOrdregIds in this batch
+    // Only delete transactions whose ordregId appears in the batch, preserving
+    // older transactions outside Power Automate's rolling query window.
     let txDeleted = 0;
     let txCreated = 0;
 
     if (affectedLotIds.size > 0) {
-      const lotIdArr = [...affectedLotIds];
-
-      // Delete all existing transactions for affected lots
-      txDeleted = await prisma.$executeRawUnsafe(
-        `DELETE FROM "Transaction" WHERE "lotId" IN (SELECT jsonb_array_elements_text($1::jsonb))`,
-        JSON.stringify(lotIdArr)
-      );
-
-      // Collect all transaction data for bulk insert
+      // Collect all transaction data for bulk operations
       const allTxData: Record<string, unknown>[] = [];
       for (const txs of txDataByLot.values()) {
         allTxData.push(...txs);
       }
 
+      // Build unique (lotId, fabricOrdregId) pairs for scoped delete
+      const deletePairs: { lotId: string; fabricOrdregId: number }[] = [];
+      const seenPairs = new Set<string>();
+      for (const tx of allTxData) {
+        const key = `${tx.lotId}::${tx.fabricOrdregId}`;
+        if (!seenPairs.has(key)) {
+          seenPairs.add(key);
+          deletePairs.push({ lotId: tx.lotId as string, fabricOrdregId: tx.fabricOrdregId as number });
+        }
+      }
+
+      // Delete only transactions matching (lotId, fabricOrdregId) pairs from this batch
+      if (deletePairs.length > 0) {
+        const CHUNK_SIZE = 5000;
+        for (let i = 0; i < deletePairs.length; i += CHUNK_SIZE) {
+          const chunk = deletePairs.slice(i, i + CHUNK_SIZE);
+          const deleted = await prisma.$executeRawUnsafe(
+            `DELETE FROM "Transaction" t
+             USING (
+               SELECT DISTINCT
+                 v.val->>'lotId' AS lot_id,
+                 (v.val->>'fabricOrdregId')::int AS ordreg_id
+               FROM jsonb_array_elements($1::jsonb) AS v(val)
+             ) AS batch
+             WHERE t."lotId" = batch.lot_id
+               AND t."fabricOrdregId" = batch.ordreg_id`,
+            JSON.stringify(chunk)
+          );
+          txDeleted += deleted;
+        }
+      }
+
+      // Insert all transactions from batch
       if (allTxData.length > 0) {
-        // Insert in chunks of 5000 to avoid oversized JSON payloads
         const CHUNK_SIZE = 5000;
         for (let i = 0; i < allTxData.length; i += CHUNK_SIZE) {
           const chunk = allTxData.slice(i, i + CHUNK_SIZE);
