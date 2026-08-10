@@ -18,6 +18,7 @@
  */
 import fs from "fs";
 import { neon } from "@neondatabase/serverless";
+import { del } from "@vercel/blob";
 import { parseSalesSheetFilename, parseSalesSheetFilenameSimple } from "../src/lib/salessheet-filename-parser";
 import { parseSalesSheetPdf } from "../src/lib/salessheet-pdf-parser";
 
@@ -181,9 +182,18 @@ type Uitkomst =
         }
       } else {
         telling.losgemaakt++;
-        regels.push(`LOSMAKEN     ${kop}\n             ${u.reden}`);
+        regels.push(`LOSMAKEN     ${kop}\n             ${u.reden} — document wordt verwijderd`);
         if (APPLY) {
+          // Het Document zelf moet ook weg. Het hangt via Document.supplierId aan
+          // de verkeerde leverancier en blijft anders zichtbaar op diens
+          // documentenpagina, ook zonder koppeling aan de salessheet.
           await sql`UPDATE "SalesSheet" SET "pdfDocumentId" = NULL, "ourInvoiceNumber" = NULL WHERE id = ${link.sheetId}`;
+          await sql`DELETE FROM "Document" WHERE id = ${link.documentId}`;
+          try {
+            await del(link.fileUrl);
+          } catch {
+            // Blob opruimen is niet kritiek; de verwijzing is al weg.
+          }
         }
       }
     }
