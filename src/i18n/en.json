@@ -58,7 +58,13 @@
     "passwordResetSuccessMessage": "Your password has been reset. You can now sign in with your new password.",
     "invalidResetLink": "Invalid or Expired Link",
     "invalidResetLinkMessage": "This password reset link is no longer valid. Please request a new one.",
-    "backToLogin": "Back to Sign In"
+    "backToLogin": "Back to Sign In",
+    "ssoLogin": "Sign in with Microsoft",
+    "ssoDivider": "or",
+    "ssoNoEmail": "Your Microsoft account did not provide an email address. Please contact your administrator.",
+    "ssoNoAccount": "No portal account exists for this Microsoft account. Please contact your administrator.",
+    "ssoNotActivated": "Your account is not yet activated. Use the activation link from your invitation email first.",
+    "ssoNotAllowed": "This account cannot sign in with Microsoft. Please use your email address and password."
   },
   "nav": {
     "dashboard": "Dashboard",

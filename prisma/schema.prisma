@@ -36,6 +36,11 @@ model User {
   name           String
   role           String   @default("supplier") // supplier, commercie, admin, transporteur, finance
   kbtCode        String?  // KBT identifier for account linking
+  // Microsoft Entra object id. Written best-effort on every SSO login. Email is
+  // the practical key but not a stable one — people change names and addresses
+  // get reissued. Recording the oid now lets us switch the match over later
+  // without relinking everyone.
+  entraOid       String?  @unique
   isActive       Boolean  @default(false)
   activationToken    String?   @unique
   resetToken         String?   @unique
