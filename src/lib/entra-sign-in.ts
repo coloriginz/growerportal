@@ -28,11 +28,12 @@ export const SSO_ROLES = ["admin", "commercie", "finance"] as const;
 export type EntraSignInError =
   | "NoEmailClaim"
   | "AccountNotFound"
-  | "AccountNotActivated"
+  | "AccountDeactivated"
   | "AccountNotAllowed";
 
 export type EntraSignInDecision =
-  | { allowed: true; userId: string }
+  /** `activate` is true for an invited account that has never been activated. */
+  | { allowed: true; userId: string; activate: boolean }
   | { allowed: false; error: EntraSignInError };
 
 /** The subset of a User row the decision needs. */
@@ -40,6 +41,9 @@ export interface EntraAccount {
   id: string;
   role: string;
   isActive: boolean;
+  deactivatedAt: Date | null;
+  /** Whether a password was ever set. Used as a safety net, see below. */
+  hasPassword: boolean;
 }
 
 /** Claims we accept as the identity, in order of preference. */
@@ -63,14 +67,16 @@ export function resolveEntraEmail(claims: EntraClaims): string | null {
 }
 
 /**
- * SSO never creates accounts and never activates them.
+ * SSO never creates accounts. It may activate one that was invited and never
+ * used, and it must refuse one an admin switched off.
  *
- * Refusing an inactive account is the fail-closed reading of `isActive`, which
- * in this schema means both "invited, never activated" and "switched off by an
- * admin". Auto-activating would let a deactivated colleague back in through the
- * side door, because nothing distinguishes the two states. Splitting them with
- * a `deactivatedAt` column is what the guide describes in §3.3; until that
- * exists, the invitation flow stays the only way in.
+ * Those two are only distinguishable because of `deactivatedAt`:
+ *
+ * | isActive | deactivatedAt | meaning                          | outcome  |
+ * |----------|---------------|----------------------------------|----------|
+ * | false    | null          | invited, never activated         | activate |
+ * | false    | set           | switched off by an admin         | refuse   |
+ * | true     | null          | active                           | allow    |
  */
 export function decideEntraSignIn(input: {
   email: string | null;
@@ -79,16 +85,24 @@ export function decideEntraSignIn(input: {
   if (!input.email) return { allowed: false, error: "NoEmailClaim" };
   if (!input.account) return { allowed: false, error: "AccountNotFound" };
 
+  const account = input.account;
+
   // Suppliers and transporters are not in the tenant and never will be. An
   // account of that kind matching a tenant identity means something is wrong,
   // so refuse rather than guess.
-  if (!(SSO_ROLES as readonly string[]).includes(input.account.role)) {
+  if (!(SSO_ROLES as readonly string[]).includes(account.role)) {
     return { allowed: false, error: "AccountNotAllowed" };
   }
 
-  if (!input.account.isActive) {
-    return { allowed: false, error: "AccountNotActivated" };
-  }
+  if (account.deactivatedAt) return { allowed: false, error: "AccountDeactivated" };
+  if (account.isActive) return { allowed: true, userId: account.id, activate: false };
 
-  return { allowed: true, userId: input.account.id };
+  // Safety net for rows the backfill never touched. Having set a password means
+  // the account was in use, so an inactive one was switched off rather than
+  // never started — the same heuristic the backfill uses, applied at runtime.
+  // Once every row has a correct `deactivatedAt` this can never trigger, but
+  // until then it keeps a forgotten migration from opening the side door.
+  if (account.hasPassword) return { allowed: false, error: "AccountDeactivated" };
+
+  return { allowed: true, userId: account.id, activate: true };
 }

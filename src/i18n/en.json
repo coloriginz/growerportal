@@ -63,8 +63,8 @@
     "ssoDivider": "or",
     "ssoNoEmail": "Your Microsoft account did not provide an email address. Please contact your administrator.",
     "ssoNoAccount": "No portal account exists for this Microsoft account. Please contact your administrator.",
-    "ssoNotActivated": "Your account is not yet activated. Use the activation link from your invitation email first.",
-    "ssoNotAllowed": "This account cannot sign in with Microsoft. Please use your email address and password."
+    "ssoNotAllowed": "This account cannot sign in with Microsoft. Please use your email address and password.",
+    "ssoDeactivated": "This account has been deactivated. Please contact your administrator."
   },
   "nav": {
     "dashboard": "Dashboard",

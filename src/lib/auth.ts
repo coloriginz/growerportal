@@ -114,10 +114,25 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       const dbUser = email ? await findEntraUser(email) : null;
       const decision = decideEntraSignIn({
         email,
-        account: dbUser && { id: dbUser.id, role: dbUser.role, isActive: dbUser.isActive },
+        account: dbUser && {
+          id: dbUser.id,
+          role: dbUser.role,
+          isActive: dbUser.isActive,
+          deactivatedAt: dbUser.deactivatedAt,
+          hasPassword: dbUser.passwordHash !== null,
+        },
       });
 
       if (!decision.allowed) return `/login?error=${decision.error}`;
+
+      // An invited account that signs in through Entra is now in use, so the
+      // outstanding invitation link should stop working.
+      if (decision.activate) {
+        await prisma.user.update({
+          where: { id: decision.userId },
+          data: { isActive: true, deactivatedAt: null, activationToken: null },
+        });
+      }
 
       // Record the object id so we can move the match off email later. Never
       // let this fail a login that is otherwise fine: a unique-constraint clash

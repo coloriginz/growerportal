@@ -39,23 +39,43 @@ de redirect URI, dus neem nooit een URI-lijst over van de Onboarding Portal.
 | §3.1 SSO maakt geen accounts | verplicht | zo gebouwd |
 | §3.2 identiteitsclaim | `email ?? preferred_username ?? upn` | zo gebouwd, lowercase, `mode: "insensitive"` |
 | §3.2 `oid` vastleggen | aanbevolen | `User.entraOid`, nullable + uniek, best-effort geschreven |
-| §3.3 auto-activatie | portal doet het, mits `deactivatedAt` bestaat | **niet gedaan — zie hieronder** |
+| §3.3 auto-activatie | portal doet het, mits `deactivatedAt` bestaat | zo gebouwd, met `User.deactivatedAt` |
 | §3.4 foutcodes | redirect met code, allowlist aan de leeskant | zo gebouwd, Engelse codes |
 
-### Waarom geen auto-activatie
+### Auto-activatie en `deactivatedAt`
 
-`User.isActive` dekt bij ons twee toestanden: "uitgenodigd, nooit geactiveerd" (zo wordt een
-gebruiker aangemaakt) en "uitgezet door een beheerder" (de knop in `user-management.tsx`). Niets
-onderscheidt die twee. Auto-activeren zou dus precies de fout maken die de gids in §3.3
-beschrijft: een uitgezette collega loopt via Microsoft weer binnen.
+`User.isActive` dekte twee toestanden: "uitgenodigd, nooit geactiveerd" (zo wordt een gebruiker
+aangemaakt) en "uitgezet door een beheerder" (de knop in `user-management.tsx`). Auto-activeren
+zonder die te scheiden maakt precies de fout uit §3.3: een uitgezette collega loopt via Microsoft
+weer binnen.
 
-Daarom weigert de callback een inactief account, met code `AccountNotActivated`. Wie nog niet
-binnen is, komt binnen via de uitnodigingsmail — één weg, geen omweg eromheen.
+`User.deactivatedAt DateTime?` scheidt ze, volgens dezelfde tabel als de gids:
 
-**Wil je auto-activatie alsnog, dan moet eerst `deactivatedAt DateTime?` bij `User`**, met de
-splitsing uit de gids: bestaande rijen met een `passwordHash` zijn "uitgezet", de rest is "nooit
-begonnen". Daarna vervalt de `isActive`-check in `decideEntraSignIn` ten gunste van een check op
-`deactivatedAt`. Dat is één functie; de rest blijft staan.
+| `isActive` | `deactivatedAt` | betekenis | SSO |
+|---|---|---|---|
+| `false` | `null` | uitgenodigd, nooit geactiveerd | activeren en toelaten |
+| `false` | gezet | uitgezet door een beheerder | weigeren (`AccountDeactivated`) |
+| `true` | `null` | actief | toelaten |
+
+Drie plekken houden het tijdstempel bij, want een blijven staan stempel sluit een heractiveerd
+account buiten en een ontbrekend stempel laat een uitgezet account binnen:
+
+- `PATCH /api/admin/users/[id]` zet hem bij `isActive: false` en wist hem bij `true`
+- `POST /api/activate` wist hem — het account is weer in gebruik
+- de `signIn`-callback wist hem bij auto-activatie, en gooit meteen `activationToken` weg: een
+  openstaande uitnodigingslink hoort dood te zijn zodra het account langs een andere weg in
+  gebruik is genomen
+
+**Bestaande rijen moeten verdeeld worden** met `scripts/backfill-user-deactivated-at.ts`, en wel
+vóórdat de provider aangaat. Zonder backfill ziet een uitgezet account eruit als een uitgenodigd
+account. De heuristiek is die van de gids: wie ooit een wachtwoord heeft gezet, is uitgezet; wie
+er geen heeft, is nooit begonnen. Als tijdstempel gebruikt het script `updatedAt`, wat dichter bij
+de waarheid ligt dan het moment van draaien.
+
+`decideEntraSignIn` heeft daarnaast een vangnet: een inactief account mét wachtwoord wordt ook
+zonder tijdstempel geweigerd. Dat is dezelfde heuristiek, maar dan tijdens het inloggen. Na een
+correcte backfill kan hij nooit meer afgaan; tot die tijd voorkomt hij dat een vergeten migratie
+de zijdeur openzet.
 
 Twee dingen uit de gids gelden bij ons **niet**:
 
@@ -75,7 +95,8 @@ Twee dingen uit de gids gelden bij ons **niet**:
 | `src/app/login/page.tsx` | Geeft `entraEnabled` server-side door |
 | `src/app/login/login-content.tsx` | Knop, scheidingslijn, foutcodes tegen een allowlist |
 | `src/components/auth/sso-button.tsx` | `@col/sso-button` 1.0.0 — beheerd bestand, niet lokaal aanpassen |
-| `prisma/schema.prisma` | `User.entraOid String? @unique` |
+| `prisma/schema.prisma` | `User.entraOid String? @unique`, `User.deactivatedAt DateTime?` |
+| `scripts/backfill-user-deactivated-at.ts` | Verdeelt bestaande rijen over uitgenodigd/uitgezet |
 
 De beslissingsfunctie staat bewust los van NextAuth en van Prisma: de regels zijn het
 interessante deel en die horen leesbaar en toetsbaar te zijn zonder request of database. Dat is
@@ -102,25 +123,25 @@ loginpagina en gedraagt de portal zich exact als nu — dat is met opzet, zodat 
 
 ## 4. Openstaand
 
-- [ ] **Domeinlijst vaststellen** (§5 hieronder) — blokkeert de aanvraag
+- [x] Domeinlijst vaststellen (§5 hieronder)
 - [ ] App Registration aanvragen bij `systems@dfg.nl` (bijlage A van de gids, ingevuld hieronder)
 - [ ] Admin consent aanvragen — aparte mail, bijlage B van de gids
 - [ ] Env-vars in Vercel, preview + productie
-- [ ] `npx prisma db push` voor `entraOid`, eerst test dan productie
+- [ ] `npx prisma db push` voor `entraOid` en `deactivatedAt`, eerst test dan productie
+- [ ] `npx tsx scripts/backfill-user-deactivated-at.ts --apply` — **vóór** de provider aangaat
 - [ ] Testen op een preview-deployment; lokaal kan niet, localhost staat bewust niet in de URI's
 - [ ] Vervaldatum van het secret in de agenda (24 maanden)
 
 ---
 
-## 5. Redirect URI's — nog te bevestigen
+## 5. Redirect URI's
 
 De vorm is `https://<host>/api/auth/callback/microsoft-entra-id`.
 
 | Omgeving | Host | Status |
 |---|---|---|
 | Test | `growerportal.test.apps.coloriginz.com` | **zeker** — staat in de importscripts |
-| Productie | `<in te vullen>` | **onbekend** — `.env.production` wijst naar `col-growerportal.vercel.app`, en de gids zegt expliciet dat je de `.vercel.app`-URL niet registreert |
-| MyPeony-label | `<in te vullen, indien interne gebruikers daar inloggen>` | onbekend — `company-config.ts` kent `mypeony` als merk |
+| Productie | `growerportal.apps.coloriginz.com` | **bevestigd** 11 aug 2026. Let op: `.env.production` wijst naar `col-growerportal.vercel.app`; die registreren we bewust niet, conform §2 van de gids |
 
 Fust-domeinen staan er bewust niet bij: geen SSO voor transporteurs.
 
@@ -146,7 +167,7 @@ het is puur een keuze om ze daar niet aan te bieden.
 > - Platform: Web
 > - Redirect URI's:
 >   - `https://growerportal.test.apps.coloriginz.com/api/auth/callback/microsoft-entra-id`
->   - `https://<productiedomein>/api/auth/callback/microsoft-entra-id`
+>   - `https://growerportal.apps.coloriginz.com/api/auth/callback/microsoft-entra-id`
 > - API permissions (Microsoft Graph, delegated): `openid`, `profile`, `email`, `User.Read`
 > - Client secret met een looptijd van 24 maanden
 >

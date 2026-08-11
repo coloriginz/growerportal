@@ -22,7 +22,7 @@ import { ENTRA_PROVIDER_ID } from "@/lib/entra-sign-in";
 const SSO_ERROR_KEYS = {
   NoEmailClaim: "auth.ssoNoEmail",
   AccountNotFound: "auth.ssoNoAccount",
-  AccountNotActivated: "auth.ssoNotActivated",
+  AccountDeactivated: "auth.ssoDeactivated",
   AccountNotAllowed: "auth.ssoNotAllowed",
 } as const;
 

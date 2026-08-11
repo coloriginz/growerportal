@@ -41,6 +41,9 @@ export async function POST(request: NextRequest) {
     data: {
       passwordHash,
       isActive: true,
+      // The account is in use again; a stale timestamp here would make SSO
+      // refuse someone who just activated through the normal route.
+      deactivatedAt: null,
       activationToken: null,
     },
   });

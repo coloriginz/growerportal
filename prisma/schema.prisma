@@ -42,6 +42,11 @@ model User {
   // without relinking everyone.
   entraOid       String?  @unique
   isActive       Boolean  @default(false)
+  // Separates the two meanings isActive used to carry on its own. Null with
+  // isActive false means "invited, never activated"; a timestamp means "switched
+  // off by an admin". Without that split, SSO auto-activation would let a
+  // deactivated account back in through the side door.
+  deactivatedAt  DateTime?
   activationToken    String?   @unique
   resetToken         String?   @unique
   resetTokenExpiry   DateTime?

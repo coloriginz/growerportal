@@ -63,8 +63,8 @@
     "ssoDivider": "of",
     "ssoNoEmail": "Je Microsoft-account heeft geen e-mailadres meegegeven. Neem contact op met je beheerder.",
     "ssoNoAccount": "Er bestaat geen portalaccount voor dit Microsoft-account. Neem contact op met je beheerder.",
-    "ssoNotActivated": "Je account is nog niet geactiveerd. Gebruik eerst de activatielink uit je uitnodigingsmail.",
-    "ssoNotAllowed": "Dit account kan niet met Microsoft inloggen. Gebruik je e-mailadres en wachtwoord."
+    "ssoNotAllowed": "Dit account kan niet met Microsoft inloggen. Gebruik je e-mailadres en wachtwoord.",
+    "ssoDeactivated": "Dit account is gedeactiveerd. Neem contact op met je beheerder."
   },
   "nav": {
     "dashboard": "Dashboard",
