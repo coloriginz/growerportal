@@ -58,7 +58,13 @@
     "passwordResetSuccessMessage": "Uw wachtwoord is gereset. U kunt nu inloggen met uw nieuwe wachtwoord.",
     "invalidResetLink": "Ongeldige of Verlopen Link",
     "invalidResetLinkMessage": "Deze resetlink is niet meer geldig. Vraag een nieuwe aan.",
-    "backToLogin": "Terug naar Inloggen"
+    "backToLogin": "Terug naar Inloggen",
+    "ssoLogin": "Inloggen met Microsoft",
+    "ssoDivider": "of",
+    "ssoNoEmail": "Je Microsoft-account heeft geen e-mailadres meegegeven. Neem contact op met je beheerder.",
+    "ssoNoAccount": "Er bestaat geen portalaccount voor dit Microsoft-account. Neem contact op met je beheerder.",
+    "ssoNotAllowed": "Dit account kan niet met Microsoft inloggen. Gebruik je e-mailadres en wachtwoord.",
+    "ssoDeactivated": "Dit account is gedeactiveerd. Neem contact op met je beheerder."
   },
   "nav": {
     "dashboard": "Dashboard",

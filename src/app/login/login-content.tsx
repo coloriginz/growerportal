@@ -12,17 +12,40 @@ import { useCompanyBranding } from "@/components/providers/company-provider";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import Link from "next/link";
 import { isTest } from "@/lib/env";
+import { SsoButton } from "@/components/auth/sso-button";
+import { ENTRA_PROVIDER_ID } from "@/lib/entra-sign-in";
 
-export function LoginContent() {
+/**
+ * Codes the signIn callback may hand back. Never render the raw query
+ * parameter — check it against this list first.
+ */
+const SSO_ERROR_KEYS = {
+  NoEmailClaim: "auth.ssoNoEmail",
+  AccountNotFound: "auth.ssoNoAccount",
+  AccountDeactivated: "auth.ssoDeactivated",
+  AccountNotAllowed: "auth.ssoNotAllowed",
+} as const;
+
+type SsoErrorCode = keyof typeof SSO_ERROR_KEYS;
+
+function isSsoErrorCode(value: string | null): value is SsoErrorCode {
+  return value !== null && value in SSO_ERROR_KEYS;
+}
+
+export function LoginContent({ ssoEnabled = false }: { ssoEnabled?: boolean }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [ssoBusy, setSsoBusy] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
   const callbackUrl = searchParams.get("callbackUrl") || "/dashboard";
   const { t } = useLanguage();
   const company = useCompanyBranding();
+
+  const ssoErrorParam = searchParams.get("error");
+  const ssoError = isSsoErrorCode(ssoErrorParam) ? t(SSO_ERROR_KEYS[ssoErrorParam]) : null;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -74,6 +97,34 @@ export function LoginContent() {
           <p className="text-muted-foreground mt-2 text-sm">
             {t("auth.loginSubtitle")}
           </p>
+
+          {ssoError && (
+            <div className="mt-6 rounded-lg bg-destructive/10 px-3 py-2.5 text-sm text-destructive">
+              {ssoError}
+            </div>
+          )}
+
+          {ssoEnabled && (
+            <div className="mt-8 space-y-5">
+              <SsoButton
+                label={t("auth.ssoLogin")}
+                busyLabel={t("common.loading")}
+                busy={ssoBusy}
+                disabled={loading}
+                onClick={() => {
+                  setSsoBusy(true);
+                  signIn(ENTRA_PROVIDER_ID, { callbackUrl });
+                }}
+              />
+              <div className="flex items-center gap-3">
+                <div className="h-px flex-1 bg-border" />
+                <span className="text-muted-foreground text-xs uppercase tracking-wider">
+                  {t("auth.ssoDivider")}
+                </span>
+                <div className="h-px flex-1 bg-border" />
+              </div>
+            </div>
+          )}
 
           <form onSubmit={handleSubmit} className="mt-8 space-y-5">
             <div className="space-y-2">
