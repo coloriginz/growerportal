@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
-import { requireImportAuth, stripBracketKeys } from "@/lib/import-auth";
+import { requireImportAuth, normalizeImportKeys, summariseImportError } from "@/lib/import-auth";
 
 const orderSchema = z.object({
   ordreg_id: z.number().nullable().optional(),
@@ -23,6 +23,17 @@ const bodySchema = z.object({
   orders: z.array(orderSchema),
 });
 
+const orderKeys = Object.keys(orderSchema.shape);
+
+const orderAliases = {
+  // Warehouse columns in marts.fct_orders that carry a different name.
+  // Afrekenomzet needs no entry: it has no column of its own (it is aantal x
+  // afrekenprijs), so the query has to alias it either way.
+  Verkoopvolume: ["vor_aantal"],
+  Verkoop_colli: ["vor_colli"],
+  "Gem afrekenprijs": ["afrekenprijs_per_steel"],
+} as const;
+
 export async function POST(request: NextRequest) {
   const authError = requireImportAuth(request);
   if (authError) return authError;
@@ -38,16 +49,23 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json();
-  if (body.orders) body.orders = stripBracketKeys(body.orders);
+  if (Array.isArray(body.orders)) {
+    body.orders = normalizeImportKeys(body.orders, orderKeys, orderAliases);
+  }
   const parsed = bodySchema.safeParse(body);
   if (!parsed.success) {
+    const summary = summariseImportError(
+      parsed.error.issues,
+      Array.isArray(body.orders) ? body.orders : [],
+      orderKeys
+    );
     if (batch) {
       try {
         await prisma.importBatch.update({
           where: { id: batch.id },
           data: {
             status: "error",
-            errorMessage: JSON.stringify(parsed.error.flatten()),
+            errorMessage: summary,
             durationMs: Date.now() - startTime,
             completedAt: new Date(),
           },
@@ -56,7 +74,7 @@ export async function POST(request: NextRequest) {
         // Batch logging should not block the import
       }
     }
-    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+    return NextResponse.json({ error: JSON.parse(summary) }, { status: 400 });
   }
 
   try {

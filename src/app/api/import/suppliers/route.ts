@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
-import { requireImportAuth, stripBracketKeys } from "@/lib/import-auth";
+import { requireImportAuth, normalizeImportKeys, summariseImportError } from "@/lib/import-auth";
 
 const supplierSchema = z.object({
   Code: z.string().min(1),
@@ -14,6 +14,14 @@ const supplierSchema = z.object({
 const bodySchema = z.object({
   suppliers: z.array(supplierSchema),
 });
+
+const supplierKeys = Object.keys(supplierSchema.shape);
+
+const supplierAliases = {
+  // dim_leverancier is not yet queried over SQL; add the warehouse column
+  // names here once that flow exists. Any field that stays unmatched is named
+  // outright in the error summary, so one test run is enough to find them.
+} as const;
 
 export async function POST(request: NextRequest) {
   const authError = requireImportAuth(request);
@@ -30,16 +38,23 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json();
-  if (body.suppliers) body.suppliers = stripBracketKeys(body.suppliers);
+  if (Array.isArray(body.suppliers)) {
+    body.suppliers = normalizeImportKeys(body.suppliers, supplierKeys, supplierAliases);
+  }
   const parsed = bodySchema.safeParse(body);
   if (!parsed.success) {
+    const summary = summariseImportError(
+      parsed.error.issues,
+      Array.isArray(body.suppliers) ? body.suppliers : [],
+      supplierKeys
+    );
     if (batch) {
       try {
         await prisma.importBatch.update({
           where: { id: batch.id },
           data: {
             status: "error",
-            errorMessage: JSON.stringify(parsed.error.flatten()),
+            errorMessage: summary,
             durationMs: Date.now() - startTime,
             completedAt: new Date(),
           },
@@ -48,7 +63,7 @@ export async function POST(request: NextRequest) {
         // Batch logging should not block the import
       }
     }
-    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+    return NextResponse.json({ error: JSON.parse(summary) }, { status: 400 });
   }
 
   try {
