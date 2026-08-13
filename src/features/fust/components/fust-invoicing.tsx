@@ -28,7 +28,6 @@ import {
 } from "@/components/ui/dialog";
 import {
   RiFileTextLine,
-  RiLink,
   RiSendPlaneLine,
   RiDownloadLine,
   RiCheckLine,
@@ -38,33 +37,53 @@ import { toast } from "sonner";
 
 // ─── Types ──────────────────────────────────────────────
 
-interface FustTypeRef {
+interface RfhInvoiceLine {
   id: string;
-  code: string;
-  name: string;
-  pricePerUnit: string;
-  rentalPricePerUnit: string;
-  depositArticleCode: string;
-  rentalArticleCode: string;
+  fustCode: string;
+  description: string;
+  quantity: number;
+  statiegeldPrice: string | null;
+  statiegeldAmount: string | null;
+  fusthuurPrice: string | null;
+  fusthuurAmount: string | null;
+  vatCode: string;
+  voucherNumber: string;
 }
 
-interface OrderRef {
+interface Allocation {
   id: string;
-  orderNumber: string;
-  status: string;
-  deliveredAt: string | null;
-  invoicedAt: string | null;
-  supplier: { id: string; code: string; name: string; company: string | null };
-  items: Array<{ id: string; quantity: number; fustType: FustTypeRef }>;
-  voucherLinks?: Array<{
+  rfhInvoiceId: string;
+  voucherNumber: string;
+  supplierId: string | null;
+  rfhInvoice: {
     id: string;
-    voucher: {
-      id: string;
-      transactionNumber: string;
-      type: string;
-      transactionDate: string;
-    };
-  }>;
+    invoiceNumber: string;
+    invoiceDate: string;
+    status: string;
+    lines: RfhInvoiceLine[];
+  };
+  supplier: {
+    id: string;
+    code: string;
+    name: string;
+    company: string | null;
+    companyEntity: { name: string } | null;
+  } | null;
+  voucher: {
+    id: string;
+    transactionNumber: string;
+    notes: string | null;
+  } | null;
+}
+
+interface SupplierGroup {
+  supplierId: string;
+  supplierCode: string;
+  supplierName: string;
+  companyName: string | null;
+  allocations: Allocation[];
+  rfhInvoiceIds: string[];
+  voucherNumbers: string[];
 }
 
 interface SupplierInvoice {
@@ -98,33 +117,63 @@ const VAT_RATE = 0.21;
 
 // ─── Helpers ────────────────────────────────────────────
 
-function buildInvoiceLines(orders: OrderRef[]): InvoiceLine[] {
-  const lines: InvoiceLine[] = [];
-  for (const order of orders) {
-    for (const item of order.items) {
-      const depositPrice = Number(item.fustType.pricePerUnit);
-      if (depositPrice > 0) {
-        lines.push({
-          articleCode: item.fustType.depositArticleCode,
-          description: `${item.fustType.name} - Deposit`,
-          quantity: item.quantity,
-          unitPrice: depositPrice,
-          total: item.quantity * depositPrice,
-        });
+function buildInvoiceLinesFromAllocations(allocations: Allocation[]): InvoiceLine[] {
+  // Collect all voucher numbers from the allocations
+  const allocatedVoucherNumbers = new Set(allocations.map((a) => a.voucherNumber));
+
+  // Group by fustCode + lineType, sum amounts
+  const grouped = new Map<string, { articleCode: string; description: string; quantity: number; totalPrice: number }>();
+
+  for (const alloc of allocations) {
+    for (const line of alloc.rfhInvoice.lines) {
+      if (!allocatedVoucherNumbers.has(line.voucherNumber)) continue;
+
+      const statiegeldAmount = Number(line.statiegeldAmount ?? 0);
+      const fusthuurAmount = Number(line.fusthuurAmount ?? 0);
+
+      // Statiegeld (deposit)
+      if (statiegeldAmount !== 0) {
+        const key = `${line.fustCode}-deposit`;
+        const existing = grouped.get(key);
+        if (existing) {
+          existing.quantity += line.quantity;
+          existing.totalPrice += statiegeldAmount;
+        } else {
+          grouped.set(key, {
+            articleCode: "2907",
+            description: `${line.description} - Statiegeld`,
+            quantity: line.quantity,
+            totalPrice: statiegeldAmount,
+          });
+        }
       }
-      const rentalPrice = Number(item.fustType.rentalPricePerUnit);
-      if (rentalPrice > 0) {
-        lines.push({
-          articleCode: item.fustType.rentalArticleCode,
-          description: `${item.fustType.name} - Rental`,
-          quantity: item.quantity,
-          unitPrice: rentalPrice,
-          total: item.quantity * rentalPrice,
-        });
+
+      // Fusthuur (rental)
+      if (fusthuurAmount !== 0) {
+        const key = `${line.fustCode}-rental`;
+        const existing = grouped.get(key);
+        if (existing) {
+          existing.quantity += line.quantity;
+          existing.totalPrice += fusthuurAmount;
+        } else {
+          grouped.set(key, {
+            articleCode: "2908",
+            description: `${line.description} - Huur`,
+            quantity: line.quantity,
+            totalPrice: fusthuurAmount,
+          });
+        }
       }
     }
   }
-  return lines;
+
+  return Array.from(grouped.values()).map((item) => ({
+    articleCode: item.articleCode,
+    description: item.description,
+    quantity: item.quantity,
+    unitPrice: item.quantity !== 0 ? Math.round((item.totalPrice / item.quantity) * 100) / 100 : 0,
+    total: Math.round(item.totalPrice * 100) / 100,
+  }));
 }
 
 function todayISO(): string {
@@ -140,10 +189,10 @@ export function FustInvoicing() {
 
   // Data fetching
   const {
-    data: orders,
-    loading: ordersLoading,
-    refetch: refetchOrders,
-  } = useFetch<OrderRef[]>("/api/fust/orders?status=delivered");
+    data: allocations,
+    loading: allocationsLoading,
+    refetch: refetchAllocations,
+  } = useFetch<Allocation[]>("/api/fust/grower-invoices?source=rfh");
 
   const {
     data: invoices,
@@ -151,8 +200,8 @@ export function FustInvoicing() {
     refetch: refetchInvoices,
   } = useFetch<SupplierInvoice[]>("/api/fust/grower-invoices");
 
-  // Selection state
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  // Selection state (by supplierId)
+  const [selectedSupplierIds, setSelectedSupplierIds] = useState<Set<string>>(new Set());
 
   // Dialog state
   const [showGenerateDialog, setShowGenerateDialog] = useState(false);
@@ -164,33 +213,50 @@ export function FustInvoicing() {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [previewing, setPreviewing] = useState(false);
 
-  // Filter orders: voucher links present AND not yet invoiced
-  const readyOrders = useMemo(() => {
-    if (!orders) return [];
-    return orders.filter(
-      (o) => (o.voucherLinks?.length ?? 0) > 0 && !o.invoicedAt
-    );
-  }, [orders]);
+  // Group allocations by supplier
+  const supplierGroups = useMemo(() => {
+    if (!allocations) return [];
+    const groupMap = new Map<string, SupplierGroup>();
+    for (const alloc of allocations) {
+      if (!alloc.supplier) continue;
+      const sid = alloc.supplier.id;
+      let group = groupMap.get(sid);
+      if (!group) {
+        group = {
+          supplierId: sid,
+          supplierCode: alloc.supplier.code,
+          supplierName: alloc.supplier.name,
+          companyName: alloc.supplier.company ?? alloc.supplier.companyEntity?.name ?? null,
+          allocations: [],
+          rfhInvoiceIds: [],
+          voucherNumbers: [],
+        };
+        groupMap.set(sid, group);
+      }
+      group.allocations.push(alloc);
+      if (!group.rfhInvoiceIds.includes(alloc.rfhInvoiceId)) {
+        group.rfhInvoiceIds.push(alloc.rfhInvoiceId);
+      }
+      if (!group.voucherNumbers.includes(alloc.voucherNumber)) {
+        group.voucherNumbers.push(alloc.voucherNumber);
+      }
+    }
+    return Array.from(groupMap.values());
+  }, [allocations]);
 
-  // Selected orders
-  const selectedOrders = useMemo(
-    () => readyOrders.filter((o) => selectedIds.has(o.id)),
-    [readyOrders, selectedIds]
-  );
+  // Selected supplier group (only one at a time for invoice generation)
+  const selectedGroup = useMemo(() => {
+    if (selectedSupplierIds.size !== 1) return null;
+    const sid = Array.from(selectedSupplierIds)[0];
+    return supplierGroups.find((g) => g.supplierId === sid) ?? null;
+  }, [selectedSupplierIds, supplierGroups]);
 
-  // Check if all selected orders belong to the same supplier
-  const selectedSupplierIds = useMemo(() => {
-    const ids = new Set(selectedOrders.map((o) => o.supplier.id));
-    return ids;
-  }, [selectedOrders]);
-
-  const allSameSupplier = selectedSupplierIds.size <= 1;
-  const canGenerate = selectedIds.size > 0 && allSameSupplier;
+  const canGenerate = selectedSupplierIds.size === 1 && selectedGroup !== null;
 
   // Invoice preview lines
   const previewLines = useMemo(
-    () => buildInvoiceLines(selectedOrders),
-    [selectedOrders]
+    () => (selectedGroup ? buildInvoiceLinesFromAllocations(selectedGroup.allocations) : []),
+    [selectedGroup]
   );
   const subtotal = useMemo(
     () => previewLines.reduce((sum, l) => sum + l.total, 0),
@@ -202,31 +268,31 @@ export function FustInvoicing() {
   // Counts for tabs
   const counts = useMemo(
     () => ({
-      ready: readyOrders.length,
+      ready: supplierGroups.length,
       invoiced: invoices?.length ?? 0,
     }),
-    [readyOrders, invoices]
+    [supplierGroups, invoices]
   );
 
   // ─── Selection handlers ───────────────────────────────
 
-  const toggleSelection = (orderId: string) => {
-    setSelectedIds((prev) => {
+  const toggleSelection = (supplierId: string) => {
+    setSelectedSupplierIds((prev) => {
       const next = new Set(prev);
-      if (next.has(orderId)) {
-        next.delete(orderId);
+      if (next.has(supplierId)) {
+        next.delete(supplierId);
       } else {
-        next.add(orderId);
+        next.add(supplierId);
       }
       return next;
     });
   };
 
   const toggleAll = () => {
-    if (selectedIds.size === readyOrders.length) {
-      setSelectedIds(new Set());
+    if (selectedSupplierIds.size === supplierGroups.length) {
+      setSelectedSupplierIds(new Set());
     } else {
-      setSelectedIds(new Set(readyOrders.map((o) => o.id)));
+      setSelectedSupplierIds(new Set(supplierGroups.map((g) => g.supplierId)));
     }
   };
 
@@ -239,16 +305,15 @@ export function FustInvoicing() {
   };
 
   const handleGenerate = async () => {
-    if (!canGenerate) return;
+    if (!canGenerate || !selectedGroup) return;
     setGenerating(true);
     try {
-      const supplierId = selectedOrders[0].supplier.id;
       const res = await fetch("/api/fust/grower-invoices", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          supplierId,
-          orderIds: selectedOrders.map((o) => o.id),
+          supplierId: selectedGroup.supplierId,
+          rfhInvoiceIds: selectedGroup.rfhInvoiceIds,
           invoiceDate,
           notes: notes.trim() || undefined,
         }),
@@ -256,8 +321,8 @@ export function FustInvoicing() {
       if (res.ok) {
         toast.success(tAny("fust.invoiceGenerated"));
         setShowGenerateDialog(false);
-        setSelectedIds(new Set());
-        refetchOrders();
+        setSelectedSupplierIds(new Set());
+        refetchAllocations();
         refetchInvoices();
       } else {
         const data = await res.json().catch(() => null);
@@ -271,16 +336,15 @@ export function FustInvoicing() {
   };
 
   const handlePreview = async () => {
-    if (!canGenerate) return;
+    if (!canGenerate || !selectedGroup) return;
     setPreviewing(true);
     try {
-      const supplierId = selectedOrders[0].supplier.id;
       const res = await fetch("/api/fust/grower-invoices/preview", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          supplierId,
-          orderIds: selectedOrders.map((o) => o.id),
+          supplierId: selectedGroup.supplierId,
+          rfhInvoiceIds: selectedGroup.rfhInvoiceIds,
           invoiceDate,
           notes: notes.trim() || undefined,
         }),
@@ -389,20 +453,20 @@ export function FustInvoicing() {
               <RiFileTextLine className="mr-1.5 h-4 w-4" />
               {tAny("fust.generateInvoice")}
             </Button>
-            {selectedIds.size > 0 && !allSameSupplier && (
+            {selectedSupplierIds.size > 1 && (
               <p className="text-sm text-destructive">
                 {tAny("fust.selectSameSupplierWarning")}
               </p>
             )}
           </div>
 
-          {ordersLoading ? (
+          {allocationsLoading ? (
             <div className="space-y-2">
               <Skeleton className="h-10" />
               <Skeleton className="h-10" />
               <Skeleton className="h-10" />
             </div>
-          ) : readyOrders.length === 0 ? (
+          ) : supplierGroups.length === 0 ? (
             <div className="py-16 text-center text-muted-foreground">
               <RiFileTextLine className="mx-auto mb-2 h-10 w-10 opacity-30" />
               <p className="text-sm">{tAny("fust.noReadyOrders")}</p>
@@ -419,33 +483,30 @@ export function FustInvoicing() {
                       >
                         <Checkbox
                           checked={
-                            selectedIds.size === readyOrders.length &&
-                            readyOrders.length > 0
+                            selectedSupplierIds.size === supplierGroups.length &&
+                            supplierGroups.length > 0
                           }
                           onCheckedChange={toggleAll}
                         />
                       </div>
                     </TableHead>
-                    <TableHead>{tAny("fust.orderNumber")}</TableHead>
                     <TableHead>{tAny("fust.supplier")}</TableHead>
-                    <TableHead>{tAny("fust.delivered")}</TableHead>
-                    <TableHead>{tAny("fust.items")}</TableHead>
-                    <TableHead>{tAny("fust.linkedVouchers")}</TableHead>
+                    <TableHead>{tAny("fust.rfhInvoices")}</TableHead>
+                    <TableHead>{tAny("fust.vouchers")}</TableHead>
+                    <TableHead>{tAny("fust.rfh.voucherNotes")}</TableHead>
+                    <TableHead className="text-right">{tAny("fust.allocations")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {readyOrders.map((order) => {
-                    const isSelected = selectedIds.has(order.id);
-                    const itemsSummary = order.items
-                      .map((item) => `${item.quantity}x ${item.fustType.code} — ${item.fustType.name}`)
-                      .join(", ");
+                  {supplierGroups.map((group) => {
+                    const isSelected = selectedSupplierIds.has(group.supplierId);
                     return (
                       <TableRow
-                        key={order.id}
+                        key={group.supplierId}
                         className={
                           isSelected ? "bg-primary/5" : "cursor-pointer"
                         }
-                        onClick={() => toggleSelection(order.id)}
+                        onClick={() => toggleSelection(group.supplierId)}
                       >
                         <TableCell>
                           <div
@@ -455,43 +516,55 @@ export function FustInvoicing() {
                             <Checkbox
                               checked={isSelected}
                               onCheckedChange={() =>
-                                toggleSelection(order.id)
+                                toggleSelection(group.supplierId)
                               }
                             />
                           </div>
                         </TableCell>
-                        <TableCell className="font-mono font-medium">
-                          {order.orderNumber}
-                        </TableCell>
                         <TableCell>
                           <span className="font-medium">
-                            {order.supplier.code}
+                            {group.supplierCode}
                           </span>
                           <span className="ml-1.5 text-muted-foreground">
-                            {order.supplier.company || order.supplier.name}
+                            {group.companyName || group.supplierName}
                           </span>
-                        </TableCell>
-                        <TableCell>
-                          {order.deliveredAt
-                            ? formatDate(order.deliveredAt)
-                            : "\u2014"}
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {itemsSummary}
                         </TableCell>
                         <TableCell>
                           <div className="flex flex-wrap gap-1">
-                            {order.voucherLinks?.map((link) => (
-                              <Badge
-                                key={link.id}
-                                variant="outline"
-                                className="gap-1"
-                              >
-                                <RiLink className="h-3 w-3" />
-                                #{link.voucher.transactionNumber}
-                              </Badge>
-                            ))}
+                            {group.rfhInvoiceIds.map((invId) => {
+                              const inv = group.allocations.find(
+                                (a) => a.rfhInvoiceId === invId
+                              )?.rfhInvoice;
+                              return (
+                                <Badge
+                                  key={invId}
+                                  variant="outline"
+                                  className="text-xs"
+                                >
+                                  {inv?.invoiceNumber ?? invId.slice(0, 8)}
+                                </Badge>
+                              );
+                            })}
                           </div>
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {group.voucherNumbers.join(", ")}
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground max-w-xs">
+                          {(() => {
+                            const notes = group.allocations
+                              .map((a) => a.voucher?.notes)
+                              .filter(Boolean);
+                            const unique = [...new Set(notes)];
+                            return unique.length > 0
+                              ? unique.map((note, i) => (
+                                  <p key={i} className="whitespace-pre-line">{note}</p>
+                                ))
+                              : "-";
+                          })()}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {group.allocations.length}
                         </TableCell>
                       </TableRow>
                     );
@@ -623,13 +696,18 @@ export function FustInvoicing() {
           <DialogHeader>
             <DialogTitle>{tAny("fust.generateInvoice")}</DialogTitle>
             <DialogDescription>
-              {selectedOrders.length > 0 && (
+              {selectedGroup && (
                 <>
-                  {selectedOrders[0].supplier.code} &mdash;{" "}
-                  {selectedOrders[0].supplier.company ||
-                    selectedOrders[0].supplier.name}{" "}
-                  ({selectedOrders.length}{" "}
-                  {selectedOrders.length === 1 ? "order" : "orders"})
+                  {selectedGroup.supplierCode} &mdash;{" "}
+                  {selectedGroup.companyName || selectedGroup.supplierName}{" "}
+                  ({selectedGroup.allocations.length}{" "}
+                  {selectedGroup.allocations.length === 1
+                    ? "allocation"
+                    : "allocations"}
+                  , {selectedGroup.rfhInvoiceIds.length}{" "}
+                  {selectedGroup.rfhInvoiceIds.length === 1
+                    ? "RFH invoice"
+                    : "RFH invoices"})
                 </>
               )}
             </DialogDescription>

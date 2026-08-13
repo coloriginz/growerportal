@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
-import { requireImportAuth, stripBracketKeys } from "@/lib/import-auth";
+import { requireImportAuth, normalizeImportKeys, summariseImportError } from "@/lib/import-auth";
 
 const growerSchema = z.object({
   Naam: z.string().min(1),
@@ -15,6 +15,12 @@ const growerSchema = z.object({
 const bodySchema = z.object({
   growers: z.array(growerSchema),
 });
+
+const growerKeys = Object.keys(growerSchema.shape);
+
+const growerAliases = {
+  // dim_kweker is not yet queried over SQL; see the note in the suppliers route.
+} as const;
 
 export async function POST(request: NextRequest) {
   const authError = requireImportAuth(request);
@@ -31,16 +37,23 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json();
-  if (body.growers) body.growers = stripBracketKeys(body.growers);
+  if (Array.isArray(body.growers)) {
+    body.growers = normalizeImportKeys(body.growers, growerKeys, growerAliases);
+  }
   const parsed = bodySchema.safeParse(body);
   if (!parsed.success) {
+    const summary = summariseImportError(
+      parsed.error.issues,
+      Array.isArray(body.growers) ? body.growers : [],
+      growerKeys
+    );
     if (batch) {
       try {
         await prisma.importBatch.update({
           where: { id: batch.id },
           data: {
             status: "error",
-            errorMessage: JSON.stringify(parsed.error.flatten()),
+            errorMessage: summary,
             durationMs: Date.now() - startTime,
             completedAt: new Date(),
           },
@@ -49,7 +62,7 @@ export async function POST(request: NextRequest) {
         // Batch logging should not block the import
       }
     }
-    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+    return NextResponse.json({ error: JSON.parse(summary) }, { status: 400 });
   }
 
   try {

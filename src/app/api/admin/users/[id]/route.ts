@@ -56,6 +56,15 @@ export async function PATCH(
     updateData.transporterId = null;
   }
 
+  // Keep deactivatedAt in step with isActive. SSO refuses on the timestamp, so
+  // leaving a stale one behind would lock out an account that is switched back
+  // on, and leaving it unset would let a switched-off account sign in.
+  if (data.isActive === false) {
+    updateData.deactivatedAt = new Date();
+  } else if (data.isActive === true) {
+    updateData.deactivatedAt = null;
+  }
+
   // Handle company (label) access
   if (companyIds !== undefined) {
     updateData.companies = { set: companyIds.map((cid) => ({ id: cid })) };

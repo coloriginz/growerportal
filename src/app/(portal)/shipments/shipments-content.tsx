@@ -4,7 +4,6 @@ import { useState, useMemo } from "react";
 import Link from "next/link";
 import { SelectSupplierPrompt } from "@/components/ui/select-supplier-prompt";
 import { useRouter } from "next/navigation";
-import { useSession } from "next-auth/react";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   Table,
@@ -14,11 +13,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { RiSearchLine, RiShipLine, RiDownloadLine, RiRefreshLine, RiMailLine } from "@remixicon/react";
+import { RiSearchLine, RiShipLine, RiDownloadLine, RiRefreshLine } from "@remixicon/react";
 import { exportToCSV } from "@/lib/export-csv";
 import { useFetch } from "@/hooks/use-fetch";
 import { ErrorState } from "@/components/ui/error-state";
@@ -43,29 +40,10 @@ interface ShipmentRow {
   totalStems: number;
 }
 
-interface IngestionRow {
-  id: string;
-  subject: string | null;
-  fromAddress: string | null;
-  receivedAt: string | null;
-  processedAt: string;
-  status: string;
-  attachmentCount: number;
-  processedCount: number;
-  skippedCount: number;
-  errors: string | null;
-  createdAt: string;
-  processed: { fileName: string; salesSheetId: string; invoiceNumber: string; ourInvoiceNumber: string; supplierCode: string }[];
-  skipped: { fileName: string; reason: string }[];
-}
-
 export function ShipmentsContent({ supplierId }: { supplierId: string | null }) {
   const [search, setSearch] = useState("");
   const { t } = useLanguage();
   const router = useRouter();
-  const { data: session } = useSession();
-
-  const isAdmin = session?.user?.role === "admin" || session?.user?.role === "commercie" || session?.user?.role === "finance";
 
   const url = useMemo(() => {
     const params = new URLSearchParams();
@@ -142,7 +120,7 @@ export function ShipmentsContent({ supplierId }: { supplierId: string | null }) 
       {/* Mobile card list */}
       <div className="space-y-3 md:hidden">
         {filtered.map((s) => (
-          <Link key={s.id} href={`/shipments/${s.id}`} className="block">
+          <Link key={s.id} href={`/shipments/${s.id}${supplierId ? `?supplierId=${supplierId}` : ""}`} className="block">
             <Card className="transition-colors hover:bg-accent/50">
               <CardContent className="p-4">
                 <div className="flex items-center justify-between mb-2">
@@ -207,7 +185,7 @@ export function ShipmentsContent({ supplierId }: { supplierId: string | null }) 
                 <TableRow
                   key={s.id}
                   className="cursor-pointer"
-                  onClick={() => router.push(`/shipments/${s.id}`)}
+                  onClick={() => router.push(`/shipments/${s.id}${supplierId ? `?supplierId=${supplierId}` : ""}`)}
                 >
                   <TableCell className="font-medium text-primary">
                     {s.invoiceNumber}
@@ -241,146 +219,5 @@ export function ShipmentsContent({ supplierId }: { supplierId: string | null }) 
     </>
   );
 
-  if (!isAdmin) {
-    return <div className="page-content">{shipmentsView}</div>;
-  }
-
-  return (
-    <div className="page-content">
-      <Tabs defaultValue="shipments">
-        <TabsList>
-          <TabsTrigger value="shipments">{t("shipments.title")}</TabsTrigger>
-          <TabsTrigger value="import-log">Import Log</TabsTrigger>
-        </TabsList>
-        <TabsContent value="shipments" className="space-y-8 mt-6">
-          {shipmentsView}
-        </TabsContent>
-        <TabsContent value="import-log" className="mt-6">
-          <ImportLogTab />
-        </TabsContent>
-      </Tabs>
-    </div>
-  );
-}
-
-// ─── Import Log Tab ──────────────────────────────────────
-
-function ImportLogTab() {
-  const { data: ingestions, loading, error, lastUpdated, refetch } = useFetch<IngestionRow[]>("/api/shipments/ingestions");
-  const router = useRouter();
-
-  if (error) return <ErrorState onRetry={refetch} />;
-
-  return (
-    <div className="space-y-8">
-      <div className="page-header">
-        <h1>Sales Sheet Import Log</h1>
-        <div className="flex items-center gap-2">
-          {lastUpdated && (
-            <span className="text-xs text-muted-foreground">
-              {formatTime(lastUpdated)}
-            </span>
-          )}
-          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={refetch}>
-            <RiRefreshLine className="h-4 w-4" />
-          </Button>
-        </div>
-      </div>
-
-      {/* Ingestion records */}
-      <div className="space-y-4">
-        {(ingestions || []).map((ing) => (
-          <Card key={ing.id}>
-            <CardContent className="p-4">
-              <div className="flex items-start justify-between gap-4 mb-3">
-                <div className="flex items-center gap-2 min-w-0">
-                  <RiMailLine className="h-4 w-4 text-muted-foreground shrink-0" />
-                  <span className="font-medium truncate">{ing.subject || "No subject"}</span>
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <IngestionStatusBadge status={ing.status} />
-                  <span className="text-xs text-muted-foreground">{formatDate(ing.createdAt)}</span>
-                </div>
-              </div>
-
-              {ing.fromAddress && (
-                <p className="text-xs text-muted-foreground mb-2">From: {ing.fromAddress}</p>
-              )}
-
-              <div className="flex gap-4 text-xs text-muted-foreground mb-3">
-                <span>{ing.attachmentCount} attachment{ing.attachmentCount !== 1 ? "s" : ""}</span>
-                <span>{ing.processedCount} processed</span>
-                {ing.skippedCount > 0 && <span>{ing.skippedCount} skipped</span>}
-              </div>
-
-              {/* Processed items with links */}
-              {ing.processed.length > 0 && (
-                <div className="border rounded-md overflow-hidden">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="text-xs">Supplier</TableHead>
-                        <TableHead className="text-xs">Reference</TableHead>
-                        <TableHead className="text-xs">Invoice #</TableHead>
-                        <TableHead className="text-xs">File</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {ing.processed.map((p, i) => (
-                        <TableRow
-                          key={i}
-                          className="cursor-pointer"
-                          onClick={() => router.push(`/shipments/${p.salesSheetId}`)}
-                        >
-                          <TableCell className="text-xs font-medium">{p.supplierCode}</TableCell>
-                          <TableCell className="text-xs">
-                            <span className="text-primary hover:underline">{p.invoiceNumber}</span>
-                          </TableCell>
-                          <TableCell className="text-xs text-muted-foreground">{p.ourInvoiceNumber || "—"}</TableCell>
-                          <TableCell className="text-xs text-muted-foreground truncate max-w-[200px]">{p.fileName}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              )}
-
-              {/* Skipped items */}
-              {ing.skipped.filter((s) => s.reason !== "not_pdf").length > 0 && (
-                <div className="mt-2 text-xs text-muted-foreground">
-                  <span className="font-medium">Skipped: </span>
-                  {ing.skipped
-                    .filter((s) => s.reason !== "not_pdf")
-                    .map((s) => `${s.fileName} (${s.reason})`)
-                    .join(", ")}
-                </div>
-              )}
-
-              {/* Errors */}
-              {ing.errors && (
-                <p className="mt-2 text-xs text-red-600">{ing.errors}</p>
-              )}
-            </CardContent>
-          </Card>
-        ))}
-
-        {!loading && (!ingestions || ingestions.length === 0) && (
-          <div className="empty-state">
-            <div className="empty-state-icon">
-              <RiMailLine />
-            </div>
-            <p className="empty-state-text">No import records yet</p>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function IngestionStatusBadge({ status }: { status: string }) {
-  const variant = status === "PROCESSED" ? "default" :
-                  status === "PARTIAL" ? "secondary" :
-                  status === "ERROR" ? "destructive" :
-                  "outline";
-  return <Badge variant={variant}>{status}</Badge>;
+  return <div className="page-content">{shipmentsView}</div>;
 }

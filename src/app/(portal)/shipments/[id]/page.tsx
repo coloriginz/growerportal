@@ -24,11 +24,14 @@ export default async function ShipmentDetailPage({ params }: Props) {
             orderBy: { date: "asc" },
             select: {
               id: true,
+              fabricOrdregId: true,
               date: true,
               salesType: true,
               stems: true,
               pricePerStem: true,
               amount: true,
+              bronFeitExtra: true,
+              correctionReasonId: true,
             },
           },
           qualityIssues: {
@@ -69,5 +72,24 @@ export default async function ShipmentDetailPage({ params }: Props) {
     return notFound();
   }
 
-  return <ShipmentDetail shipment={JSON.parse(JSON.stringify(salesSheet))} />;
+  // Fetch correction reason codes for transaction correctionReasonIds (no FK relation)
+  const reasonIds = [...new Set(
+    salesSheet.lots.flatMap(l =>
+      l.transactions.map(tx => tx.correctionReasonId).filter((id): id is number => id != null)
+    )
+  )];
+  const reasons = reasonIds.length > 0
+    ? await prisma.correctionReasonCode.findMany({
+        where: { id: { in: reasonIds } },
+        select: { id: true, code: true, nameNl: true, nameEn: true },
+      })
+    : [];
+  const correctionReasons = Object.fromEntries(reasons.map(r => [r.id, r]));
+
+  return (
+    <ShipmentDetail
+      shipment={JSON.parse(JSON.stringify(salesSheet))}
+      correctionReasons={correctionReasons}
+    />
+  );
 }

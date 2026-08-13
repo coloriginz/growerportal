@@ -24,11 +24,33 @@ import {
 
 interface Transaction {
   id: string;
+  fabricOrdregId: number | null;
   date: string;
   salesType: string;
   stems: number;
   pricePerStem: string;
   amount: string;
+  bronFeitExtra: string;
+  correctionReasonId: number | null;
+}
+
+interface CorrectionReason {
+  id: number;
+  code: string;
+  nameNl: string;
+  nameEn: string | null;
+}
+
+/** Merged display row: groups transactions with the same fabricOrdregId */
+interface MergedTransaction {
+  id: string;
+  date: string;
+  salesType: string;
+  stems: number;
+  amount: number;
+  pricePerStem: number;
+  hasCorrection: boolean;
+  correctionReasonId: number | null;
 }
 
 interface QualityIssue {
@@ -95,9 +117,10 @@ interface ShipmentDetailProps {
     lots: Lot[];
     costs: Cost[];
   };
+  correctionReasons?: Record<number, CorrectionReason>;
 }
 
-export function ShipmentDetail({ shipment }: ShipmentDetailProps) {
+export function ShipmentDetail({ shipment, correctionReasons = {} }: ShipmentDetailProps) {
   const { t, language } = useLanguage();
   const [expandedLots, setExpandedLots] = useState<Set<string>>(new Set());
 
@@ -108,6 +131,99 @@ export function ShipmentDetail({ shipment }: ShipmentDetailProps) {
   // Calculate stems from transactions (sold stems), not from stored totalStems
   const lotStems = (lot: Lot) => lot.transactions.reduce((sum, tx) => sum + tx.stems, 0);
   const totalStems = shipment.lots.reduce((sum, l) => sum + lotStems(l), 0);
+
+  /** Channel category: Persoonlijk/VMP/Aurora → "Direct Sales", Veilen stays */
+  const DIRECT_TYPES = new Set(["Persoonlijk", "VMP", "Aurora"]);
+  const channelLabel = (salesType: string) =>
+    DIRECT_TYPES.has(salesType) ? "Direct Sales" : salesType;
+
+  /** Merge transactions in two passes:
+   *  1. Group by fabricOrdregId (collapse origineel+correcties+prullenbak into one)
+   *  2. Group by date + channel category (Direct Sales vs Veilen) */
+  function mergeTransactions(transactions: Transaction[]): MergedTransaction[] {
+    // --- Pass 1: merge by fabricOrdregId ---
+    const ordregGroups = new Map<string, Transaction[]>();
+    const ungrouped: Transaction[] = [];
+
+    for (const tx of transactions) {
+      if (tx.fabricOrdregId != null) {
+        const key = `${tx.fabricOrdregId}`;
+        if (!ordregGroups.has(key)) ordregGroups.set(key, []);
+        ordregGroups.get(key)!.push(tx);
+      } else {
+        ungrouped.push(tx);
+      }
+    }
+
+    const pass1: MergedTransaction[] = [];
+
+    for (const txs of ordregGroups.values()) {
+      const origineel = txs.find(t => t.bronFeitExtra === "origineel");
+      const correctie = txs.find(t => t.bronFeitExtra === "correcties");
+      const hasCorrection = txs.some(t => t.bronFeitExtra !== "origineel");
+
+      const base = origineel ?? txs[0];
+      const stems = origineel ? origineel.stems : txs.reduce((s, t) => s + t.stems, 0);
+      const netAmount = txs.reduce((s, t) => s + parseFloat(t.amount), 0);
+
+      pass1.push({
+        id: base.id,
+        date: base.date,
+        salesType: base.salesType,
+        stems,
+        amount: netAmount,
+        pricePerStem: stems !== 0 ? netAmount / stems : 0,
+        hasCorrection,
+        correctionReasonId: correctie?.correctionReasonId ?? null,
+      });
+    }
+
+    for (const tx of ungrouped) {
+      pass1.push({
+        id: tx.id,
+        date: tx.date,
+        salesType: tx.salesType,
+        stems: tx.stems,
+        amount: parseFloat(tx.amount),
+        pricePerStem: parseFloat(tx.pricePerStem),
+        hasCorrection: false,
+        correctionReasonId: null,
+      });
+    }
+
+    // --- Pass 2: group by date (day) + channel category ---
+    const dayGroups = new Map<string, MergedTransaction[]>();
+    for (const tx of pass1) {
+      const dayKey = new Date(tx.date).toISOString().slice(0, 10);
+      const channel = channelLabel(tx.salesType);
+      const key = `${dayKey}::${channel}`;
+      if (!dayGroups.has(key)) dayGroups.set(key, []);
+      dayGroups.get(key)!.push(tx);
+    }
+
+    const result: MergedTransaction[] = [];
+    for (const [key, txs] of dayGroups) {
+      const channel = key.split("::")[1];
+      const totalStems = txs.reduce((s, t) => s + t.stems, 0);
+      const totalAmount = txs.reduce((s, t) => s + t.amount, 0);
+      const hasCorrection = txs.some(t => t.hasCorrection);
+      const correctionReasonId = txs.find(t => t.correctionReasonId != null)?.correctionReasonId ?? null;
+
+      result.push({
+        id: txs[0].id,
+        date: txs[0].date,
+        salesType: channel,
+        stems: totalStems,
+        amount: totalAmount,
+        pricePerStem: totalStems !== 0 ? totalAmount / totalStems : 0,
+        hasCorrection,
+        correctionReasonId,
+      });
+    }
+
+    result.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    return result;
+  }
 
   // Collect all corrections across all lots for the separate corrections section
   const allCorrections = shipment.lots.flatMap((lot) =>
@@ -245,24 +361,42 @@ export function ShipmentDetail({ shipment }: ShipmentDetailProps) {
                       <TableCell className="text-right tabular-nums">{stems > 0 ? formatPrice(parseFloat(lot.avgPrice)) : "-"}</TableCell>
                       <TableCell className="text-right tabular-nums font-medium">{stems > 0 ? formatCurrencyDetailed(parseFloat(lot.totalAmount)) : "-"}</TableCell>
                     </TableRow>
-                    {isExpanded && lot.transactions.map((tx) => (
-                      <TableRow key={tx.id} className="bg-muted/30">
-                        <TableCell></TableCell>
-                        <TableCell colSpan={3} className="text-muted-foreground text-sm">
-                          {formatDate(tx.date)} &middot; {tx.salesType}
-                        </TableCell>
-                        <TableCell colSpan={3}></TableCell>
-                        <TableCell></TableCell>
-                        <TableCell></TableCell>
-                        <TableCell className="text-right tabular-nums text-sm">{tx.stems}</TableCell>
-                        <TableCell className="text-right tabular-nums text-sm">
-                          {parseFloat(tx.pricePerStem) > 0 ? formatPrice(parseFloat(tx.pricePerStem)) : "-"}
-                        </TableCell>
-                        <TableCell className="text-right tabular-nums text-sm">
-                          {parseFloat(tx.amount) > 0 ? formatCurrencyDetailed(parseFloat(tx.amount)) : "-"}
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                    {isExpanded && mergeTransactions(lot.transactions).map((tx) => {
+                      const rowClass = tx.hasCorrection
+                        ? "bg-red-50/50 dark:bg-red-950/10"
+                        : "bg-muted/30";
+                      const valueClass = tx.hasCorrection ? "text-red-600 dark:text-red-400" : "";
+                      const reason = tx.correctionReasonId ? correctionReasons[tx.correctionReasonId] : null;
+                      const reasonLabel = reason
+                        ? (language === "en" && reason.nameEn) || reason.nameNl
+                        : null;
+                      return (
+                        <TableRow key={tx.id} className={rowClass}>
+                          <TableCell></TableCell>
+                          <TableCell colSpan={3} className="text-muted-foreground text-sm">
+                            {formatDate(tx.date)} &middot; {tx.salesType}
+                            {tx.hasCorrection && (
+                              <Badge variant="destructive" className="ml-2 text-xs">{t("shipments.correction")}</Badge>
+                            )}
+                            {reasonLabel && (
+                              <span className="ml-2 text-xs text-red-600 dark:text-red-400">({reasonLabel})</span>
+                            )}
+                          </TableCell>
+                          <TableCell colSpan={3}></TableCell>
+                          <TableCell></TableCell>
+                          <TableCell></TableCell>
+                          <TableCell className={`text-right tabular-nums text-sm ${valueClass}`}>
+                            {formatNumber(tx.stems)}
+                          </TableCell>
+                          <TableCell className={`text-right tabular-nums text-sm ${valueClass}`}>
+                            {tx.pricePerStem !== 0 ? formatPrice(tx.pricePerStem) : "-"}
+                          </TableCell>
+                          <TableCell className={`text-right tabular-nums text-sm ${valueClass}`}>
+                            {tx.amount !== 0 ? formatCurrencyDetailed(tx.amount) : "-"}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
                   </>
                 );
               })}
