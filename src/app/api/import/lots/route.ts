@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
-import { requireImportAuth, stripBracketKeys } from "@/lib/import-auth";
+import { requireImportAuth, normalizeImportKeys, summariseImportError } from "@/lib/import-auth";
 
 const partijSchema = z.object({
   part_id: z.number(),
@@ -28,6 +28,14 @@ const partijSchema = z.object({
 const bodySchema = z.object({
   partijen: z.array(partijSchema),
 });
+
+const partijKeys = Object.keys(partijSchema.shape);
+
+const partijAliases = {
+  // The one column in marts.fct_partijen whose name differs beyond spelling.
+  // The rest matches once case, spaces and underscores are ignored.
+  "Inkoopfactuur volume": ["inkoopfust_volume"],
+} as const;
 
 /** Classify a Facttype Sub value into base lot or correction */
 function isCorrection(facttypeSub: string | null | undefined): boolean {
@@ -56,16 +64,23 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json();
-  if (body.partijen) body.partijen = stripBracketKeys(body.partijen);
+  if (Array.isArray(body.partijen)) {
+    body.partijen = normalizeImportKeys(body.partijen, partijKeys, partijAliases);
+  }
   const parsed = bodySchema.safeParse(body);
   if (!parsed.success) {
+    const summary = summariseImportError(
+      parsed.error.issues,
+      Array.isArray(body.partijen) ? body.partijen : [],
+      partijKeys
+    );
     if (batch) {
       try {
         await prisma.importBatch.update({
           where: { id: batch.id },
           data: {
             status: "error",
-            errorMessage: JSON.stringify(parsed.error.flatten()),
+            errorMessage: summary,
             durationMs: Date.now() - startTime,
             completedAt: new Date(),
           },
@@ -74,7 +89,7 @@ export async function POST(request: NextRequest) {
         // Batch logging should not block the import
       }
     }
-    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+    return NextResponse.json({ error: JSON.parse(summary) }, { status: 400 });
   }
 
   try {

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
-import { requireImportAuth, stripBracketKeys } from "@/lib/import-auth";
+import { requireImportAuth, normalizeImportKeys, summariseImportError } from "@/lib/import-auth";
 
 const costSchema = z.object({
   "Shkost ID": z.number(),
@@ -21,6 +21,17 @@ const bodySchema = z.object({
   costs: z.array(costSchema),
 });
 
+const costKeys = Object.keys(costSchema.shape);
+
+/**
+ * Warehouse columns whose name differs from the schema field beyond spelling.
+ * Everything else in marts.fct_salesheets_costs matches once case, spaces and
+ * underscores are ignored, so this list stays short on purpose.
+ */
+const costAliases = {
+  "Totaal Aantal": ["totaal_verkoop_aantal"],
+} as const;
+
 export async function POST(request: NextRequest) {
   const authError = requireImportAuth(request);
   if (authError) return authError;
@@ -36,16 +47,23 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json();
-  if (body.costs) body.costs = stripBracketKeys(body.costs);
+  if (Array.isArray(body.costs)) {
+    body.costs = normalizeImportKeys(body.costs, costKeys, costAliases);
+  }
   const parsed = bodySchema.safeParse(body);
   if (!parsed.success) {
+    const summary = summariseImportError(
+      parsed.error.issues,
+      Array.isArray(body.costs) ? body.costs : [],
+      costKeys
+    );
     if (batch) {
       try {
         await prisma.importBatch.update({
           where: { id: batch.id },
           data: {
             status: "error",
-            errorMessage: JSON.stringify(parsed.error.flatten()),
+            errorMessage: summary,
             durationMs: Date.now() - startTime,
             completedAt: new Date(),
           },
@@ -54,7 +72,7 @@ export async function POST(request: NextRequest) {
         // Batch logging should not block the import
       }
     }
-    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+    return NextResponse.json({ error: JSON.parse(summary) }, { status: 400 });
   }
 
   try {
