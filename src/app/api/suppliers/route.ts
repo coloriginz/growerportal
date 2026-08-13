@@ -39,6 +39,7 @@ export async function GET(request: NextRequest) {
         code: true,
         name: true,
         company: true,
+        fustEnabled: true,
         companyEntity: { select: { id: true, name: true, slug: true } },
       },
       orderBy: { code: "asc" },
@@ -48,6 +49,7 @@ export async function GET(request: NextRequest) {
       code: g.code,
       name: g.name,
       company: g.company,
+      fustEnabled: g.fustEnabled,
       companyEntity: g.companyEntity,
     })));
   }

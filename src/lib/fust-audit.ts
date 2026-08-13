@@ -28,6 +28,11 @@ export const FUST_AUDIT_ACTIONS = [
   "grower_invoice_created",
   "grower_invoice_sent",
   "grower_invoice_status_changed",
+  // RFH Invoice
+  "rfh_invoice_imported",
+  "rfh_invoice_deleted",
+  "rfh_voucher_allocated",
+  "rfh_voucher_deallocated",
 ] as const;
 
 export type FustAuditAction = (typeof FUST_AUDIT_ACTIONS)[number];

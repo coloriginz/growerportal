@@ -139,6 +139,7 @@ export async function POST(request: NextRequest) {
       customerName: parsed.customerName,
       transporterName: parsed.transporterName,
       cardNumber: parsed.cardNumber,
+      notes: parsed.notes,
       pdfUrl: blob.url,
       items: {
         create: itemsToCreate,

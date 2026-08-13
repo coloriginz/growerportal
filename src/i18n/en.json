@@ -86,7 +86,8 @@
     "fustActivity": "Activity",
     "fustEmails": "Email Log",
     "fust": "Fust",
-    "importStatus": "Import Status"
+    "importStatus": "Import Status",
+    "rfhInvoices": "RFH Invoices"
   },
   "dashboard": {
     "title": "Dashboard",
@@ -216,7 +217,8 @@
     "searchPlaceholder": "Search by invoice number...",
     "correction": "Correction",
     "corrections": "Corrections",
-    "correctionReason": "Reason"
+    "correctionReason": "Reason",
+    "deleted": "Deleted"
   },
   "documents": {
     "title": "Documents",
@@ -656,6 +658,8 @@
     "sentInvoices": "Sent Invoices",
     "noReadyOrders": "No orders ready for invoicing",
     "linkedVouchers": "Linked Vouchers",
+    "rfhInvoices": "RFH Invoices",
+    "allocations": "Allocations",
     "activity": "Activity",
     "auditLog": "Audit Log",
     "history": "History",
@@ -718,7 +722,11 @@
       "voucher_unmatched": "Voucher unmatched",
       "supplier_invoice_created": "Supplier invoice created",
       "supplier_invoice_sent": "Supplier invoice sent",
-      "supplier_invoice_status_changed": "Supplier invoice status changed"
+      "supplier_invoice_status_changed": "Supplier invoice status changed",
+      "rfh_invoice_imported": "RFH invoice imported",
+      "rfh_invoice_deleted": "RFH invoice deleted",
+      "rfh_voucher_allocated": "Voucher allocated to grower",
+      "rfh_voucher_deallocated": "Voucher allocation removed"
     },
     "generateInvoice": "Generate Invoice",
     "invoicePreview": "Invoice Preview",
@@ -759,6 +767,49 @@
     "generate": "Generate",
     "previewPdf": "Preview PDF",
     "loadingPreview": "Loading preview...",
-    "send": "Send"
+    "send": "Send",
+    "rfh": {
+      "title": "RFH Invoices",
+      "uploadInvoice": "Upload Invoice",
+      "invoiceNumber": "Invoice Number",
+      "rfhInvoiceNumber": "RFH Invoice Number",
+      "invoiceDate": "Invoice Date",
+      "company": "Company",
+      "vouchers": "Vouchers",
+      "statiegeld": "Deposit",
+      "fusthuur": "Rental",
+      "total": "Total",
+      "status": "Status",
+      "statusOpen": "Open",
+      "statusPartial": "Partial",
+      "statusComplete": "Complete",
+      "statusInvoiced": "Invoiced",
+      "vouchersAllocated": "{count}/{total} vouchers",
+      "allocateToGrower": "Allocate to grower",
+      "deallocate": "Remove allocation",
+      "selectGrower": "Select grower",
+      "allocated": "Allocated",
+      "unallocated": "Unallocated",
+      "voucherNotes": "Notes",
+      "transporter": "Transporter",
+      "customer": "Customer",
+      "fustLines": "Fust items",
+      "viewPdf": "View PDF",
+      "viewVoucherPdf": "View voucher",
+      "noInvoices": "No RFH invoices found",
+      "importSuccess": "Invoice imported successfully",
+      "importError": "Failed to import invoice",
+      "duplicateInvoice": "Invoice already exists",
+      "allocationSaved": "Allocation saved",
+      "allocationRemoved": "Allocation removed",
+      "deleteConfirm": "Delete this RFH invoice?",
+      "deleted": "Invoice deleted",
+      "filterStatus": "Filter by status",
+      "filterCompany": "Filter by company",
+      "allStatuses": "All statuses",
+      "allCompanies": "All companies",
+      "voucherNotFound": "Voucher not found in system",
+      "date": "Date"
+    }
   }
 }

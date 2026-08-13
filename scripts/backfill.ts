@@ -177,6 +177,8 @@ function transformOrder(row: Record<string, string>) {
     Verkoop_colli: parseInt2(row["Verkoop_colli"]),
     Afrekenomzet: parseDecimal(row["Afrekenomzet"]),
     "Gem afrekenprijs": parseDecimal(row["Gem afrekenprijs"]),
+    bron_feit_extra: parseStr(row["bron_feit_extra"]),
+    reden_id: parseInt2(row["reden_id"]),
   };
 }
 
@@ -309,8 +311,10 @@ async function processFile(config: FileConfig, dryRun: boolean) {
     return;
   }
 
-  // Split into batches — for lots, keep rows with the same part_id together
-  const batches = splitIntoBatches(valid, BATCH_SIZE, config.endpoint === "lots" ? "part_id" : null);
+  // Split into batches — for lots and orders, keep rows with the same part_id together
+  // (orders use delete+reinsert per lot, so splitting a lot across batches causes data loss)
+  const groupKey = (config.endpoint === "lots" || config.endpoint === "orders") ? "part_id" : null;
+  const batches = splitIntoBatches(valid, BATCH_SIZE, groupKey);
   const totalBatches = batches.length;
   let totalCreated = 0;
   let totalUpdated = 0;
@@ -382,13 +386,13 @@ const FILES: FileConfig[] = [
     transform: transformPartij,
   },
   {
-    file: "orders_2025.csv",
+    file: "orders_2025 NIEUW incl bronfeit en reden.csv",
     endpoint: "orders",
     bodyKey: "orders",
     transform: transformOrder,
   },
   {
-    file: "orders_2026.csv",
+    file: "orders_2026 NIEUW incl bronfeit en reden.csv",
     endpoint: "orders",
     bodyKey: "orders",
     transform: transformOrder,

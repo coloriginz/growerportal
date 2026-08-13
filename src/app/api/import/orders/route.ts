@@ -15,6 +15,8 @@ const orderSchema = z.object({
   Verkoop_colli: z.number().nullable().optional(),
   Afrekenomzet: z.number().nullable().optional(),
   "Gem afrekenprijs": z.number().nullable().optional(),
+  bron_feit_extra: z.string().nullable().optional(),
+  reden_id: z.number().nullable().optional(),
 });
 
 const bodySchema = z.object({
@@ -112,6 +114,7 @@ export async function POST(request: NextRequest) {
       row.parthdr_id = Math.round(row.parthdr_id);
       row.rel_id_kweker = Math.round(row.rel_id_kweker);
       row.rel_id_leverancier = Math.round(row.rel_id_leverancier);
+      if (row.reden_id != null) row.reden_id = Math.round(row.reden_id);
     }
 
     // Build grower pairs: fabricKwekerId → supplierId
@@ -123,12 +126,11 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Phase 1: Pre-fetch existing growers, FabricRelations, lots, transactions in parallel
+    // Phase 1: Pre-fetch existing growers, FabricRelations, lots
     const growerFabricIds = [...growerPairs.keys()];
     const lotPartIds = [...new Set(validOrders.map((o) => o.part_id))];
-    const allOrdregIds = validOrders.map((o) => o.ordreg_id as number);
 
-    const [existingGrowers, fabricRelations, lots, existingTransactions] = await Promise.all([
+    const [existingGrowers, fabricRelations, lots] = await Promise.all([
       prisma.grower.findMany({
         where: { fabricId: { in: growerFabricIds } },
         select: { id: true, fabricId: true, name: true },
@@ -140,10 +142,6 @@ export async function POST(request: NextRequest) {
       prisma.lot.findMany({
         where: { fabricPartId: { in: lotPartIds } },
         select: { id: true, fabricPartId: true, supplierId: true },
-      }),
-      prisma.transaction.findMany({
-        where: { fabricOrdregId: { in: allOrdregIds } },
-        select: { id: true, fabricOrdregId: true, lotId: true },
       }),
     ]);
 
@@ -165,12 +163,6 @@ export async function POST(request: NextRequest) {
     const lotMap = new Map<number, { id: string; supplierId: string }>();
     for (const l of lots) {
       if (l.fabricPartId) lotMap.set(l.fabricPartId, { id: l.id, supplierId: l.supplierId });
-    }
-
-    // Track existing transactions by composite key (ordregId::lotId)
-    const txExistsSet = new Set<string>();
-    for (const t of existingTransactions) {
-      if (t.fabricOrdregId) txExistsSet.add(`${t.fabricOrdregId}::${t.lotId}`);
     }
 
     // Phase 2: Upsert growers
@@ -238,28 +230,13 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Phase 3: Build transaction operations
-    let txCreated = 0,
-      txUpdated = 0,
-      txSkipped = 0;
+    // Phase 3: Collect all transaction data per lot
+    let txSkipped = 0;
     const affectedLotIds = new Set<string>();
-
-    // Deduplicate updates by (ordreg_id, lotId) (last one wins, avoids non-deterministic UPDATE...FROM)
-    const txUpdateMap = new Map<string, {
-      fabricOrdregId: number;
-      lotId: string;
-      date: string;
-      salesType: string;
-      stems: number;
-      pricePerStem: number;
-      amount: number;
-      fabricGrowerId: number;
-    }>();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const txCreateData: any[] = [];
+    const txDataByLot = new Map<string, any[]>();
 
     for (const row of validOrders) {
-      const ordregId = row.ordreg_id as number;
       const lotInfo = lotMap.get(row.part_id);
       if (!lotInfo) {
         txSkipped++;
@@ -276,109 +253,102 @@ export async function POST(request: NextRequest) {
       const stems = row.Verkoopvolume ?? 0;
       const amount = row.Afrekenomzet ?? 0;
       const pricePerStem = row["Gem afrekenprijs"] ?? 0;
+      const bronFeitExtra = row.bron_feit_extra?.trim() || "origineel";
+      const correctionReasonId = row.reden_id ?? null;
 
-      const compositeKey = `${ordregId}::${lotInfo.id}`;
-      if (txExistsSet.has(compositeKey)) {
-        txUpdateMap.set(compositeKey, {
-          fabricOrdregId: ordregId,
-          lotId: lotInfo.id,
-          date: date.toISOString(),
-          salesType,
-          stems,
-          pricePerStem: Math.round(pricePerStem * 10000) / 10000,
-          amount: Math.round(amount * 100) / 100,
-          fabricGrowerId: row.rel_id_kweker,
-        });
-        txUpdated++;
-      } else {
-        txCreateData.push({
-          lotId: lotInfo.id,
-          fabricOrdregId: ordregId,
-          fabricGrowerId: row.rel_id_kweker,
-          date,
-          salesType,
-          stems,
-          pricePerStem: Math.round(pricePerStem * 10000) / 10000,
-          amount: Math.round(amount * 100) / 100,
-        });
-        txCreated++;
-      }
+      if (!txDataByLot.has(lotInfo.id)) txDataByLot.set(lotInfo.id, []);
+      txDataByLot.get(lotInfo.id)!.push({
+        lotId: lotInfo.id,
+        fabricOrdregId: row.ordreg_id,
+        fabricGrowerId: row.rel_id_kweker,
+        date: date.toISOString(),
+        salesType,
+        stems,
+        pricePerStem: Math.round(pricePerStem * 10000) / 10000,
+        amount: Math.round(amount * 1000) / 1000,
+        bronFeitExtra,
+        correctionReasonId,
+      });
       affectedLotIds.add(lotInfo.id);
     }
 
-    // Phase 4: Execute transaction operations
-    const txUpdateData = [...txUpdateMap.values()];
-    if (txUpdateData.length > 0) {
-      await prisma.$executeRawUnsafe(
-        `UPDATE "Transaction" AS t
-         SET
-           date = (u.val->>'date')::timestamp,
-           "salesType" = u.val->>'salesType',
-           stems = (u.val->>'stems')::int,
-           "pricePerStem" = (u.val->>'pricePerStem')::numeric,
-           amount = (u.val->>'amount')::numeric,
-           "fabricGrowerId" = (u.val->>'fabricGrowerId')::int,
-           "updatedAt" = NOW()
-         FROM jsonb_array_elements($1::jsonb) AS u(val)
-         WHERE t."fabricOrdregId" = (u.val->>'fabricOrdregId')::int
-           AND t."lotId" = u.val->>'lotId'`,
-        JSON.stringify(txUpdateData)
-      );
-    }
+    // Phase 4: Delete+reinsert scoped to fabricOrdregIds in this batch
+    // Only delete transactions whose ordregId appears in the batch, preserving
+    // older transactions outside Power Automate's rolling query window.
+    let txDeleted = 0;
+    let txCreated = 0;
 
-    if (txCreateData.length > 0) {
-      // Deduplicate by (fabricOrdregId, lotId) — PostgreSQL INSERT ON CONFLICT cannot affect the same row twice
-      const createDedupMap = new Map<string, (typeof txCreateData)[0]>();
-      for (const d of txCreateData) {
-        createDedupMap.set(`${d.fabricOrdregId}::${d.lotId}`, d);
-      }
-      const dedupedCreateData = [...createDedupMap.values()];
-      const dupCount = txCreateData.length - dedupedCreateData.length;
-      if (dupCount > 0) {
-        txCreated -= dupCount;
-        txSkipped += dupCount;
+    if (affectedLotIds.size > 0) {
+      // Collect all transaction data for bulk operations
+      const allTxData: Record<string, unknown>[] = [];
+      for (const txs of txDataByLot.values()) {
+        allTxData.push(...txs);
       }
 
-      const txJsonData = dedupedCreateData.map((d: Record<string, unknown>) => ({
-        lotId: d.lotId,
-        fabricOrdregId: d.fabricOrdregId,
-        fabricGrowerId: d.fabricGrowerId,
-        date: d.date instanceof Date ? d.date.toISOString() : d.date,
-        salesType: d.salesType,
-        stems: d.stems ?? 0,
-        pricePerStem: d.pricePerStem ?? 0,
-        amount: d.amount ?? 0,
-      }));
+      // Build unique (lotId, fabricOrdregId) pairs for scoped delete
+      const deletePairs: { lotId: string; fabricOrdregId: number }[] = [];
+      const seenPairs = new Set<string>();
+      for (const tx of allTxData) {
+        const key = `${tx.lotId}::${tx.fabricOrdregId}`;
+        if (!seenPairs.has(key)) {
+          seenPairs.add(key);
+          deletePairs.push({ lotId: tx.lotId as string, fabricOrdregId: tx.fabricOrdregId as number });
+        }
+      }
 
-      await prisma.$executeRawUnsafe(
-        `INSERT INTO "Transaction" (
-           id, "lotId", "fabricOrdregId", "fabricGrowerId",
-           date, "salesType", stems, "pricePerStem", amount,
-           "createdAt", "updatedAt"
-         )
-         SELECT
-           gen_random_uuid()::text,
-           v.val->>'lotId',
-           (v.val->>'fabricOrdregId')::int,
-           (v.val->>'fabricGrowerId')::int,
-           (v.val->>'date')::timestamp,
-           v.val->>'salesType',
-           COALESCE((v.val->>'stems')::int, 0),
-           COALESCE((v.val->>'pricePerStem')::numeric, 0),
-           COALESCE((v.val->>'amount')::numeric, 0),
-           NOW(),
-           NOW()
-         FROM jsonb_array_elements($1::jsonb) AS v(val)
-         ON CONFLICT ("fabricOrdregId", "lotId") DO UPDATE SET
-           date = EXCLUDED.date,
-           "salesType" = EXCLUDED."salesType",
-           stems = EXCLUDED.stems,
-           "pricePerStem" = EXCLUDED."pricePerStem",
-           amount = EXCLUDED.amount,
-           "fabricGrowerId" = EXCLUDED."fabricGrowerId",
-           "updatedAt" = NOW()`,
-        JSON.stringify(txJsonData)
-      );
+      // Delete only transactions matching (lotId, fabricOrdregId) pairs from this batch
+      if (deletePairs.length > 0) {
+        const CHUNK_SIZE = 5000;
+        for (let i = 0; i < deletePairs.length; i += CHUNK_SIZE) {
+          const chunk = deletePairs.slice(i, i + CHUNK_SIZE);
+          const deleted = await prisma.$executeRawUnsafe(
+            `DELETE FROM "Transaction" t
+             USING (
+               SELECT DISTINCT
+                 v.val->>'lotId' AS lot_id,
+                 (v.val->>'fabricOrdregId')::int AS ordreg_id
+               FROM jsonb_array_elements($1::jsonb) AS v(val)
+             ) AS batch
+             WHERE t."lotId" = batch.lot_id
+               AND t."fabricOrdregId" = batch.ordreg_id`,
+            JSON.stringify(chunk)
+          );
+          txDeleted += deleted;
+        }
+      }
+
+      // Insert all transactions from batch
+      if (allTxData.length > 0) {
+        const CHUNK_SIZE = 5000;
+        for (let i = 0; i < allTxData.length; i += CHUNK_SIZE) {
+          const chunk = allTxData.slice(i, i + CHUNK_SIZE);
+          await prisma.$executeRawUnsafe(
+            `INSERT INTO "Transaction" (
+               id, "lotId", "fabricOrdregId", "fabricGrowerId",
+               date, "salesType", stems, "pricePerStem", amount,
+               "bronFeitExtra", "correctionReasonId",
+               "createdAt", "updatedAt"
+             )
+             SELECT
+               gen_random_uuid()::text,
+               v.val->>'lotId',
+               (v.val->>'fabricOrdregId')::int,
+               (v.val->>'fabricGrowerId')::int,
+               (v.val->>'date')::timestamp,
+               v.val->>'salesType',
+               COALESCE((v.val->>'stems')::int, 0),
+               COALESCE((v.val->>'pricePerStem')::numeric, 0),
+               COALESCE((v.val->>'amount')::numeric, 0),
+               COALESCE(v.val->>'bronFeitExtra', 'origineel'),
+               (v.val->>'correctionReasonId')::int,
+               NOW(),
+               NOW()
+             FROM jsonb_array_elements($1::jsonb) AS v(val)`,
+            JSON.stringify(chunk)
+          );
+        }
+        txCreated = allTxData.length;
+      }
     }
 
     // Phase 5: Recalculate lot aggregates via single raw SQL
@@ -462,7 +432,7 @@ export async function POST(request: NextRequest) {
             status: "success",
             recordsReceived: orders.length,
             recordsCreated: txCreated,
-            recordsUpdated: txUpdated,
+            recordsUpdated: 0,
             recordsSkipped: txSkipped + skippedNoOrdregId,
             durationMs: Date.now() - startTime,
             completedAt: new Date(),
@@ -470,6 +440,7 @@ export async function POST(request: NextRequest) {
               growers: { created: growersCreated, existing: growersExisting },
               recalculated: { lots: lotsRecalculated, salesSheets: ssRecalculated },
               skippedNoOrdregId,
+              txDeleted,
             },
           },
         });
@@ -483,7 +454,7 @@ export async function POST(request: NextRequest) {
       valid: validOrders.length,
       skippedNoOrdregId,
       growers: { created: growersCreated, existing: growersExisting },
-      transactions: { created: txCreated, updated: txUpdated, skipped: txSkipped },
+      transactions: { created: txCreated, deleted: txDeleted, skipped: txSkipped },
       recalculated: { lots: lotsRecalculated, salesSheets: ssRecalculated },
     });
   } catch (err) {

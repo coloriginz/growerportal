@@ -13,3 +13,5 @@ export { FustInvoicing } from "./fust-invoicing";
 export { FustSettings } from "./fust-settings";
 export { FustAuditLog } from "./fust-audit-log";
 export { FustOrderTimeline } from "./fust-order-timeline";
+export { RfhInvoices } from "./rfh-invoices";
+export { RfhInvoiceDetail } from "./rfh-invoice-detail";

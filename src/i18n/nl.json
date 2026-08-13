@@ -86,7 +86,8 @@
     "fustActivity": "Activiteit",
     "fustEmails": "Email Log",
     "fust": "Fust",
-    "importStatus": "Import Status"
+    "importStatus": "Import Status",
+    "rfhInvoices": "RFH Facturen"
   },
   "dashboard": {
     "title": "Dashboard",
@@ -216,7 +217,8 @@
     "searchPlaceholder": "Zoek op factuurnummer...",
     "correction": "Correctie",
     "corrections": "Correcties",
-    "correctionReason": "Reden"
+    "correctionReason": "Reden",
+    "deleted": "Verwijderd"
   },
   "documents": {
     "title": "Documenten",
@@ -656,6 +658,8 @@
     "sentInvoices": "Verzonden Facturen",
     "noReadyOrders": "Geen orders klaar voor facturatie",
     "linkedVouchers": "Gekoppelde Bonnen",
+    "rfhInvoices": "RFH Facturen",
+    "allocations": "Toewijzingen",
     "activity": "Activiteit",
     "auditLog": "Audit Log",
     "history": "Geschiedenis",
@@ -718,7 +722,11 @@
       "voucher_unmatched": "Bon ontkoppeld",
       "supplier_invoice_created": "Leveranciersfactuur aangemaakt",
       "supplier_invoice_sent": "Leveranciersfactuur verstuurd",
-      "supplier_invoice_status_changed": "Leveranciersfactuur status gewijzigd"
+      "supplier_invoice_status_changed": "Leveranciersfactuur status gewijzigd",
+      "rfh_invoice_imported": "RFH factuur geimporteerd",
+      "rfh_invoice_deleted": "RFH factuur verwijderd",
+      "rfh_voucher_allocated": "Bon gekoppeld aan grower",
+      "rfh_voucher_deallocated": "Bonkoppeling verwijderd"
     },
     "generateInvoice": "Factuur Genereren",
     "invoicePreview": "Factuurvoorbeeld",
@@ -759,6 +767,49 @@
     "generate": "Genereren",
     "previewPdf": "PDF Voorbeeld",
     "loadingPreview": "Voorbeeld laden...",
-    "send": "Versturen"
+    "send": "Versturen",
+    "rfh": {
+      "title": "RFH Facturen",
+      "uploadInvoice": "Factuur uploaden",
+      "invoiceNumber": "Factuurnummer",
+      "rfhInvoiceNumber": "RFH Factuurnummer",
+      "invoiceDate": "Factuurdatum",
+      "company": "Bedrijf",
+      "vouchers": "Bonnen",
+      "statiegeld": "Statiegeld",
+      "fusthuur": "Fusthuur",
+      "total": "Totaal",
+      "status": "Status",
+      "statusOpen": "Open",
+      "statusPartial": "Gedeeltelijk",
+      "statusComplete": "Compleet",
+      "statusInvoiced": "Gefactureerd",
+      "vouchersAllocated": "{count}/{total} bonnen",
+      "allocateToGrower": "Koppelen aan grower",
+      "deallocate": "Koppeling verwijderen",
+      "selectGrower": "Selecteer grower",
+      "allocated": "Gekoppeld",
+      "unallocated": "Niet gekoppeld",
+      "voucherNotes": "Opmerkingen",
+      "transporter": "Transporteur",
+      "customer": "Klant",
+      "fustLines": "Fust regels",
+      "viewPdf": "PDF bekijken",
+      "viewVoucherPdf": "Bon bekijken",
+      "noInvoices": "Geen RFH facturen gevonden",
+      "importSuccess": "Factuur succesvol geimporteerd",
+      "importError": "Factuur importeren mislukt",
+      "duplicateInvoice": "Factuur bestaat al",
+      "allocationSaved": "Koppeling opgeslagen",
+      "allocationRemoved": "Koppeling verwijderd",
+      "deleteConfirm": "Deze RFH factuur verwijderen?",
+      "deleted": "Factuur verwijderd",
+      "filterStatus": "Filter op status",
+      "filterCompany": "Filter op bedrijf",
+      "allStatuses": "Alle statussen",
+      "allCompanies": "Alle bedrijven",
+      "voucherNotFound": "Bon niet gevonden in systeem",
+      "date": "Datum"
+    }
   }
 }

@@ -5,17 +5,11 @@ import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { signOut } from "next-auth/react";
 import {
-  RiBox3Line,
-  RiTruckLine,
   RiReceiptLine,
   RiFileTextLine,
-  RiShoppingCartLine,
-  RiLink,
   RiLogoutBoxLine,
   RiMenuLine,
   RiGroupLine,
-  RiPriceTag3Line,
-  RiUserSettingsLine,
   RiHistoryLine,
   RiMailLine,
 } from "@remixicon/react";
@@ -56,24 +50,15 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { href: "/fust-portal", labelKey: "nav.fustCatalogue", icon: RiPriceTag3Line, roles: ["commercie", "admin"] },
-  { href: "/fust-portal", labelKey: "nav.fustOrder", icon: RiShoppingCartLine, roles: ["supplier"] },
-  { href: "/fust-portal/my-orders", labelKey: "nav.fustMyOrders", icon: RiBox3Line, roles: ["supplier"] },
-  { href: "/fust-portal/deliveries", labelKey: "nav.fustDeliveries", icon: RiTruckLine, roles: ["supplier"] },
-  { href: "/fust-portal/orders", labelKey: "nav.fustOrders", icon: RiBox3Line, roles: ["commercie", "admin", "finance"] },
-  { href: "/fust-portal/pickups", labelKey: "fust.deliveries", icon: RiTruckLine, roles: ["transporteur", "admin", "finance"] },
-  { href: "/fust-portal/vouchers", labelKey: "nav.fustVouchers", icon: RiFileTextLine, roles: ["finance", "admin"] },
-  { href: "/fust-portal/matching", labelKey: "nav.fustMatching", icon: RiLink, roles: ["finance", "admin"] },
-  { href: "/fust-portal/invoices", labelKey: "nav.fustInvoices", icon: RiReceiptLine, roles: ["finance", "admin"] },
+  { href: "/fust-portal/rfh-invoices", labelKey: "nav.rfhInvoices", icon: RiFileTextLine, roles: ["admin", "finance"] },
+  { href: "/fust-portal/vouchers", labelKey: "nav.fustVouchers", icon: RiReceiptLine, roles: ["admin", "finance"] },
+  { href: "/fust-portal/invoices", labelKey: "nav.fustInvoices", icon: RiReceiptLine, roles: ["admin", "finance"] },
   { href: "/fust-portal/activity", labelKey: "nav.fustActivity", icon: RiHistoryLine, roles: ["admin", "finance"] },
 ];
 
 const adminItems: NavItem[] = [
   { href: "/fust-portal/emails", labelKey: "nav.fustEmails", icon: RiMailLine, roles: ["admin", "finance"] },
-  { href: "/fust-portal/users", labelKey: "admin.users", icon: RiUserSettingsLine, roles: ["admin"] },
   { href: "/fust-portal/settings?tab=suppliers", labelKey: "fust.supplierAccess", icon: RiGroupLine, roles: ["admin"] },
-  { href: "/fust-portal/settings?tab=types", labelKey: "fust.fustTypes", icon: RiPriceTag3Line, roles: ["admin"] },
-  { href: "/fust-portal/settings?tab=transporters", labelKey: "fust.transporters", icon: RiTruckLine, roles: ["admin"] },
 ];
 
 export function FustShell({ user, children }: FustShellProps) {
@@ -88,11 +73,9 @@ export function FustShell({ user, children }: FustShellProps) {
   const hostBranding = useCompanyBranding();
   const company = user.companySlug ? getCompanyBranding(user.companySlug) : hostBranding;
 
-  const filteredNav = navItems.filter((item) => {
-    if (!item.roles?.includes(userRole)) return false;
-    if (userRole === "supplier" && !user.fustEnabled) return false;
-    return true;
-  });
+  const filteredNav = navItems.filter(
+    (item) => item.roles?.includes(userRole)
+  );
 
   const filteredAdmin = adminItems.filter(
     (item) => !item.roles || item.roles.includes(userRole)
