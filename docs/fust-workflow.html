@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fust Module - Workflow Documentatie</title>
+<style>
+  :root {
+    --bg: #fafafa;
+    --card: #fff;
+    --border: #e2e8f0;
+    --text: #1e293b;
+    --muted: #64748b;
+    --accent: #059669;
+    --accent-light: #ecfdf5;
+    --blue: #2563eb;
+    --blue-light: #eff6ff;
+    --amber: #d97706;
+    --amber-light: #fffbeb;
+    --red: #dc2626;
+    --red-light: #fef2f2;
+    --purple: #7c3aed;
+    --purple-light: #f5f3ff;
+    --pink: #db2777;
+    --pink-light: #fdf2f8;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    padding: 2rem;
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+  h1 { font-size: 2rem; margin-bottom: 0.5rem; }
+  h1 span { color: var(--accent); }
+  .subtitle { color: var(--muted); font-size: 1.1rem; margin-bottom: 2.5rem; }
+  h2 {
+    font-size: 1.4rem;
+    margin: 2.5rem 0 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid var(--border);
+  }
+  h3 { font-size: 1.1rem; margin: 1.5rem 0 0.75rem; }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin-bottom: 1.25rem;
+  }
+  .card-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+  }
+  .card-header .icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.3rem;
+    flex-shrink: 0;
+  }
+  .card-header h3 { margin: 0; }
+  .card-header .role-label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 6px;
+  }
+
+  .role-grower .icon { background: var(--accent-light); }
+  .role-grower .role-label { background: var(--accent-light); color: var(--accent); }
+  .role-commercie .icon { background: var(--blue-light); }
+  .role-commercie .role-label { background: var(--blue-light); color: var(--blue); }
+  .role-transporteur .icon { background: var(--amber-light); }
+  .role-transporteur .role-label { background: var(--amber-light); color: var(--amber); }
+  .role-finance .icon { background: var(--purple-light); }
+  .role-finance .role-label { background: var(--purple-light); color: var(--purple); }
+  .role-admin .icon { background: var(--red-light); }
+  .role-admin .role-label { background: var(--red-light); color: var(--red); }
+
+  .steps { padding-left: 0; list-style: none; }
+  .steps li {
+    position: relative;
+    padding: 0.4rem 0 0.4rem 1.75rem;
+  }
+  .steps li::before {
+    content: attr(data-step);
+    position: absolute;
+    left: 0;
+    width: 1.25rem;
+    height: 1.25rem;
+    background: var(--accent);
+    color: #fff;
+    border-radius: 50%;
+    font-size: 0.7rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    top: 0.55rem;
+  }
+  .steps li.blue::before { background: var(--blue); }
+  .steps li.amber::before { background: var(--amber); }
+  .steps li.purple::before { background: var(--purple); }
+
+  .flow-diagram {
+    display: flex;
+    align-items: stretch;
+    gap: 0;
+    margin: 1.5rem 0;
+    overflow-x: auto;
+    padding-bottom: 0.5rem;
+  }
+  .flow-step {
+    text-align: center;
+    min-width: 130px;
+    flex: 1;
+  }
+  .flow-box {
+    border: 2px solid var(--border);
+    border-radius: 10px;
+    padding: 0.75rem 0.5rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    position: relative;
+    background: var(--card);
+  }
+  .flow-box.active { border-color: var(--accent); background: var(--accent-light); }
+  .flow-box.rejected { border-color: var(--red); background: var(--red-light); }
+  .flow-arrow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 0.25rem;
+    color: var(--muted);
+    font-size: 1.2rem;
+  }
+  .flow-role {
+    font-size: 0.7rem;
+    color: var(--muted);
+    margin-top: 0.35rem;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+    margin: 1rem 0;
+  }
+  th, td {
+    padding: 0.6rem 0.75rem;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+  }
+  th {
+    background: var(--bg);
+    font-weight: 600;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--muted);
+  }
+  td code {
+    background: var(--bg);
+    padding: 1px 5px;
+    border-radius: 4px;
+    font-size: 0.85em;
+  }
+
+  .badge {
+    display: inline-block;
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 6px;
+  }
+  .badge-green { background: var(--accent-light); color: var(--accent); }
+  .badge-blue { background: var(--blue-light); color: var(--blue); }
+  .badge-amber { background: var(--amber-light); color: var(--amber); }
+  .badge-purple { background: var(--purple-light); color: var(--purple); }
+  .badge-red { background: var(--red-light); color: var(--red); }
+  .badge-pink { background: var(--pink-light); color: var(--pink); }
+
+  .note {
+    background: var(--blue-light);
+    border-left: 4px solid var(--blue);
+    padding: 0.75rem 1rem;
+    border-radius: 0 8px 8px 0;
+    font-size: 0.9rem;
+    margin: 1rem 0;
+  }
+  .note.warning {
+    background: var(--amber-light);
+    border-color: var(--amber);
+  }
+
+  .toc {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.25rem 1.5rem;
+    margin-bottom: 2rem;
+  }
+  .toc h3 { margin: 0 0 0.75rem; font-size: 1rem; }
+  .toc ol { padding-left: 1.25rem; }
+  .toc li { padding: 0.2rem 0; }
+  .toc a { color: var(--blue); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+
+  .role-matrix {
+    overflow-x: auto;
+  }
+  .role-matrix td:first-child {
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  @media (max-width: 768px) {
+    body { padding: 1rem; }
+    .flow-diagram { flex-direction: column; align-items: stretch; }
+    .flow-arrow { transform: rotate(90deg); padding: 0.25rem 0; }
+    .flow-step { min-width: auto; }
+  }
+</style>
+</head>
+<body>
+
+<h1>Fust Module <span>Workflow</span></h1>
+<p class="subtitle">Coloriginz Grower Portal &mdash; Hoe de fustbestelling van A tot Z werkt</p>
+
+<nav class="toc">
+  <h3>Inhoudsopgave</h3>
+  <ol>
+    <li><a href="#rollen">De 5 rollen</a></li>
+    <li><a href="#overzicht">Procesoverzicht in 7 stappen</a></li>
+    <li><a href="#stap1">Stap 1: Kweker plaatst bestelling</a></li>
+    <li><a href="#stap2">Stap 2: Goedkeuring door commercie/admin</a></li>
+    <li><a href="#stap3">Stap 3: Transporteur plant ophaalronde</a></li>
+    <li><a href="#stap4">Stap 4: Ophalen bij kwekers</a></li>
+    <li><a href="#stap5">Stap 5: Levering bevestigen met werkelijke aantallen</a></li>
+    <li><a href="#stap6">Stap 6: Factuur uploaden en matchen</a></li>
+    <li><a href="#stap7">Stap 7: Kosten doorbelasten aan kwekers</a></li>
+    <li><a href="#statussen">Status-overzicht per entiteit</a></li>
+    <li><a href="#instellingen">Admin instellingen</a></li>
+    <li><a href="#rolmatrix">Wie kan wat? (Rolmatrix)</a></li>
+  </ol>
+</nav>
+
+<!-- ─── ROLLEN ─── -->
+<h2 id="rollen">De 5 rollen</h2>
+
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 0.75rem;">
+  <div class="card role-grower" style="padding: 1rem;">
+    <div class="card-header" style="margin-bottom: 0.25rem;">
+      <div class="icon">&#127793;</div>
+      <div><strong>Grower</strong><br><span style="font-size:0.85rem;color:var(--muted)">Kweker</span></div>
+    </div>
+    <p style="font-size:0.85rem;">Bestelt fust via de webshop. Ziet eigen bestellingen en leveringen.</p>
+  </div>
+  <div class="card role-commercie" style="padding: 1rem;">
+    <div class="card-header" style="margin-bottom: 0.25rem;">
+      <div class="icon">&#128188;</div>
+      <div><strong>Commercie</strong><br><span style="font-size:0.85rem;color:var(--muted)">Inkoper</span></div>
+    </div>
+    <p style="font-size:0.85rem;">Keurt bestellingen goed of af. Bekijkt alle orders.</p>
+  </div>
+  <div class="card role-transporteur" style="padding: 1rem;">
+    <div class="card-header" style="margin-bottom: 0.25rem;">
+      <div class="icon">&#128666;</div>
+      <div><strong>Transporteur</strong><br><span style="font-size:0.85rem;color:var(--muted)">Chauffeur</span></div>
+    </div>
+    <p style="font-size:0.85rem;">Plant ophaalrondes, haalt fust op, bevestigt leveringen.</p>
+  </div>
+  <div class="card role-finance" style="padding: 1rem;">
+    <div class="card-header" style="margin-bottom: 0.25rem;">
+      <div class="icon">&#128176;</div>
+      <div><strong>Finance</strong><br><span style="font-size:0.85rem;color:var(--muted)">Administratie</span></div>
+    </div>
+    <p style="font-size:0.85rem;">Verwerkt facturen en verdeelt kosten over kwekers.</p>
+  </div>
+  <div class="card role-admin" style="padding: 1rem;">
+    <div class="card-header" style="margin-bottom: 0.25rem;">
+      <div class="icon">&#9881;&#65039;</div>
+      <div><strong>Admin</strong><br><span style="font-size:0.85rem;color:var(--muted)">Beheerder</span></div>
+    </div>
+    <p style="font-size:0.85rem;">Beheert alles: gebruikers, fusttypes, transporteurs, instellingen.</p>
+  </div>
+</div>
+
+<!-- ─── OVERZICHT ─── -->
+<h2 id="overzicht">Procesoverzicht in 7 stappen</h2>
+
+<div class="flow-diagram">
+  <div class="flow-step">
+    <div class="flow-box active">Bestelling</div>
+    <div class="flow-role">Grower</div>
+  </div>
+  <div class="flow-arrow">&rarr;</div>
+  <div class="flow-step">
+    <div class="flow-box">Goedkeuring</div>
+    <div class="flow-role">Commercie</div>
+  </div>
+  <div class="flow-arrow">&rarr;</div>
+  <div class="flow-step">
+    <div class="flow-box">Ophaalronde</div>
+    <div class="flow-role">Transporteur</div>
+  </div>
+  <div class="flow-arrow">&rarr;</div>
+  <div class="flow-step">
+    <div class="flow-box">Ophalen</div>
+    <div class="flow-role">Transporteur</div>
+  </div>
+  <div class="flow-arrow">&rarr;</div>
+  <div class="flow-step">
+    <div class="flow-box">Levering</div>
+    <div class="flow-role">Transporteur</div>
+  </div>
+  <div class="flow-arrow">&rarr;</div>
+  <div class="flow-step">
+    <div class="flow-box">Factuur</div>
+    <div class="flow-role">Finance</div>
+  </div>
+  <div class="flow-arrow">&rarr;</div>
+  <div class="flow-step">
+    <div class="flow-box">Doorbelasting</div>
+    <div class="flow-role">Finance</div>
+  </div>
+</div>
+
+<!-- ─── STAP 1 ─── -->
+<h2 id="stap1">Stap 1: Kweker plaatst bestelling</h2>
+
+<div class="card role-grower">
+  <div class="card-header">
+    <div class="icon">&#127793;</div>
+    <h3>Grower bestelt fust</h3>
+    <span class="role-label">Grower</span>
+  </div>
+
+  <p>De kweker opent de <strong>Fust Orders</strong> pagina en ziet het tabblad <em>"Order"</em> met een overzicht van alle beschikbare fusttypes, gegroepeerd per categorie:</p>
+
+  <table>
+    <tr><th>Categorie</th><th>Voorbeeld</th></tr>
+    <tr><td>Emmers (Buckets)</td><td>Bloememmer nieuw Fc555, Bloememmer klein Fc566</td></tr>
+    <tr><td>Opzetrekken (Risers)</td><td>Laag opzetrek Fc595, Hoog opzetrek Fc596</td></tr>
+    <tr><td>Karren (Trolleys)</td><td>Deense kar Fc700</td></tr>
+    <tr><td>Kratten (Crates)</td><td>Standaard krat Fc800</td></tr>
+    <tr><td>Dozen (Boxes)</td><td>Verzenddoos Fc900</td></tr>
+    <tr><td>Overig (Other)</td><td>Diversen</td></tr>
+  </table>
+
+  <p>Per item ziet de kweker <strong>code</strong>, <strong>naam</strong> en <strong>prijs per stuk</strong>. Met de <code>+</code> en <code>-</code> knoppen kiest hij het gewenste aantal.</p>
+
+  <ol class="steps">
+    <li data-step="1">Kweker selecteert aantallen per fusttype (winkelwagen wordt opgebouwd)</li>
+    <li data-step="2">Optioneel: <strong>gewenste leverdatum</strong> invoeren</li>
+    <li data-step="3">Optioneel: <strong>opmerking</strong> toevoegen</li>
+    <li data-step="4">Klik op <em>"Bestelling Plaatsen"</em></li>
+  </ol>
+
+  <div class="note">
+    <strong>Voorwaarde:</strong> De kweker moet door een admin zijn ingeschakeld voor fust (<code>fustEnabled = true</code>) en er moet een standaard transporteur zijn gekoppeld. Anders kan hij niet bestellen.
+  </div>
+
+  <p><strong>Resultaat:</strong> Er wordt een <code>FustOrder</code> aangemaakt met status <span class="badge badge-amber">Pending</span> en een automatisch gegenereerd ordernummer (bijv. <code>FO-2026-0001</code>). De kweker ziet de bestelling terug op het tabblad <em>"Mijn Bestellingen"</em>.</p>
+</div>
+
+<!-- ─── STAP 2 ─── -->
+<h2 id="stap2">Stap 2: Goedkeuring door commercie/admin</h2>
+
+<div class="card role-commercie">
+  <div class="card-header">
+    <div class="icon">&#128188;</div>
+    <h3>Bestelling goedkeuren of afwijzen</h3>
+    <span class="role-label">Commercie / Admin</span>
+  </div>
+
+  <p>Commercie of admin opent de <strong>Fust Orders</strong> pagina en ziet een tabel met alle bestellingen van alle kwekers. Bovenaan is een statusfilter (Alle / Pending / Approved / Rejected / Delivered).</p>
+
+  <p>Bij elke bestelling met status <span class="badge badge-amber">Pending</span> staan twee knoppen:</p>
+
+  <ol class="steps">
+    <li data-step="&#10003;" class="blue"><strong>Goedkeuren</strong> &mdash; Status wordt <span class="badge badge-green">Approved</span>. De bestelling is nu klaar voor transport.</li>
+    <li data-step="&#10007;" class="amber"><strong>Afwijzen</strong> &mdash; Er verschijnt een dialoog om een reden in te vullen. Status wordt <span class="badge badge-red">Rejected</span>. De kweker ziet de reden in zijn bestellijst.</li>
+  </ol>
+
+  <div class="note warning">
+    <strong>Let op:</strong> Alleen bestellingen met status "Pending" kunnen goedgekeurd of afgewezen worden. Eenmaal goedgekeurd kan de status niet meer terug.
+  </div>
+</div>
+
+<!-- ─── STAP 3 ─── -->
+<h2 id="stap3">Stap 3: Transporteur plant ophaalronde</h2>
+
+<div class="card role-transporteur">
+  <div class="card-header">
+    <div class="icon">&#128666;</div>
+    <h3>Ophaalronde aanmaken</h3>
+    <span class="role-label">Transporteur</span>
+  </div>
+
+  <p>De transporteur opent de <strong>Pickups</strong> pagina en klikt op <em>"Nieuwe Ophaalronde"</em>. Een dialoog verschijnt:</p>
+
+  <ol class="steps">
+    <li data-step="1" class="amber">Kies een <strong>ophaaldatum</strong> (minimaal vandaag)</li>
+    <li data-step="2" class="amber">Optioneel: <strong>opmerkingen</strong> toevoegen</li>
+    <li data-step="3" class="amber">Selecteer welke <strong>goedgekeurde bestellingen</strong> mee moeten in deze ophaalronde (checkboxes)</li>
+    <li data-step="4" class="amber">Klik op <em>"Ophaalronde Aanmaken"</em></li>
+  </ol>
+
+  <p><strong>Wat er gebeurt:</strong></p>
+  <ul>
+    <li>Er wordt een <code>FustPickup</code> aangemaakt met status <span class="badge badge-blue">Planned</span></li>
+    <li>Voor elke geselecteerde bestelling wordt een <code>FustDelivery</code> record aangemaakt (koppeling pickup &harr; order)</li>
+    <li>De bestelling-status verandert automatisch van <span class="badge badge-green">Approved</span> naar <span class="badge badge-blue">Scheduled</span></li>
+  </ul>
+
+  <div class="note">
+    <strong>Batching:</strong> Meerdere bestellingen van verschillende kwekers kunnen in &eacute;&eacute;n ophaalronde worden gecombineerd. Dit is de kern van de logistieke planning.
+  </div>
+</div>
+
+<!-- ─── STAP 4 ─── -->
+<h2 id="stap4">Stap 4: Ophalen bij kwekers</h2>
+
+<div class="card role-transporteur">
+  <div class="card-header">
+    <div class="icon">&#128666;</div>
+    <h3>Markeer als opgehaald</h3>
+    <span class="role-label">Transporteur</span>
+  </div>
+
+  <p>Op de dag van ophalen opent de transporteur de geplande ophaalronde en klikt op <em>"Markeer als Opgehaald"</em>.</p>
+
+  <p><strong>Cascade-effect:</strong></p>
+  <ul>
+    <li>Pickup status: <span class="badge badge-blue">Planned</span> &rarr; <span class="badge badge-amber">Picked Up</span></li>
+    <li>Alle gekoppelde leveringen: status &rarr; <span class="badge badge-amber">In Transit</span></li>
+    <li>Alle gekoppelde bestellingen: status &rarr; <span class="badge badge-amber">In Transit</span></li>
+  </ul>
+
+  <p>De kweker ziet nu in zijn bestellijst dat de status is veranderd naar "Onderweg".</p>
+</div>
+
+<!-- ─── STAP 5 ─── -->
+<h2 id="stap5">Stap 5: Levering bevestigen met werkelijke aantallen</h2>
+
+<div class="card role-transporteur">
+  <div class="card-header">
+    <div class="icon">&#128666;</div>
+    <h3>Levering per bestelling bevestigen</h3>
+    <span class="role-label">Transporteur</span>
+  </div>
+
+  <p>Per bestelling in de ophaalronde klikt de transporteur op <em>"Markeer als Geleverd"</em>. Een dialoog toont:</p>
+
+  <ol class="steps">
+    <li data-step="1" class="amber">Alle bestelde items met het <strong>bestelde aantal</strong></li>
+    <li data-step="2" class="amber">Invoerveld voor het <strong>werkelijk geleverde aantal</strong> per item (kan afwijken!)</li>
+    <li data-step="3" class="amber">Klik op <em>"Levering Bevestigen"</em></li>
+  </ol>
+
+  <p><strong>Wat er gebeurt:</strong></p>
+  <ul>
+    <li>Levering-status &rarr; <span class="badge badge-green">Delivered</span>, met timestamp</li>
+    <li>Bestelling-status &rarr; <span class="badge badge-green">Delivered</span></li>
+    <li><code>FustDeliveryItem</code> records worden aangemaakt met de werkelijke aantallen</li>
+    <li>Als <strong>alle</strong> leveringen in de pickup klaar zijn, wordt de pickup automatisch <span class="badge badge-green">Completed</span></li>
+  </ul>
+
+  <div class="note warning">
+    <strong>Aantallen kunnen afwijken!</strong> De kweker ziet op het tabblad "Leveringen" een vergelijking: besteld vs. geleverd. Afwijkingen worden in het oranje gemarkeerd.
+  </div>
+</div>
+
+<!-- ─── STAP 6 ─── -->
+<h2 id="stap6">Stap 6: Factuur uploaden en matchen</h2>
+
+<div class="card role-finance">
+  <div class="card-header">
+    <div class="icon">&#128176;</div>
+    <h3>Factuur verwerken</h3>
+    <span class="role-label">Finance</span>
+  </div>
+
+  <p>Finance ontvangt een factuur van de fust-leverancier en uploadt de PDF via de <strong>Invoices</strong> pagina.</p>
+
+  <ol class="steps">
+    <li data-step="1" class="purple">Klik op <em>"Factuur Uploaden"</em></li>
+    <li data-step="2" class="purple">Selecteer of sleep een PDF-bestand</li>
+    <li data-step="3" class="purple">Het systeem <strong>parseert automatisch</strong>:
+      <ul>
+        <li>Factuurnummer</li>
+        <li>Factuurdatum</li>
+        <li>Regelitems (fustcode, aantal, stukprijs, totaal)</li>
+        <li>Totaalbedrag</li>
+      </ul>
+    </li>
+    <li data-step="4" class="purple">Geparsede items worden <strong>gematcht</strong> met bekende fusttypes op basis van de fustcode</li>
+  </ol>
+
+  <p><strong>Resultaat:</strong> Factuur verschijnt in de lijst met status <span class="badge badge-blue">Matched</span> (als items gevonden) of <span class="badge badge-amber">Pending</span> (als geen match). De PDF wordt opgeslagen in Vercel Blob.</p>
+</div>
+
+<!-- ─── STAP 7 ─── -->
+<h2 id="stap7">Stap 7: Kosten doorbelasten aan kwekers</h2>
+
+<div class="card role-finance">
+  <div class="card-header">
+    <div class="icon">&#128176;</div>
+    <h3>Kostenverdeling</h3>
+    <span class="role-label">Finance</span>
+  </div>
+
+  <p>Finance opent een factuur en klikt op het <em>kostenverdeling-icoon</em>. Een dialoog toont:</p>
+
+  <ol class="steps">
+    <li data-step="1" class="purple">Bovenaan: het <strong>factuurtotaal</strong> en hoeveel er al is toegewezen</li>
+    <li data-step="2" class="purple">Klik op <em>"+ Kweker"</em> om een kwekerr toe te voegen, of <em>"Automatisch Verdelen"</em> om gelijkmatig te splitsen over alle fust-kwekers</li>
+    <li data-step="3" class="purple">Per kweker: kies de <strong>kweker</strong> (dropdown), vul het <strong>bedrag</strong> in, en optioneel een <strong>omschrijving</strong></li>
+    <li data-step="4" class="purple">Het totaal van alle regels moet gelijk zijn aan het factuurtotaal</li>
+    <li data-step="5" class="purple">Klik op <em>"Kosten Toewijzen"</em></li>
+  </ol>
+
+  <p><strong>Resultaat:</strong> Er worden <code>FustGrowerCharge</code> records aangemaakt. De factuurstatus verandert naar <span class="badge badge-purple">Charged</span>. Later kan finance de status handmatig naar <span class="badge badge-green">Paid</span> zetten.</p>
+</div>
+
+<!-- ─── STATUSSEN ─── -->
+<h2 id="statussen">Status-overzicht per entiteit</h2>
+
+<h3>Bestelling (FustOrder)</h3>
+<div class="flow-diagram">
+  <div class="flow-step"><div class="flow-box">Pending</div><div class="flow-role">Kweker bestelt</div></div>
+  <div class="flow-arrow">&rarr;</div>
+  <div class="flow-step"><div class="flow-box">Approved</div><div class="flow-role">Commercie keurt goed</div></div>
+  <div class="flow-arrow">&rarr;</div>
+  <div class="flow-step"><div class="flow-box">Scheduled</div><div class="flow-role">Gekoppeld aan pickup</div></div>
+  <div class="flow-arrow">&rarr;</div>
+  <div class="flow-step"><div class="flow-box">In Transit</div><div class="flow-role">Opgehaald</div></div>
+  <div class="flow-arrow">&rarr;</div>
+  <div class="flow-step"><div class="flow-box active">Delivered</div><div class="flow-role">Geleverd</div></div>
+</div>
+<p style="font-size:0.85rem;color:var(--muted);margin-top:-0.5rem;">Alternatief pad: Pending &rarr; <span class="badge badge-red">Rejected</span> (door commercie) of <span class="badge badge-red">Cancelled</span></p>
+
+<h3>Ophaalronde (FustPickup)</h3>
+<div class="flow-diagram">
+  <div class="flow-step"><div class="flow-box">Planned</div><div class="flow-role">Transporteur maakt aan</div></div>
+  <div class="flow-arrow">&rarr;</div>
+  <div class="flow-step"><div class="flow-box">Picked Up</div><div class="flow-role">Opgehaald bij kwekers</div></div>
+  <div class="flow-arrow">&rarr;</div>
+  <div class="flow-step"><div class="flow-box active">Completed</div><div class="flow-role">Alle leveringen klaar</div></div>
+</div>
+
+<h3>Factuur (FustInvoice)</h3>
+<div class="flow-diagram">
+  <div class="flow-step"><div class="flow-box">Pending</div><div class="flow-role">Geen items gematcht</div></div>
+  <div class="flow-arrow">&rarr;</div>
+  <div class="flow-step"><div class="flow-box">Matched</div><div class="flow-role">Items herkend</div></div>
+  <div class="flow-arrow">&rarr;</div>
+  <div class="flow-step"><div class="flow-box">Charged</div><div class="flow-role">Kosten verdeeld</div></div>
+  <div class="flow-arrow">&rarr;</div>
+  <div class="flow-step"><div class="flow-box active">Paid</div><div class="flow-role">Betaald</div></div>
+</div>
+
+<!-- ─── INSTELLINGEN ─── -->
+<h2 id="instellingen">Admin instellingen</h2>
+
+<div class="card role-admin">
+  <div class="card-header">
+    <div class="icon">&#9881;&#65039;</div>
+    <h3>Configuratie door admin</h3>
+    <span class="role-label">Admin</span>
+  </div>
+
+  <p>De admin beheert drie onderdelen via <strong>Fust Settings</strong>:</p>
+
+  <h3 style="margin-top:1rem;">1. Kweker Toegang (Grower Access)</h3>
+  <p>Per kweker instellen:</p>
+  <ul>
+    <li><strong>Fust ingeschakeld</strong> &mdash; Ja/Nee. Zonder dit kan de kweker niet bestellen.</li>
+    <li><strong>Standaard transporteur</strong> &mdash; Verplicht als fust is ingeschakeld. Bepaalt welke transporteur de bestellingen van deze kweker ophaalt.</li>
+  </ul>
+
+  <h3>2. Fusttypes</h3>
+  <p>Beheer het assortiment (CRUD):</p>
+  <ul>
+    <li><strong>Code</strong> (bijv. Fc555) &mdash; uniek, gebruikt voor factuurafstemming</li>
+    <li><strong>Naam</strong> (bijv. "Bloememmer nieuw 2026")</li>
+    <li><strong>Categorie</strong> (emmers, karren, kratten, dozen, opzetrekken, overig)</li>
+    <li><strong>Prijs per stuk</strong></li>
+    <li><strong>Actief/Inactief</strong> &mdash; inactieve types verschijnen niet in de webshop</li>
+    <li><strong>Sorteervolgorde</strong></li>
+  </ul>
+
+  <h3>3. Transporteurs</h3>
+  <p>Beheer transportbedrijven (CRUD):</p>
+  <ul>
+    <li><strong>Naam</strong>, <strong>e-mail</strong>, <strong>telefoon</strong></li>
+    <li><strong>Actief/Inactief</strong></li>
+  </ul>
+
+  <div class="note warning">
+    <strong>Verwijderen:</strong> Een fusttype kan niet verwijderd worden als het in bestellingen voorkomt. Een transporteur kan niet verwijderd worden als er ophaalrondes of kwekers aan gekoppeld zijn. Deactiveren is dan het alternatief.
+  </div>
+</div>
+
+<!-- ─── ROLMATRIX ─── -->
+<h2 id="rolmatrix">Wie kan wat? (Rolmatrix)</h2>
+
+<div class="role-matrix">
+  <table>
+    <thead>
+      <tr>
+        <th>Actie</th>
+        <th><span class="badge badge-green">Grower</span></th>
+        <th><span class="badge badge-blue">Commercie</span></th>
+        <th><span class="badge badge-red">Admin</span></th>
+        <th><span class="badge badge-amber">Transporteur</span></th>
+        <th><span class="badge badge-purple">Finance</span></th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Fust bestellen</td>
+        <td>&#10003;</td><td>&mdash;</td><td>&mdash;</td><td>&mdash;</td><td>&mdash;</td>
+      </tr>
+      <tr>
+        <td>Catalogus bekijken</td>
+        <td>&#10003;</td><td>&#10003;</td><td>&#10003;</td><td>&mdash;</td><td>&mdash;</td>
+      </tr>
+      <tr>
+        <td>Eigen bestellingen zien</td>
+        <td>&#10003;</td><td>&mdash;</td><td>&mdash;</td><td>&mdash;</td><td>&mdash;</td>
+      </tr>
+      <tr>
+        <td>Alle bestellingen zien</td>
+        <td>&mdash;</td><td>&#10003;</td><td>&#10003;</td><td>&#10003;*</td><td>&mdash;</td>
+      </tr>
+      <tr>
+        <td>Bestelling goedkeuren/afwijzen</td>
+        <td>&mdash;</td><td>&#10003;</td><td>&#10003;</td><td>&mdash;</td><td>&mdash;</td>
+      </tr>
+      <tr>
+        <td>Ophaalronde aanmaken</td>
+        <td>&mdash;</td><td>&mdash;</td><td>&#10003;</td><td>&#10003;</td><td>&mdash;</td>
+      </tr>
+      <tr>
+        <td>Ophalen/levering bevestigen</td>
+        <td>&mdash;</td><td>&mdash;</td><td>&#10003;</td><td>&#10003;</td><td>&mdash;</td>
+      </tr>
+      <tr>
+        <td>Factuur uploaden</td>
+        <td>&mdash;</td><td>&mdash;</td><td>&#10003;</td><td>&mdash;</td><td>&#10003;</td>
+      </tr>
+      <tr>
+        <td>Kosten doorbelasten</td>
+        <td>&mdash;</td><td>&mdash;</td><td>&#10003;</td><td>&mdash;</td><td>&#10003;</td>
+      </tr>
+      <tr>
+        <td>Instellingen beheren</td>
+        <td>&mdash;</td><td>&mdash;</td><td>&#10003;</td><td>&mdash;</td><td>&mdash;</td>
+      </tr>
+      <tr>
+        <td>Gebruikers beheren</td>
+        <td>&mdash;</td><td>&mdash;</td><td>&#10003;</td><td>&mdash;</td><td>&mdash;</td>
+      </tr>
+    </tbody>
+  </table>
+  <p style="font-size:0.8rem;color:var(--muted);margin-top:0.5rem;">* Transporteur ziet alleen goedgekeurde+ bestellingen (niet pending)</p>
+</div>
+
+<div style="margin-top:3rem;padding-top:1.5rem;border-top:1px solid var(--border);color:var(--muted);font-size:0.85rem;">
+  <p>Coloriginz Grower Portal &mdash; Fust Module Documentatie &mdash; Gegenereerd april 2026</p>
+</div>
+
+</body>
+</html>

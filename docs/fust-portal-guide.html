@@ -1,0 +1,1175 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fust Portal — Handleiding &amp; Documentatie</title>
+<style>
+  :root {
+    --primary: #2D6A4F;
+    --primary-light: #40916C;
+    --primary-bg: #F0F7F4;
+    --accent: #E76F51;
+    --accent-light: #FFF3F0;
+    --blue: #2563EB;
+    --blue-light: #EFF6FF;
+    --purple: #7C3AED;
+    --purple-light: #F5F3FF;
+    --amber: #D97706;
+    --amber-light: #FFFBEB;
+    --gray-50: #F9FAFB;
+    --gray-100: #F3F4F6;
+    --gray-200: #E5E7EB;
+    --gray-300: #D1D5DB;
+    --gray-400: #9CA3AF;
+    --gray-500: #6B7280;
+    --gray-600: #4B5563;
+    --gray-700: #374151;
+    --gray-800: #1F2937;
+    --gray-900: #111827;
+    --radius: 12px;
+    --shadow: 0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.04);
+    --shadow-lg: 0 4px 12px rgba(0,0,0,.1), 0 2px 4px rgba(0,0,0,.06);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    color: var(--gray-800);
+    line-height: 1.7;
+    background: var(--gray-50);
+  }
+
+  /* ── Hero ── */
+  .hero {
+    background: linear-gradient(135deg, var(--primary) 0%, #1B4332 100%);
+    color: #fff;
+    padding: 80px 24px 60px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+  .hero::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: url("data:image/svg+xml,%3Csvg width='60' height='60' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M30 0L60 30L30 60L0 30Z' fill='none' stroke='rgba(255,255,255,.04)' stroke-width='1'/%3E%3C/svg%3E");
+  }
+  .hero > * { position: relative; z-index: 1; }
+  .hero h1 { font-size: 2.8rem; font-weight: 800; letter-spacing: -1px; margin-bottom: 12px; }
+  .hero p { font-size: 1.15rem; opacity: .85; max-width: 600px; margin: 0 auto; }
+  .hero .badge {
+    display: inline-block;
+    background: rgba(255,255,255,.15);
+    border: 1px solid rgba(255,255,255,.2);
+    border-radius: 20px;
+    padding: 6px 18px;
+    font-size: .85rem;
+    margin-bottom: 20px;
+    backdrop-filter: blur(4px);
+  }
+
+  /* ── Two-column layout ── */
+  .page-layout {
+    max-width: 1200px;
+    margin: 0 auto;
+    display: flex;
+    gap: 0;
+    min-height: calc(100vh - 250px);
+  }
+
+  /* ── Sidebar nav ── */
+  .sidebar {
+    width: 240px;
+    flex-shrink: 0;
+    background: #fff;
+    border-right: 1px solid var(--gray-200);
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow-y: auto;
+    padding: 24px 0;
+    box-shadow: var(--shadow);
+  }
+  .sidebar-title {
+    font-size: .7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--gray-400);
+    padding: 8px 20px 6px;
+    margin-top: 8px;
+  }
+  .sidebar-title:first-child { margin-top: 0; }
+  .sidebar a {
+    display: block;
+    text-decoration: none;
+    color: var(--gray-500);
+    font-size: .88rem;
+    font-weight: 500;
+    padding: 7px 20px;
+    border-left: 3px solid transparent;
+    transition: all .15s;
+  }
+  .sidebar a:hover {
+    color: var(--primary);
+    background: var(--primary-bg);
+    border-left-color: var(--primary);
+  }
+
+  /* ── Content ── */
+  .content {
+    flex: 1;
+    min-width: 0;
+    padding: 40px 48px 80px;
+  }
+
+  /* ── Section ── */
+  section { margin-bottom: 56px; }
+  section > h2 {
+    font-size: 1.6rem;
+    font-weight: 700;
+    color: var(--gray-900);
+    margin-bottom: 6px;
+    padding-bottom: 10px;
+    border-bottom: 3px solid var(--primary);
+    display: inline-block;
+  }
+  section > .subtitle {
+    color: var(--gray-500);
+    font-size: .95rem;
+    margin-bottom: 24px;
+  }
+  h3 {
+    font-size: 1.15rem;
+    font-weight: 600;
+    color: var(--gray-800);
+    margin: 28px 0 10px;
+  }
+  h4 {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--gray-700);
+    margin: 18px 0 8px;
+  }
+  p { margin-bottom: 12px; color: var(--gray-600); }
+
+  /* ── Cards ── */
+  .card {
+    background: #fff;
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius);
+    padding: 24px;
+    box-shadow: var(--shadow);
+    margin-bottom: 16px;
+  }
+  .card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 16px;
+    margin: 16px 0;
+  }
+  .card h4 { margin-top: 0; }
+  .card.green { border-left: 4px solid var(--primary); }
+  .card.orange { border-left: 4px solid var(--accent); }
+  .card.blue { border-left: 4px solid var(--blue); }
+  .card.purple { border-left: 4px solid var(--purple); }
+  .card.amber { border-left: 4px solid var(--amber); }
+
+  /* ── Role cards ── */
+  .role-card {
+    background: #fff;
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius);
+    overflow: hidden;
+    box-shadow: var(--shadow);
+  }
+  .role-card .role-header {
+    padding: 16px 20px;
+    font-weight: 700;
+    font-size: 1.05rem;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .role-card .role-body { padding: 16px 20px; }
+  .role-card .role-body ul { list-style: none; padding: 0; }
+  .role-card .role-body li {
+    padding: 5px 0;
+    font-size: .9rem;
+    color: var(--gray-600);
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  .role-card .role-body li::before {
+    content: '\2713';
+    color: var(--primary);
+    font-weight: 700;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+  .role-grower .role-header { background: #059669; }
+  .role-commercie .role-header { background: #2563EB; }
+  .role-admin .role-header { background: #7C3AED; }
+  .role-transporteur .role-header { background: #D97706; }
+  .role-finance .role-header { background: #DC2626; }
+
+  /* ── Flow ── */
+  .flow {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    margin: 16px 0 24px;
+  }
+  .flow-step {
+    background: #fff;
+    border: 2px solid var(--gray-200);
+    border-radius: 10px;
+    padding: 10px 18px;
+    font-size: .88rem;
+    font-weight: 600;
+    color: var(--gray-700);
+    position: relative;
+    text-align: center;
+    min-width: 100px;
+  }
+  .flow-step.active { border-color: var(--primary); color: var(--primary); background: var(--primary-bg); }
+  .flow-step.warn { border-color: var(--amber); color: var(--amber); background: var(--amber-light); }
+  .flow-step.danger { border-color: var(--accent); color: var(--accent); background: var(--accent-light); }
+  .flow-step.done { border-color: #059669; color: #059669; background: #ECFDF5; }
+  .flow-step small { display: block; font-weight: 400; font-size: .75rem; opacity: .7; margin-top: 2px; }
+  .flow-arrow { color: var(--gray-300); font-size: 1.4rem; font-weight: 300; }
+
+  /* ── Table ── */
+  .table-wrap { overflow-x: auto; margin: 16px 0; border-radius: var(--radius); border: 1px solid var(--gray-200); }
+  table { width: 100%; border-collapse: collapse; font-size: .88rem; background: #fff; }
+  thead th {
+    background: var(--primary);
+    color: #fff;
+    text-align: left;
+    padding: 12px 16px;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  tbody td { padding: 10px 16px; border-bottom: 1px solid var(--gray-100); color: var(--gray-600); }
+  tbody tr:hover { background: var(--gray-50); }
+  .check { color: var(--primary); font-weight: 700; text-align: center; }
+  .cross { color: var(--gray-300); text-align: center; }
+
+  /* ── Code ── */
+  code {
+    background: var(--gray-100);
+    padding: 2px 8px;
+    border-radius: 6px;
+    font-size: .85rem;
+    font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+    color: var(--primary);
+  }
+  .code-block {
+    background: var(--gray-800);
+    color: #E5E7EB;
+    padding: 16px 20px;
+    border-radius: var(--radius);
+    font-family: 'Cascadia Code', 'Fira Code', monospace;
+    font-size: .85rem;
+    overflow-x: auto;
+    margin: 12px 0;
+    line-height: 1.6;
+  }
+
+  /* ── Callout ── */
+  .callout {
+    border-radius: var(--radius);
+    padding: 16px 20px;
+    margin: 16px 0;
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    font-size: .9rem;
+  }
+  .callout-icon { font-size: 1.3rem; flex-shrink: 0; line-height: 1; margin-top: 2px; }
+  .callout.info { background: var(--blue-light); border: 1px solid #BFDBFE; color: #1E40AF; }
+  .callout.warn { background: var(--amber-light); border: 1px solid #FDE68A; color: #92400E; }
+  .callout.tip { background: var(--primary-bg); border: 1px solid #A7F3D0; color: #065F46; }
+
+  /* ── Accordion ── */
+  details {
+    background: #fff;
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius);
+    margin-bottom: 8px;
+    box-shadow: var(--shadow);
+  }
+  details[open] { border-color: var(--primary); }
+  summary {
+    padding: 14px 20px;
+    font-weight: 600;
+    cursor: pointer;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--gray-700);
+    user-select: none;
+  }
+  summary::before {
+    content: '\25B6';
+    font-size: .7rem;
+    transition: transform .2s;
+    color: var(--gray-400);
+  }
+  details[open] summary::before { transform: rotate(90deg); color: var(--primary); }
+  summary::-webkit-details-marker { display: none; }
+  details .detail-body { padding: 0 20px 20px; }
+  details .detail-body p { font-size: .9rem; }
+
+  /* ── Tags ── */
+  .tag {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 6px;
+    font-size: .78rem;
+    font-weight: 600;
+    line-height: 1.4;
+  }
+  .tag-green { background: #D1FAE5; color: #065F46; }
+  .tag-orange { background: #FED7AA; color: #9A3412; }
+  .tag-blue { background: #DBEAFE; color: #1E40AF; }
+  .tag-red { background: #FEE2E2; color: #991B1B; }
+  .tag-purple { background: #EDE9FE; color: #5B21B6; }
+  .tag-gray { background: var(--gray-100); color: var(--gray-600); }
+  .tag-amber { background: #FEF3C7; color: #92400E; }
+
+  /* ── Lists ── */
+  ul, ol { margin: 8px 0 12px 20px; }
+  li { margin-bottom: 4px; font-size: .92rem; color: var(--gray-600); }
+
+  /* ── Divider ── */
+  hr { border: none; border-top: 1px solid var(--gray-200); margin: 32px 0; }
+
+  /* ── Footer ── */
+  .footer {
+    text-align: center;
+    padding: 32px;
+    color: var(--gray-400);
+    font-size: .85rem;
+    border-top: 1px solid var(--gray-200);
+    background: #fff;
+  }
+
+  /* ── Responsive ── */
+  @media (max-width: 900px) {
+    .page-layout { flex-direction: column; }
+    .sidebar {
+      width: 100%;
+      position: relative;
+      height: auto;
+      border-right: none;
+      border-bottom: 1px solid var(--gray-200);
+      padding: 16px 0;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0;
+    }
+    .sidebar-title { width: 100%; padding: 4px 16px; margin-top: 4px; }
+    .sidebar a { padding: 6px 16px; font-size: .82rem; border-left: none; }
+    .content { padding: 24px 20px 60px; }
+    .hero h1 { font-size: 2rem; }
+    .card-grid { grid-template-columns: 1fr; }
+    .flow { flex-direction: column; align-items: stretch; }
+    .flow-arrow { transform: rotate(90deg); text-align: center; }
+    .flow-step { min-width: unset; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════ HERO ═══════════════════════════ -->
+<div class="hero">
+  <h1>Fust Portal</h1>
+  <p>Volledig platform voor het bestellen, volgen, leveren en factureren van fust (containers, emmers, karren) binnen de sierteeltketen.</p>
+</div>
+
+<!-- ═══════════════════════════ LAYOUT ═══════════════════════════ -->
+<div class="page-layout">
+
+<!-- ── Sidebar Nav ── -->
+<nav class="sidebar">
+  <div class="sidebar-title">Algemeen</div>
+  <a href="#overzicht">Overzicht</a>
+  <a href="#rollen">Gebruikersrollen</a>
+  <a href="#branding">Multi-company Branding</a>
+
+  <div class="sidebar-title">Workflow</div>
+  <a href="#order-flow">Orderflow</a>
+  <a href="#leveringen">Leveringen</a>
+  <a href="#vouchers">Uitgiftebonnen</a>
+  <a href="#matching">Voucher Matching</a>
+  <a href="#facturatie">Facturatie</a>
+
+  <div class="sidebar-title">Systeem</div>
+  <a href="#emails">E-mailsysteem</a>
+  <a href="#audit">Audit Trail</a>
+  <a href="#instellingen">Instellingen</a>
+  <a href="#gebruikersbeheer">Gebruikersbeheer</a>
+
+  <div class="sidebar-title">Testen</div>
+  <a href="#testomgeving">Testomgeving</a>
+  <a href="#permissies">Permissiematrix</a>
+</nav>
+
+<!-- ── Main Content ── -->
+<div class="content">
+
+<!-- ═══════════════════════════ OVERZICHT ═══════════════════════════ -->
+<section id="overzicht">
+  <h2>Overzicht</h2>
+  <p class="subtitle">Wat is de Fust Portal en wat doet het?</p>
+
+  <p>De Fust Portal is een onderdeel van het Coloriginz Grower Portal. Het beheert de volledige levenscyclus van <strong>fust</strong> (herbruikbare containers voor de bloemenhandel): van bestelling door kwekers, via goedkeuring en levering door transporteurs, tot facturatie en reconciliatie met Royal FloraHolland uitgiftebonnen.</p>
+
+  <div class="card-grid">
+    <div class="card green">
+      <h4>Webshop &amp; Bestellen</h4>
+      <p>Kwekers bestellen fust uit een catalogus met 6 categorieen: emmers, karren, kratten, dozen, opzetrekken en overig. Elke FustType heeft een statiegeld- en optioneel huurprijs.</p>
+    </div>
+    <div class="card orange">
+      <h4>Logistiek &amp; Levering</h4>
+      <p>Transporteurs zien goedgekeurde orders, leveren het fust bij de kweker en bevestigen de levering met werkelijke aantallen.</p>
+    </div>
+    <div class="card blue">
+      <h4>Facturatie &amp; Export</h4>
+      <p>Finance genereert professionele PDF-facturen per company-branding en eExact XML-bestanden voor import in Exact Globe boekhouding.</p>
+    </div>
+    <div class="card purple">
+      <h4>Reconciliatie</h4>
+      <p>Uitgiftebonnen van Royal FloraHolland worden automatisch ge-ingest via e-mail, geparsed en gekoppeld aan orders voor afstemming.</p>
+    </div>
+  </div>
+
+  <h3>Twee portalen</h3>
+  <p>De fust-functionaliteit is beschikbaar via twee interfaces:</p>
+  <div class="card-grid">
+    <div class="card">
+      <h4>Hoofdportaal <code>/fust/</code></h4>
+      <p>Onderdeel van het bestaande Grower Portal. Bevat een kwekerselector voor multi-tenant toegang en alle portal-functionaliteit (sales, lots, forecasts, etc.) naast fust. Toegankelijk voor kwekers, commercie, admin en finance.</p>
+    </div>
+    <div class="card">
+      <h4>Standalone Fust Portal <code>/fust-portal/</code></h4>
+      <p>Eigen layout (FustShell) met eigen inlog en (sub)domein, bijv. <code>fust.coloriginz.nl</code>. Gestroomlijnd en mobiel-vriendelijk. <strong>Transporteurs</strong> gebruiken uitsluitend dit portaal. Andere rollen kunnen beide portalen gebruiken.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════ ROLLEN ═══════════════════════════ -->
+<section id="rollen">
+  <h2>Gebruikersrollen</h2>
+  <p class="subtitle">Vijf rollen met specifieke verantwoordelijkheden en toegang.</p>
+
+  <div class="card-grid">
+    <div class="role-card role-grower">
+      <div class="role-header"><span>&#127793;</span> Grower (Kweker)</div>
+      <div class="role-body">
+        <ul>
+          <li>Fust bestellen uit de catalogus (webshop)</li>
+          <li>Eigen orders volgen (status, tijdlijn)</li>
+          <li>Leveringen inzien (besteld vs. geleverd)</li>
+          <li>Eigen facturen bekijken en downloaden</li>
+          <li>Wachtwoord wijzigen, taal kiezen (NL/EN)</li>
+        </ul>
+      </div>
+    </div>
+    <div class="role-card role-commercie">
+      <div class="role-header"><span>&#128188;</span> Commercie (Account Manager)</div>
+      <div class="role-body">
+        <ul>
+          <li>Alle kwekerorders bekijken en beheren</li>
+          <li>Orders goedkeuren of afwijzen (met reden)</li>
+          <li>Leveringen volgen per kweker</li>
+          <li>Audit trail / activiteitenlogboek inzien</li>
+          <li>Kwekerselector voor multi-tenant weergave</li>
+        </ul>
+      </div>
+    </div>
+    <div class="role-card role-admin">
+      <div class="role-header"><span>&#128272;</span> Admin (Beheerder)</div>
+      <div class="role-body">
+        <ul>
+          <li>Volledige toegang tot alle functies</li>
+          <li>Fust-types beheren (catalogus, prijzen, artikelcodes)</li>
+          <li>Transporteurs aanmaken en toewijzen</li>
+          <li>Kwekertoegang beheren (fust aan/uit, auto-approve)</li>
+          <li>Gebruikersbeheer (aanmaken, rollen, activeren)</li>
+          <li>E-mail ingestion log en alle finance-functies</li>
+        </ul>
+      </div>
+    </div>
+    <div class="role-card role-transporteur">
+      <div class="role-header"><span>&#128666;</span> Transporteur</div>
+      <div class="role-body">
+        <ul>
+          <li>Goedgekeurde orders zien (als default transporteur)</li>
+          <li>Orders markeren als geleverd</li>
+          <li>Werkelijk geleverde aantallen invoeren</li>
+          <li>E-mailnotificatie bij goedgekeurde orders</li>
+        </ul>
+      </div>
+    </div>
+    <div class="role-card role-finance">
+      <div class="role-header"><span>&#128176;</span> Finance</div>
+      <div class="role-body">
+        <ul>
+          <li>Kwekerfacturen genereren (PDF + eExact XML)</li>
+          <li>Facturen versturen naar kwekers per e-mail</li>
+          <li>Uitgiftebonnen matchen aan orders</li>
+          <li>E-mail ingestion log bekijken</li>
+          <li>Audit trail / activiteitenlogboek inzien</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════ BRANDING ═══════════════════════════ -->
+<section id="branding">
+  <h2>Multi-company Branding</h2>
+  <p class="subtitle">Ondersteuning voor meerdere bedrijfsentiteiten met eigen huisstijl.</p>
+
+  <div class="card">
+    <p>Kwekers zijn gekoppeld aan een <strong>Company</strong> (bijv. Coloriginz, My Peony Society). Dit be&iuml;nvloedt:</p>
+    <ul>
+      <li><strong>Sidebar-logo</strong> in het portal (zowel AppShell als FustShell)</li>
+      <li><strong>PDF-facturen:</strong> bedrijfslogo, naam en voettekst</li>
+      <li><strong>E-mails:</strong> afzendernaam, afzenderadres, voettekst</li>
+      <li><strong>Browsertab-titel:</strong> "Fust Portal | [Bedrijfsnaam]"</li>
+    </ul>
+    <p>De branding wordt bepaald door het <code>companySlug</code> van de kweker. Bij ontbreken valt het systeem terug op de hostname-gebaseerde standaard.</p>
+  </div>
+</section>
+
+<!-- ═══════════════════════════ ORDER FLOW ═══════════════════════════ -->
+<section id="order-flow">
+  <h2>Orderflow</h2>
+  <p class="subtitle">Van bestelling tot levering &mdash; de volledige levenscyclus van een fust-order.</p>
+
+  <div class="flow">
+    <div class="flow-step warn">Pending<small>Kweker bestelt</small></div>
+    <span class="flow-arrow">&rarr;</span>
+    <div class="flow-step active">Approved<small>Admin/Commercie</small></div>
+    <span class="flow-arrow">&rarr;</span>
+    <div class="flow-step done">Delivered<small>Transporteur levert</small></div>
+  </div>
+
+  <div class="flow" style="margin-top: -8px; margin-left: 110px;">
+    <span class="flow-arrow" style="transform: rotate(135deg);">&#8628;</span>
+    <div class="flow-step danger">Rejected<small>Afgewezen (met reden)</small></div>
+    <span style="width: 16px"></span>
+    <div class="flow-step" style="border-color: var(--gray-400); color: var(--gray-500);">Cancelled<small>Geannuleerd</small></div>
+  </div>
+
+  <details>
+    <summary>Stap 1 &mdash; Bestelling plaatsen (Kweker)</summary>
+    <div class="detail-body">
+      <p>De kweker opent de fust-catalogus, gegroepeerd per categorie (emmers, karren, kratten, dozen, opzetrekken, overig). Per FustType kan een aantal worden gekozen. Optioneel kan een gewenste leverdatum en opmerking worden toegevoegd.</p>
+      <p>Bij het afrekenen wordt een <code>FustOrder</code> aangemaakt met een automatisch ordernummer: <code>FO-2026-0001</code>, <code>FO-2026-0002</code>, etc. De order begint in status <span class="tag tag-orange">pending</span>.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>Stap 2 &mdash; Goedkeuring (Admin / Commercie)</summary>
+    <div class="detail-body">
+      <p>De order verschijnt in het tabblad "Active" van de orders-pagina. Admin of Commercie kan:</p>
+      <ul>
+        <li><strong>Goedkeuren</strong> &rarr; status wordt <span class="tag tag-green">approved</span>, e-mail naar transporteur</li>
+        <li><strong>Afwijzen</strong> &rarr; status wordt <span class="tag tag-red">rejected</span>, reden verplicht</li>
+      </ul>
+      <div class="callout tip">
+        <span class="callout-icon">&#9889;</span>
+        <div><strong>Auto-approve:</strong> Als de kweker <code>autoApproveOrders</code> aan heeft staan, wordt de order direct goedgekeurd zonder handmatige tussenkomst. De transporteur ontvangt meteen een e-mail.</div>
+      </div>
+    </div>
+  </details>
+
+  <details>
+    <summary>Stap 3 &mdash; Levering (Transporteur)</summary>
+    <div class="detail-body">
+      <p>De transporteur ziet goedgekeurde orders in de Fust Portal. Per order kan de transporteur:</p>
+      <ul>
+        <li>De order markeren als <span class="tag tag-green">delivered</span></li>
+        <li>De <strong>werkelijk geleverde aantallen</strong> invoeren (die kunnen afwijken van de bestelde hoeveelheid)</li>
+      </ul>
+      <p>Na bevestiging:</p>
+      <ul>
+        <li>Status &rarr; <span class="tag tag-green">delivered</span></li>
+        <li>E-mail naar kweker met besteld vs. geleverd overzicht</li>
+        <li>Order beschikbaar voor facturatie</li>
+      </ul>
+    </div>
+  </details>
+
+  <details>
+    <summary>Ordernummering</summary>
+    <div class="detail-body">
+      <p>Ordernummers worden automatisch gegenereerd per jaar:</p>
+      <div class="code-block">FO-2026-0001, FO-2026-0002, FO-2026-0003, ...</div>
+      <p>Het prefix <code>FO</code> staat voor "Fust Order", gevolgd door het jaar en een oplopend volgnummer van 4 cijfers.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>Soft delete</summary>
+    <div class="detail-body">
+      <p>Orders worden nooit fysiek verwijderd. Bij "verwijderen" wordt een <code>deletedAt</code> timestamp gezet. Verwijderde orders zijn onzichtbaar in de reguliere weergaven maar blijven in de database voor audit- en compliance-doeleinden.</p>
+    </div>
+  </details>
+
+  <h3>Tabs op de Orders-pagina</h3>
+  <p>De orders-pagina gebruikt tabs om orders te scheiden:</p>
+  <div class="card-grid">
+    <div class="card orange">
+      <h4>Active (standaard)</h4>
+      <p>Orders met status <span class="tag tag-orange">pending</span> en <span class="tag tag-green">approved</span>. Pending-orders vallen visueel meer op (oranje fill) dan approved (groen outline).</p>
+    </div>
+    <div class="card green">
+      <h4>Delivered</h4>
+      <p>Afgeleverde orders. Deze zijn beschikbaar voor facturatie zodra ze gekoppeld zijn aan een uitgiftebon.</p>
+    </div>
+    <div class="card">
+      <h4>Rejected / Cancelled</h4>
+      <p>Afgewezen en geannuleerde orders ter referentie.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════ LEVERINGEN ═══════════════════════════ -->
+<section id="leveringen">
+  <h2>Leveringen</h2>
+  <p class="subtitle">Kwekersweergave van lopende en afgeronde leveringen.</p>
+
+  <div class="card-grid">
+    <div class="card orange">
+      <h4>Tab: Pending</h4>
+      <p>Orders die goedgekeurd zijn maar nog niet geleverd. De kweker ziet hier welke fust nog onderweg is.</p>
+    </div>
+    <div class="card green">
+      <h4>Tab: Completed</h4>
+      <p>Afgeronde leveringen met detail: bestelde vs. werkelijk geleverde aantallen en leverdatum.</p>
+    </div>
+  </div>
+
+  <div class="callout info">
+    <span class="callout-icon">&#128231;</span>
+    <div><strong>E-mailnotificatie:</strong> Bij het bevestigen van een levering ontvangt de kweker automatisch een e-mail met het bestel- en leveroverzicht.</div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════ VOUCHERS ═══════════════════════════ -->
+<section id="vouchers">
+  <h2>Uitgiftebonnen (Vouchers)</h2>
+  <p class="subtitle">Automatische verwerking van Royal FloraHolland fusttransacties.</p>
+
+  <h3>E-mail Ingestion</h3>
+  <p>Royal FloraHolland stuurt automatisch e-mails bij fusttransacties. Deze worden doorgestuurd naar het portal en automatisch verwerkt:</p>
+
+  <div class="flow">
+    <div class="flow-step">E-mail ontvangen<small>Van RFH / TrackOnline</small></div>
+    <span class="flow-arrow">&rarr;</span>
+    <div class="flow-step">Transactienr. extraheren<small>Uit e-mail subject</small></div>
+    <span class="flow-arrow">&rarr;</span>
+    <div class="flow-step">PDF ophalen<small>Via TrackOnline API</small></div>
+    <span class="flow-arrow">&rarr;</span>
+    <div class="flow-step">PDF parsen<small>pdfjs-dist</small></div>
+    <span class="flow-arrow">&rarr;</span>
+    <div class="flow-step done">Voucher aangemaakt</div>
+  </div>
+
+  <h4>Wat wordt er uit de PDF gehaald?</h4>
+  <ul>
+    <li><strong>Header:</strong> Transactienummer, type (uitgifte/inname), transactiedatum</li>
+    <li><strong>Klantgegevens:</strong> Kwekercode, kwekernaam, transporteur, locatie, kaartnummer</li>
+    <li><strong>Items:</strong> Fustcodes, omschrijvingen en aantallen &mdash; automatisch gekoppeld aan FustTypes in het systeem</li>
+  </ul>
+
+  <h3>Voucher Types</h3>
+  <div class="card-grid">
+    <div class="card green">
+      <h4><span class="tag tag-green">Uitgifte</span></h4>
+      <p>Fust is uitgegeven aan de kweker via de veiling. Positieve aantallen. Dit is het meest voorkomende type.</p>
+    </div>
+    <div class="card blue">
+      <h4><span class="tag tag-blue">Inname</span></h4>
+      <p>Fust is ingenomen/geretourneerd. Negatieve aantallen. Wordt gebruikt voor retouren.</p>
+    </div>
+  </div>
+
+  <h3>E-mail Ingestion Log</h3>
+  <p>Alle verwerkte e-mails zijn zichtbaar in het <strong>Emails</strong>-tabblad (admin/finance). Elke ingestion toont:</p>
+  <ul>
+    <li>Onderwerp, afzender, ontvangstdatum</li>
+    <li>Status: <span class="tag tag-green">Processed</span>, <span class="tag tag-blue">Processing</span>, of <span class="tag tag-red">Error</span></li>
+    <li>Geextraheerd transactienummer en gekoppelde voucher</li>
+    <li>Volledige e-mailtekst (voor debugging)</li>
+  </ul>
+
+  <div class="callout tip">
+    <span class="callout-icon">&#128260;</span>
+    <div><strong>Reprocess:</strong> Bij een foutmelding kan de verwerking opnieuw worden uitgevoerd via de "Reprocess"-knop. Het systeem verwijdert de bestaande (eventueel incomplete) voucher en doorloopt het volledige verwerkingsproces opnieuw.</div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════ MATCHING ═══════════════════════════ -->
+<section id="matching">
+  <h2>Voucher Matching</h2>
+  <p class="subtitle">Koppel uitgiftebonnen aan orders voor reconciliatie.</p>
+
+  <div class="card">
+    <h4>Hoe werkt matching?</h4>
+    <p>De matching-pagina heeft een <strong>twee-panelen layout</strong>:</p>
+    <ul>
+      <li><strong>Links:</strong> Vouchers (standaard ongekoppeld, filterbaar)</li>
+      <li><strong>Rechts:</strong> Geleverde orders (gegroepeerd per kweker)</li>
+    </ul>
+    <p>Selecteer een of meerdere vouchers (links) en een of meerdere orders (rechts), klik vervolgens op <strong>"Link"</strong>. Gekoppelde items worden gemarkeerd met een link-icoon en het aantal koppelingen.</p>
+
+    <h4 style="margin-top: 16px;">Filters</h4>
+    <ul>
+      <li><strong>Weergave:</strong> "Unmatched" (standaard) of "All" (ook gekoppelde tonen)</li>
+      <li><strong>Kweker:</strong> Filter beide panelen op kweker</li>
+      <li><strong>Transporteur:</strong> Filter vouchers op transporteursnaam</li>
+    </ul>
+
+    <h4 style="margin-top: 16px;">Selectie</h4>
+    <p>Multi-select met checkboxes. <strong>Shift+klik</strong> selecteert een bereik (range select). De "select all" checkbox in de header selecteert alle zichtbare items.</p>
+  </div>
+
+  <div class="callout warn">
+    <span class="callout-icon">&#9888;</span>
+    <div><strong>Belangrijk:</strong> Orders moeten aan minstens een uitgiftebon gekoppeld zijn voordat ze gefactureerd kunnen worden. Matching is dus een vereiste stap voor facturatie.</div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════ FACTURATIE ═══════════════════════════ -->
+<section id="facturatie">
+  <h2>Facturatie</h2>
+  <p class="subtitle">Kwekerfacturen genereren, versturen en exporteren naar Exact Globe.</p>
+
+  <h3>Factuurgeneratie</h3>
+  <div class="card green">
+    <p>Finance selecteert geleverde orders (tab "Ready for Invoicing") voor een specifieke kweker. Het systeem genereert:</p>
+    <ol>
+      <li><strong>Factuurregels</strong> uit de orderitems:
+        <ul>
+          <li>Per FustType een <strong>statiegeld-regel</strong> (artikelcode bijv. <code>2907</code>)</li>
+          <li>Per FustType optioneel een <strong>huur-regel</strong> (artikelcode bijv. <code>2908</code>, alleen als huurprijs &gt; 0)</li>
+        </ul>
+      </li>
+      <li><strong>PDF-factuur</strong> via pdfmake met company-branding (logo, bedrijfsnaam, juridische footer)</li>
+      <li><strong>eExact XML</strong> voor import in Exact Globe boekhouding</li>
+    </ol>
+  </div>
+
+  <h3>Factuurstatussen</h3>
+  <div class="flow">
+    <div class="flow-step">Draft<small>Aangemaakt</small></div>
+    <span class="flow-arrow">&rarr;</span>
+    <div class="flow-step active">Sent<small>Verstuurd naar kweker</small></div>
+    <span class="flow-arrow">&rarr;</span>
+    <div class="flow-step done">Paid<small>Betaald</small></div>
+  </div>
+
+  <details>
+    <summary>PDF-factuur layout</summary>
+    <div class="detail-body">
+      <p>De gegenereerde PDF bevat:</p>
+      <ul>
+        <li><strong>Header:</strong> Bedrijfslogo + "FACTUUR"</li>
+        <li><strong>Afzender:</strong> Bedrijfsnaam, postbus, stad</li>
+        <li><strong>Debiteur:</strong> Kwekercode, naam, adres</li>
+        <li><strong>Factuurdatum</strong> en <strong>factuurnummer</strong> (bijv. <code>FI-2026-0042</code>)</li>
+        <li><strong>Items-tabel:</strong> Code | Omschrijving | Aantal | Prijs | Bedrag</li>
+        <li><strong>Totalen:</strong> Subtotaal excl. BTW, BTW 21%, Factuurtotaal</li>
+        <li><strong>Footer:</strong> VGB-voorwaarden, KvK-nummer, BTW-nummer, bankgegevens</li>
+      </ul>
+      <p>Bedragen in Nederlands formaat (komma als decimaalteken, punt als duizendtalscheider).</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>eExact XML-export</summary>
+    <div class="detail-body">
+      <p>Het XML-bestand volgt het eExact-schema voor Exact Globe:</p>
+      <ul>
+        <li>Journaalcode: <code>70</code> (standaard verkoop)</li>
+        <li>Factuurtype: <code>V</code> (verkoopfactuur)</li>
+        <li>BTW-code: <code>2</code> (21% NL hoog tarief)</li>
+        <li>Debiteurcode: kwekercode (bijv. <code>PCFUP</code>)</li>
+        <li>Valuta: EUR</li>
+      </ul>
+      <p>Het XML-bestand is direct downloadbaar vanuit het facturendetailscherm.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>Preview-functie</summary>
+    <div class="detail-body">
+      <p>Voordat een factuur definitief wordt aangemaakt, kan Finance een <strong>preview</strong> bekijken. De preview genereert een volledige PDF met "PREVIEW" als factuurnummer, zonder iets op te slaan in de database. Zo kunnen factuurregels, bedragen en branding worden gecontroleerd.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>Factuurnummering</summary>
+    <div class="detail-body">
+      <div class="code-block">FI-2026-0001, FI-2026-0002, FI-2026-0003, ...</div>
+      <p>Automatisch oplopend per jaar. <code>FI</code> = Fust Invoice.</p>
+    </div>
+  </details>
+
+  <div class="callout info">
+    <span class="callout-icon">&#128274;</span>
+    <div><strong>Dubbelfacturatie-beveiliging:</strong> Wanneer een factuur wordt gegenereerd, worden de betreffende orders gemarkeerd met <code>invoicedAt</code>. Gefactureerde orders verschijnen niet meer in "Ready for Invoicing".</div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════ E-MAIL ═══════════════════════════ -->
+<section id="emails">
+  <h2>E-mailsysteem</h2>
+  <p class="subtitle">Automatische notificaties op sleutelmomenten in het proces.</p>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Trigger</th>
+          <th>Ontvanger</th>
+          <th>Inhoud</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Order goedgekeurd</strong></td>
+          <td>Transporteur (default)</td>
+          <td>Ordernummer, kwekergegevens, items, gewenste leverdatum, portal-link</td>
+        </tr>
+        <tr>
+          <td><strong>Levering bevestigd</strong></td>
+          <td>Alle kweker-gebruikers</td>
+          <td>Ordernummer, besteld vs. geleverd overzicht, leverdatum</td>
+        </tr>
+        <tr>
+          <td><strong>Factuur verstuurd</strong></td>
+          <td>Kweker</td>
+          <td>Factuurnummer, datum, totaalbedrag, <strong>PDF als bijlage</strong></td>
+        </tr>
+        <tr>
+          <td><strong>Account activatie</strong></td>
+          <td>Nieuwe gebruiker (alle rollen)</td>
+          <td>Activatielink om wachtwoord in te stellen</td>
+        </tr>
+        <tr>
+          <td><strong>Wachtwoord reset</strong></td>
+          <td>Gebruiker</td>
+          <td>Reset-link met vervaltijd</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>Technische details</h3>
+  <ul>
+    <li><strong>Provider:</strong> Nodemailer (Ethereal voor dev/test, Resend SMTP voor productie)</li>
+    <li><strong>Branding:</strong> Logo via CID inline-attachment (base64), geen externe URLs</li>
+    <li><strong>Outlook-compatibiliteit:</strong> VML knoppen voor Outlook Desktop</li>
+    <li><strong>Multi-company:</strong> E-mailadres en -naam per bedrijf</li>
+  </ul>
+</section>
+
+<!-- ═══════════════════════════ AUDIT TRAIL ═══════════════════════════ -->
+<section id="audit">
+  <h2>Audit Trail / Activiteitenlogboek</h2>
+  <p class="subtitle">Alle fust-acties worden gelogd voor traceerbaarheid.</p>
+
+  <div class="card">
+    <h4>Gelogde acties</h4>
+    <div class="card-grid" style="margin-top: 12px;">
+      <div>
+        <p style="font-weight: 600; margin-bottom: 8px;">Orders</p>
+        <div style="display: flex; flex-wrap: wrap; gap: 4px;">
+          <span class="tag tag-green">order_created</span>
+          <span class="tag tag-green">order_auto_approved</span>
+          <span class="tag tag-green">order_approved</span>
+          <span class="tag tag-red">order_rejected</span>
+          <span class="tag tag-gray">order_cancelled</span>
+          <span class="tag tag-gray">order_deleted</span>
+        </div>
+      </div>
+      <div>
+        <p style="font-weight: 600; margin-bottom: 8px;">Leveringen</p>
+        <div style="display: flex; flex-wrap: wrap; gap: 4px;">
+          <span class="tag tag-purple">delivery_delivered</span>
+        </div>
+      </div>
+      <div>
+        <p style="font-weight: 600; margin-bottom: 8px;">Vouchers</p>
+        <div style="display: flex; flex-wrap: wrap; gap: 4px;">
+          <span class="tag tag-orange">voucher_uploaded</span>
+          <span class="tag tag-orange">voucher_matched</span>
+          <span class="tag tag-orange">voucher_unmatched</span>
+        </div>
+      </div>
+      <div>
+        <p style="font-weight: 600; margin-bottom: 8px;">Facturen</p>
+        <div style="display: flex; flex-wrap: wrap; gap: 4px;">
+          <span class="tag tag-green">grower_invoice_created</span>
+          <span class="tag tag-green">grower_invoice_sent</span>
+          <span class="tag tag-green">grower_invoice_status_changed</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <h3>Activity-pagina</h3>
+  <p>De activiteitenpagina (admin/finance) biedt:</p>
+  <ul>
+    <li><strong>Filters:</strong> entity type, actie, datumbereik</li>
+    <li><strong>Weergave:</strong> icoon + kleur per actiecategorie, actor, timestamp, metadata</li>
+    <li><strong>Paginering:</strong> 50 items per pagina</li>
+  </ul>
+
+  <h3>Order-tijdlijn</h3>
+  <p>In het detailscherm van een order is een tijdlijn beschikbaar die alle audit-events voor die specifieke order chronologisch toont.</p>
+</section>
+
+<!-- ═══════════════════════════ INSTELLINGEN ═══════════════════════════ -->
+<section id="instellingen">
+  <h2>Instellingen</h2>
+  <p class="subtitle">Configuratie van fust-types, kwekertoegang en transporteurs (admin-only).</p>
+
+  <details open>
+    <summary>Fust-types (Catalogus)</summary>
+    <div class="detail-body">
+      <p>Beheer van alle containertypen. Per FustType:</p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Veld</th><th>Omschrijving</th><th>Voorbeeld</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Code</td><td>Unieke systeemcode</td><td><code>EMM-50-1000</code></td></tr>
+            <tr><td>Naam</td><td>Weergavenaam</td><td>Bloemenemmer groot (nieuw)</td></tr>
+            <tr><td>Categorie</td><td>Groepering in webshop</td><td>emmers, karren, kratten, dozen, opzetrekken, overig</td></tr>
+            <tr><td>Statiegeld</td><td>Prijs per eenheid (deposit)</td><td>&euro; 2,50</td></tr>
+            <tr><td>Huurprijs</td><td>Prijs per eenheid (rental, kan 0 zijn)</td><td>&euro; 0,80</td></tr>
+            <tr><td>Artikelcode statiegeld</td><td>Code voor Exact Globe</td><td><code>2907</code></td></tr>
+            <tr><td>Artikelcode huur</td><td>Code voor Exact Globe</td><td><code>2908</code></td></tr>
+            <tr><td>Actief</td><td>Zichtbaar in webshop</td><td>Ja / Nee</td></tr>
+            <tr><td>Sorteervolgorde</td><td>Positie in catalogus</td><td>10, 20, 30...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </details>
+
+  <details>
+    <summary>Kwekertoegang</summary>
+    <div class="detail-body">
+      <p>Per kweker configureerbaar:</p>
+      <ul>
+        <li><strong>Fust aan/uit</strong> (<code>fustEnabled</code>) &mdash; of de kweker toegang heeft tot de fust-webshop</li>
+        <li><strong>Auto-approve</strong> (<code>autoApproveOrders</code>) &mdash; orders worden automatisch goedgekeurd</li>
+        <li><strong>Default transporteur</strong> &mdash; welke transporteur de goedkeuringsmail ontvangt</li>
+      </ul>
+    </div>
+  </details>
+
+  <details>
+    <summary>Transporteurs</summary>
+    <div class="detail-body">
+      <p>Aanmaken en beheren van transporteurs met naam, e-mailadres en telefoonnummer. Transporteurs kunnen geactiveerd/gedeactiveerd worden. Alleen actieve transporteurs zijn zichtbaar in de kweker-instellingen.</p>
+    </div>
+  </details>
+</section>
+
+<!-- ═══════════════════════════ GEBRUIKERSBEHEER ═══════════════════════════ -->
+<section id="gebruikersbeheer">
+  <h2>Gebruikersbeheer</h2>
+  <p class="subtitle">Accounts aanmaken, activeren en beheren (admin-only).</p>
+
+  <div class="card">
+    <h4>Activatieflow</h4>
+    <div class="flow">
+      <div class="flow-step">Admin maakt user aan</div>
+      <span class="flow-arrow">&rarr;</span>
+      <div class="flow-step">Activatie-e-mail verstuurd</div>
+      <span class="flow-arrow">&rarr;</span>
+      <div class="flow-step">Gebruiker stelt wachtwoord in</div>
+      <span class="flow-arrow">&rarr;</span>
+      <div class="flow-step done">Account actief</div>
+    </div>
+    <p>Bij het aanmaken van een gebruiker worden de volgende gegevens opgegeven:</p>
+    <ul>
+      <li><strong>E-mail</strong> (uniek)</li>
+      <li><strong>Naam</strong></li>
+      <li><strong>Rol</strong> (grower, commercie, admin, transporteur, finance)</li>
+      <li><strong>Koppeling:</strong> bij rol "transporteur" &rarr; transporteur-bedrijf; bij rol "grower" &rarr; kweker</li>
+    </ul>
+    <p>Het systeem verstuurt automatisch een activatie-e-mail met een link naar <code>/activate?token=...</code>. De gebruiker stelt daar een wachtwoord in.</p>
+  </div>
+</section>
+
+<!-- ═══════════════════════════ TESTOMGEVING ═══════════════════════════ -->
+<section id="testomgeving">
+  <h2>Testomgeving</h2>
+  <p class="subtitle">Speciale mogelijkheden voor testen en ontwikkeling.</p>
+
+  <div class="callout info">
+    <span class="callout-icon">&#128736;</span>
+    <div>De testomgeving is herkenbaar aan de <strong>oranje banner</strong> bovenaan het scherm met de tekst "TEST ENVIRONMENT". Deze verschijnt alleen als <code>NEXT_PUBLIC_IS_TEST=true</code> is ingesteld.</div>
+  </div>
+
+  <h3>Test Banner Features</h3>
+  <div class="card-grid">
+    <div class="card amber">
+      <h4>Role Switcher</h4>
+      <p>Wisselen tussen rollen (grower, commercie, admin, transporteur, finance) zonder opnieuw in te loggen. Handig om snel te testen hoe de applicatie er uitziet vanuit verschillende perspectieven.</p>
+    </div>
+    <div class="card amber">
+      <h4>E-mail Switcher</h4>
+      <p>Wisselen van gebruiker via e-mailadres. Nuttig om te testen met verschillende kweker- of transporteur-accounts.</p>
+    </div>
+  </div>
+
+  <h3>Ethereal E-mail Preview</h3>
+  <p>In de testomgeving worden e-mails verstuurd via <strong>Ethereal</strong>, een sandbox e-mailservice. Dit betekent:</p>
+  <ul>
+    <li>Er worden <strong>geen echte e-mails</strong> verstuurd</li>
+    <li>Na elke e-mailactie verschijnt een <strong>preview-link</strong> in een toast-notificatie</li>
+    <li>Via deze link opent de Ethereal-preview in een nieuw tabblad waar de volledige e-mail (inclusief opmaak, bijlagen en CID-afbeeldingen) bekeken kan worden</li>
+  </ul>
+
+  <h3>Demo-accounts</h3>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Rol</th><th>E-mailadres</th><th>Wachtwoord</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><span class="tag tag-purple">Admin</span></td><td><code>admin@coloriginz.com</code></td><td><code>Colori2026!</code></td></tr>
+        <tr><td><span class="tag tag-blue">Commercie</span></td><td><code>iris.inkoper@coloriginz.com</code></td><td><code>FloraDesk#24</code></td></tr>
+        <tr><td><span class="tag tag-green">Grower</span></td><td><code>pcfup@example.com</code></td><td><code>GreenField99</code></td></tr>
+        <tr><td><span class="tag tag-amber">Transporteur</span></td><td><code>chauffeur@flowertrans.nl</code></td><td><code>Transport#2026</code></td></tr>
+        <tr><td><span class="tag tag-red">Finance</span></td><td><code>finance@coloriginz.com</code></td><td><code>Finance#2026</code></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout warn">
+    <span class="callout-icon">&#9888;</span>
+    <div><strong>Let op:</strong> De testomgeving draait op een aparte database (apart Neon-project). Wijzigingen in de testomgeving hebben geen invloed op de productieomgeving.</div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════ PERMISSIES ═══════════════════════════ -->
+<section id="permissies">
+  <h2>Permissiematrix</h2>
+  <p class="subtitle">Overzicht van wie wat mag doen.</p>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Functie</th>
+          <th style="text-align:center">Grower</th>
+          <th style="text-align:center">Commercie</th>
+          <th style="text-align:center">Admin</th>
+          <th style="text-align:center">Transporteur</th>
+          <th style="text-align:center">Finance</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Catalogus bekijken</td>
+          <td class="check">&#10003;</td><td class="check">&#10003;</td><td class="check">&#10003;</td><td class="cross">&mdash;</td><td class="cross">&mdash;</td>
+        </tr>
+        <tr>
+          <td>Fust bestellen</td>
+          <td class="check">&#10003;</td><td class="cross">&mdash;</td><td class="cross">&mdash;</td><td class="cross">&mdash;</td><td class="cross">&mdash;</td>
+        </tr>
+        <tr>
+          <td>Orders goedkeuren / afwijzen</td>
+          <td class="cross">&mdash;</td><td class="check">&#10003;</td><td class="check">&#10003;</td><td class="cross">&mdash;</td><td class="cross">&mdash;</td>
+        </tr>
+        <tr>
+          <td>Alle orders bekijken</td>
+          <td class="cross">&mdash;</td><td class="check">&#10003;</td><td class="check">&#10003;</td><td class="cross">&mdash;</td><td class="check">&#10003;</td>
+        </tr>
+        <tr>
+          <td>Levering bevestigen</td>
+          <td class="cross">&mdash;</td><td class="cross">&mdash;</td><td class="check">&#10003;</td><td class="check">&#10003;</td><td class="cross">&mdash;</td>
+        </tr>
+        <tr>
+          <td>Vouchers matchen</td>
+          <td class="cross">&mdash;</td><td class="cross">&mdash;</td><td class="check">&#10003;</td><td class="cross">&mdash;</td><td class="check">&#10003;</td>
+        </tr>
+        <tr>
+          <td>Kwekerfactuur genereren</td>
+          <td class="cross">&mdash;</td><td class="cross">&mdash;</td><td class="check">&#10003;</td><td class="cross">&mdash;</td><td class="check">&#10003;</td>
+        </tr>
+        <tr>
+          <td>Eigen facturen bekijken</td>
+          <td class="check">&#10003;</td><td class="cross">&mdash;</td><td class="check">&#10003;</td><td class="cross">&mdash;</td><td class="check">&#10003;</td>
+        </tr>
+        <tr>
+          <td>E-mail ingestion log</td>
+          <td class="cross">&mdash;</td><td class="cross">&mdash;</td><td class="check">&#10003;</td><td class="cross">&mdash;</td><td class="check">&#10003;</td>
+        </tr>
+        <tr>
+          <td>Audit trail bekijken</td>
+          <td class="cross">&mdash;</td><td class="check">&#10003;</td><td class="check">&#10003;</td><td class="cross">&mdash;</td><td class="check">&#10003;</td>
+        </tr>
+        <tr>
+          <td>Instellingen beheren</td>
+          <td class="cross">&mdash;</td><td class="cross">&mdash;</td><td class="check">&#10003;</td><td class="cross">&mdash;</td><td class="cross">&mdash;</td>
+        </tr>
+        <tr>
+          <td>Gebruikers beheren</td>
+          <td class="cross">&mdash;</td><td class="cross">&mdash;</td><td class="check">&#10003;</td><td class="cross">&mdash;</td><td class="cross">&mdash;</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<hr>
+
+<!-- ═══════════════════════════ SAMENVATTING ═══════════════════════════ -->
+<section>
+  <h2>Samenvatting</h2>
+  <p>De Fust Portal dekt de volledige keten van fustbeheer in de sierteeltsector:</p>
+  <div class="flow" style="flex-wrap: wrap; justify-content: center;">
+    <div class="flow-step" style="border-color: #059669; background: #ECFDF5; color: #059669;">Bestellen</div>
+    <span class="flow-arrow">&rarr;</span>
+    <div class="flow-step" style="border-color: var(--blue); background: var(--blue-light); color: var(--blue);">Goedkeuren</div>
+    <span class="flow-arrow">&rarr;</span>
+    <div class="flow-step" style="border-color: var(--amber); background: var(--amber-light); color: var(--amber);">Leveren</div>
+    <span class="flow-arrow">&rarr;</span>
+    <div class="flow-step" style="border-color: var(--purple); background: var(--purple-light); color: var(--purple);">Reconcilieren</div>
+    <span class="flow-arrow">&rarr;</span>
+    <div class="flow-step" style="border-color: var(--primary); background: var(--primary-bg); color: var(--primary);">Factureren</div>
+  </div>
+  <p style="text-align: center; margin-top: 16px; color: var(--gray-500); font-size: .9rem;">
+    Met volledige audit trail, multi-company branding, e-mailnotificaties en Exact Globe integratie.
+  </p>
+</section>
+
+</div><!-- end .content -->
+</div><!-- end .page-layout -->
+
+<div class="footer">
+  Fust Portal Handleiding &middot; Coloriginz Grower Portal &middot; Versie april 2026
+</div>
+
+</body>
+</html>
