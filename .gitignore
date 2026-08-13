@@ -50,3 +50,10 @@ next-env.d.ts
 .fabric-devicecode.txt
 .fabric-auth-record.json
 .fabric-auth-log.txt
+
+# lokale tooling en losse output (geen projectinhoud)
+/.claude
+/.playwright-mcp
+/recon-err.txt
+/recon-out.txt
+/favicon-check.png
