@@ -13,10 +13,14 @@
  *   npx tsx scripts/fix-salessheet-pdf-links.ts            # alleen rapporteren
  *   npx tsx scripts/fix-salessheet-pdf-links.ts --apply    # ook wegschrijven
  *
+ * Voor productie draait hetzelfde script tegen een ander env-bestand:
+ *   ENV_FILE=.env.production npx tsx scripts/fix-salessheet-pdf-links.ts
+ *
  * Leest via de Neon HTTP-driver; Prisma over TCP 5432 komt niet door het
  * werknetwerk heen.
  */
 import fs from "fs";
+import dotenv from "dotenv";
 import { neon } from "@neondatabase/serverless";
 import { del } from "@vercel/blob";
 import { parseSalesSheetFilename, parseSalesSheetFilenameSimple } from "../src/lib/salessheet-filename-parser";
@@ -25,7 +29,23 @@ import { parseSalesSheetPdf } from "../src/lib/salessheet-pdf-parser";
 const APPLY = process.argv.includes("--apply");
 const PARALLEL = 6;
 
-const url = fs.readFileSync(".env", "utf8").match(/^DATABASE_URL="?([^"\n\r]+)"?/m)![1];
+const ENV_FILE = process.env.ENV_FILE || ".env";
+if (!fs.existsSync(ENV_FILE)) throw new Error(`${ENV_FILE} bestaat niet`);
+
+/*
+ * Het hele bestand laden, niet alleen DATABASE_URL: del() hieronder haalt
+ * BLOB_READ_WRITE_TOKEN uit de omgeving. Wijst de database naar productie
+ * terwijl het blob-token nog naar test wijst, dan wordt de koppeling wel
+ * losgemaakt maar het bestand niet verwijderd — of erger, in de verkeerde
+ * store gezocht. Beide horen uit hetzelfde bestand te komen.
+ */
+dotenv.config({ path: ENV_FILE, override: true });
+
+const url = process.env.DATABASE_URL;
+if (!url) throw new Error(`DATABASE_URL ontbreekt in ${ENV_FILE}`);
+if (APPLY && !process.env.BLOB_READ_WRITE_TOKEN) {
+  throw new Error(`BLOB_READ_WRITE_TOKEN ontbreekt in ${ENV_FILE} — nodig om losgemaakte PDF's op te ruimen`);
+}
 const sql = neon(url);
 
 interface Sheet {
@@ -70,6 +90,11 @@ type Uitkomst =
     JOIN "Supplier" s ON s.id = ss."supplierId"
     ORDER BY s.code, ss."invoiceNumber"`) as unknown as Link[];
 
+  // De host erbij, want dit script maakt koppelingen los en verwijdert blobs.
+  // Zien op welke omgeving je zit hoort niet af te hangen van onthouden welk
+  // env-bestand je had meegegeven.
+  const host = url.match(/@([^/]+)\//)?.[1] ?? "onbekend";
+  console.log(`Database uit ${ENV_FILE} (${host})`);
   console.log(`${sheets.length} salessheets, ${links.length} met een gekoppelde PDF`);
   console.log(APPLY ? "Modus: WEGSCHRIJVEN\n" : "Modus: alleen rapporteren (gebruik --apply om te herstellen)\n");
 
