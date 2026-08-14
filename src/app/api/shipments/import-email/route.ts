@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { Prisma } from "@/generated/prisma";
 import { put, del } from "@vercel/blob";
 import { requireImportAuth } from "@/lib/import-auth";
 import { parseSalesSheetFilename, parseSalesSheetFilenameSimple } from "@/lib/salessheet-filename-parser";
@@ -137,6 +138,51 @@ export async function POST(request: NextRequest) {
   );
 }
 
+type SalesSheetCandidate = Prisma.SalesSheetGetPayload<{
+  include: { supplier: { select: { id: true; code: true } } };
+}>;
+
+/**
+ * Collect every sales sheet a reference could point at.
+ *
+ * Sales sheet numbers recycle per year while SalesSheet.invoiceNumber is
+ * globally unique, so the lots import stores a colliding number with a
+ * "-<parthdrId>" suffix (see src/app/api/import/lots/route.ts). Reference "95"
+ * must therefore also consider "95-2254938".
+ *
+ * ourInvoiceNumber is included as a candidate source but never trusted on its
+ * own: wrongly linked PDFs wrote their own number onto the sales sheet, so the
+ * field can carry the very error this matching is meant to catch.
+ */
+async function findCandidates(
+  references: (string | null)[],
+  ourInvoiceNumber: string | null
+) {
+  const refs = [...new Set(references.filter((r): r is string => !!r))];
+  const include = { supplier: { select: { id: true, code: true } } } as const;
+  const byId = new Map<string, SalesSheetCandidate>();
+
+  for (const ref of refs) {
+    const rows = await prisma.salesSheet.findMany({
+      where: { OR: [{ invoiceNumber: ref }, { invoiceNumber: { startsWith: `${ref}-` } }] },
+      include,
+    });
+    // startsWith also catches genuine numbers like "212-28"; keep only the
+    // exact reference and the numeric parthdrId suffix the import appends.
+    const suffixed = new RegExp(`^${ref.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}-\\d{5,}$`);
+    for (const row of rows) {
+      if (row.invoiceNumber === ref || suffixed.test(row.invoiceNumber)) byId.set(row.id, row);
+    }
+  }
+
+  if (ourInvoiceNumber) {
+    const rows = await prisma.salesSheet.findMany({ where: { ourInvoiceNumber }, include });
+    for (const row of rows) byId.set(row.id, row);
+  }
+
+  return [...byId.values()];
+}
+
 async function processAttachment(
   attachment: z.infer<typeof attachmentSchema>
 ): Promise<{ ok: true; data: ProcessedItem } | { ok: false; reason: string }> {
@@ -159,33 +205,66 @@ async function processAttachment(
     }
   }
 
-  // Step 2: Try matching by filename reference
-  let salesSheet = reference
-    ? await prisma.salesSheet.findUnique({
-        where: { invoiceNumber: reference },
-        include: { supplier: { select: { id: true, code: true } } },
-      })
-    : null;
-
-  // Step 3: Fallback — parse PDF content
-  if (!salesSheet) {
-    try {
-      const pdfParsed = await parseSalesSheetPdf(pdfBuffer);
-      if (pdfParsed.reference) {
-        reference = pdfParsed.reference;
-        ourInvoiceNumber = ourInvoiceNumber || pdfParsed.ourInvoiceNumber;
-        salesSheet = await prisma.salesSheet.findUnique({
-          where: { invoiceNumber: pdfParsed.reference },
-          include: { supplier: { select: { id: true, code: true } } },
-        });
-      }
-    } catch {
-      // PDF parsing failed — continue with no match
-    }
+  // Step 2: Read the PDF. The delivery date printed on it is what tells two
+  // sales sheets with the same recycled number apart.
+  let pdfReference: string | null = null;
+  let deliveryDate: string | null = null;
+  try {
+    const pdfParsed = await parseSalesSheetPdf(pdfBuffer);
+    pdfReference = pdfParsed.reference;
+    deliveryDate = pdfParsed.deliveryDate;
+    ourInvoiceNumber = ourInvoiceNumber || pdfParsed.ourInvoiceNumber;
+  } catch {
+    // PDF unreadable — fall back to filename data only
   }
 
-  if (!salesSheet) {
+  let candidates = await findCandidates([reference, pdfReference], ourInvoiceNumber);
+  reference = reference || pdfReference;
+
+  if (candidates.length === 0) {
     return { ok: false, reason: reference ? `no_match:${reference}` : "no_reference" };
+  }
+
+  // The "-<parthdrId>" variants can belong to another supplier, so narrow down
+  // by supplier when the filename tells us who it is. Only when that leaves
+  // something — supplier codes in filenames are not guaranteed to match, and
+  // the delivery date check below is the real guard.
+  if (parsed?.supplierCode) {
+    const ofSupplier = candidates.filter((c) => c.supplier.code === parsed.supplierCode);
+    if (ofSupplier.length > 0) candidates = ofSupplier;
+  }
+
+  // Step 3: Verify against the delivery date. Only an exact match may link.
+  let salesSheet: SalesSheetCandidate;
+  if (deliveryDate) {
+    let onDate = candidates.filter(
+      (c) => c.deliveryDate.toISOString().slice(0, 10) === deliveryDate
+    );
+    // Two sales sheets can share a delivery date. Our own sales sheet number
+    // breaks the tie: one that already carries a different number is holding
+    // another PDF and is not the owner of this one.
+    if (onDate.length > 1 && ourInvoiceNumber) {
+      const exact = onDate.filter((c) => c.ourInvoiceNumber === ourInvoiceNumber);
+      const free = onDate.filter((c) => !c.ourInvoiceNumber || c.ourInvoiceNumber === ourInvoiceNumber);
+      if (exact.length === 1) onDate = exact;
+      else if (free.length === 1) onDate = free;
+    }
+    if (onDate.length !== 1) {
+      return {
+        ok: false,
+        reason:
+          onDate.length === 0
+            ? `date_mismatch:${reference}:${deliveryDate}`
+            : `ambiguous:${reference}:${deliveryDate}`,
+      };
+    }
+    salesSheet = onDate[0];
+  } else {
+    // No readable date: link only when there is nothing to confuse it with.
+    if (candidates.length > 1) {
+      return { ok: false, reason: `ambiguous_no_date:${reference}` };
+    }
+    salesSheet = candidates[0];
   }
 
   // Step 4: Handle duplicate — delete old document if exists

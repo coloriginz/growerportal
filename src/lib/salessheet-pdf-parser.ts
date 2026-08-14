@@ -4,12 +4,31 @@
  * The reference number and invoice number appear on page 1 of the PDF
  * as standalone values in the header area.
  *
+ * Also extracts the delivery date, which is used to verify that a PDF is
+ * linked to the right sales sheet. Sales sheet numbers are recycled per
+ * year, so the number alone is not enough to identify a delivery.
+ *
  * Uses pdfjs-dist legacy build for Vercel serverless compatibility.
  */
 
 export interface ParsedSalesSheetPdf {
   reference: string | null;
   ourInvoiceNumber: string | null;
+  /** Delivery date printed on the PDF, as "YYYY-MM-DD". Null if unreadable. */
+  deliveryDate: string | null;
+}
+
+/** Convert a Dutch "DD-MM-YYYY" or "DD-MM-YY" date to "YYYY-MM-DD". */
+function parseDutchDate(value: string | null): string | null {
+  if (!value) return null;
+  const m = value.trim().match(/^(\d{1,2})-(\d{1,2})-(\d{2,4})/);
+  if (!m) return null;
+  const day = Number(m[1]);
+  const month = Number(m[2]);
+  let year = Number(m[3]);
+  if (year < 100) year += 2000;
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 
 export async function parseSalesSheetPdf(pdfBuffer: Buffer): Promise<ParsedSalesSheetPdf> {
@@ -19,7 +38,36 @@ export async function parseSalesSheetPdf(pdfBuffer: Buffer): Promise<ParsedSales
 
   const page = await doc.getPage(1);
   const content = await page.getTextContent();
-  const items = content.items as Array<{ str: string; hasEOL?: boolean }>;
+  const items = content.items as Array<{
+    str: string;
+    hasEOL?: boolean;
+    transform?: number[];
+  }>;
+
+  // Positioned items, used to read the value printed to the right of a label.
+  // Header fields sit in a two-column layout, so a line-based read would glue
+  // unrelated values together.
+  const positioned = items
+    .filter((i) => i.str.trim() && Array.isArray(i.transform))
+    .map((i) => ({
+      text: i.str.trim(),
+      x: Math.round(i.transform![4]),
+      y: Math.round(i.transform![5]),
+    }));
+
+  const valueRightOf = (label: RegExp): string | null => {
+    const labelItem = positioned.find((i) => label.test(i.text));
+    if (!labelItem) return null;
+    const right = positioned
+      .filter((i) => Math.abs(i.y - labelItem.y) <= 4 && i.x > labelItem.x)
+      .sort((a, b) => a.x - b.x)[0];
+    return right ? right.text : null;
+  };
+
+  // English template: "Deliverydate". Dutch template: "Datum levering".
+  const deliveryDate = parseDutchDate(
+    valueRightOf(/^(Delivery\s?date|Datum\s+levering|Leverdatum)\s*:?$/i)
+  );
 
   // Build lines from text items
   const lines: string[] = [];
@@ -62,5 +110,5 @@ export async function parseSalesSheetPdf(pdfBuffer: Buffer): Promise<ParsedSales
   }
 
   await doc.destroy();
-  return { reference, ourInvoiceNumber };
+  return { reference, ourInvoiceNumber, deliveryDate };
 }
