@@ -218,6 +218,12 @@ async function processAttachment(
     // PDF unreadable — fall back to filename data only
   }
 
+  // The filename carries the delivery date too. Without this fallback an
+  // unreadable PDF drops the date check entirely, and a single candidate then
+  // gets linked on its number alone — which is how sales sheets ended up with
+  // another supplier's PDF in the first place.
+  if (!deliveryDate) deliveryDate = parsed?.deliveryDate ?? null;
+
   let candidates = await findCandidates([reference, pdfReference], ourInvoiceNumber);
   reference = reference || pdfReference;
 
