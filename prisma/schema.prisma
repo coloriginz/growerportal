@@ -937,3 +937,35 @@ model StagingKbtShcost {
   @@index([shkostId])
   @@index([importBatchId])
 }
+
+model SyncJob {
+  id               String    @id @default(uuid())
+  runId            String
+  sequence         Int
+  endpoint         String
+  windowFrom       DateTime
+  windowTo         DateTime
+  supplierFabricId Int?
+  source           String
+  status           String    @default("pending")
+  attempts         Int       @default(0)
+  importBatchId    String?
+  lastError        String?
+  createdAt        DateTime  @default(now())
+  dispatchedAt     DateTime?
+  completedAt      DateTime?
+
+  @@index([status, createdAt])
+  @@index([runId, sequence])
+  @@index([importBatchId])
+}
+
+model SyncSchedule {
+  name        String    @id
+  enabled     Boolean   @default(true)
+  intervalMin Int?
+  atTime      String?
+  endpoints   String[]
+  windowDays  Int
+  lastRunAt   DateTime?
+}
