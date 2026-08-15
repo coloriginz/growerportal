@@ -938,16 +938,18 @@ model StagingKbtShcost {
   @@index([importBatchId])
 }
 
+// ─── SYNC ENGINE (Fabric sync jobs & schedules) ─────────
+
 model SyncJob {
   id               String    @id @default(uuid())
   runId            String
   sequence         Int
-  endpoint         String
+  endpoint         String    // "suppliers", "growers", "lots", "orders", "costs"
   windowFrom       DateTime
   windowTo         DateTime
-  supplierFabricId Int?
-  source           String
-  status           String    @default("pending")
+  supplierFabricId Int?      // rel_id_leverancier; alleen gevuld bij een backfill voor één leverancier
+  source           String    // "schedule", "nightly", "backfill"
+  status           String    @default("pending") // "pending", "dispatched", "done", "failed", "cancelled"
   attempts         Int       @default(0)
   importBatchId    String?
   lastError        String?
@@ -956,7 +958,7 @@ model SyncJob {
   completedAt      DateTime?
 
   @@index([status, createdAt])
-  @@index([runId, sequence])
+  @@unique([runId, sequence])
   @@index([importBatchId])
 }
 
@@ -964,8 +966,8 @@ model SyncSchedule {
   name        String    @id
   enabled     Boolean   @default(true)
   intervalMin Int?
-  atTime      String?
+  atTime      String?   // nachtronde, "03:00" in Europe/Amsterdam — niet UTC
   endpoints   String[]
-  windowDays  Int
+  windowDays  Int       // rollend venster; moet ruimer zijn dan de tijd tussen twee nachtrondes, anders verdwijnen partijen van nieuwe leveranciers
   lastRunAt   DateTime?
 }

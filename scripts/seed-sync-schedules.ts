@@ -5,6 +5,8 @@
 import { prisma } from "../src/lib/db";
 
 async function main() {
+  // Beide schema's staan bewust op enabled: false tot de sync-motor compleet is
+  // (later ingeschakeld in een volgende taak van het implementatieplan).
   await prisma.syncSchedule.upsert({
     where: { name: "short" },
     update: {},
@@ -33,7 +35,9 @@ async function main() {
   console.log(JSON.stringify(all, null, 2));
 }
 
-main().catch((e) => {
-  console.error(e);
-  process.exit(1);
-});
+main()
+  .catch((e) => {
+    console.error(e);
+    process.exit(1);
+  })
+  .finally(() => prisma.$disconnect());
