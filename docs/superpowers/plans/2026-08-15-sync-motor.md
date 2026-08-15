@@ -332,7 +332,9 @@ SELECT
   kost_type_naam   AS "Kost Type Naam",
   totaal_omzet     AS "Totaal Omzet",
   totaal_verkoop_aantal AS "Totaal Aantal",
-  salesheet_amount AS "Salesheet Amount"
+  salesheet_amount AS "Salesheet Amount",
+  laatste_ontvangstdatum AS "Laatste Ontvangstdatum",
+  laatste_aanmelddatum   AS "Laatste Aanmelddatum"
 FROM marts.fct_salesheets_costs
 WHERE levering_datum >= '${isoDate(from)}'
   AND levering_datum <  '${isoDate(to)}'
@@ -340,6 +342,10 @@ WHERE levering_datum >= '${isoDate(from)}'
 `.trim();
 }
 ```
+
+**Die laatste twee kolommen zijn niet optioneel.** De costs-route gebruikt ze om `SalesSheet.lastReceiptDate` en `lastRegistrationDate` bij te werken. Laat je ze weg, dan blijft de import slagen en stoppen die twee velden er stil mee — precies het soort regressie dat maanden onopgemerkt blijft.
+
+**De kolomnamen aan de warehouse-kant zijn wel onzeker.** Dat de velden bestaan is bewezen: ze zaten in de SQL-payload van 15 augustus, als `Laatste_x0020_Ontvangstdatum` en `Laatste_x0020_Aanmelddatum`. Maar `scripts/sql/recon-fabric-kosten.sql` selecteert dertien kolommen uit dezelfde tabel en deze twee zitten er niet bij, dus onder welke naam ze in `marts.fct_salesheets_costs` staan is niet vastgelegd. Controleer dat in taak 10 vóór de eerste echte ronde; een verkeerde kolomnaam laat de query hard falen, en dat is precies wat je wilt — luid in plaats van stil.
 
 - [ ] **Step 5: Draai het script om te zien dat het slaagt**
 
