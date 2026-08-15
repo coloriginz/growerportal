@@ -34,16 +34,27 @@ export function requireImportAuth(request: NextRequest): NextResponse | null {
  * comes from. A DAX query wraps names in brackets, the SQL warehouse returns
  * the raw column, and the schemas here were written in a third style again:
  *
- *   "[Shkost ID]"  (DAX)  ->  shkostid
- *   "shkost_id"    (SQL)  ->  shkostid
- *   "Shkost ID"    (schema)  ->  shkostid
+ *   "[Shkost ID]"       (DAX)     ->  shkostid
+ *   "shkost_id"         (SQL)     ->  shkostid
+ *   "Shkost_x0020_ID"   (XML)     ->  shkostid
+ *   "Shkost ID"         (schema)  ->  shkostid
  *
- * Stripping separators and case is enough to make those meet. Fields that are
- * genuinely named differently need an explicit alias — see IMPORT_ALIASES in
- * the route that owns them.
+ * The XML form appears when a column name containing a space passes through a
+ * step that encodes it as an XML element name: a space becomes `_x0020_`, the
+ * standard `_xHHHH_` escape. Those are decoded first, because `x0020` would
+ * otherwise survive as literal text and never match anything.
+ *
+ * After that, stripping separators and case is enough to make the spellings
+ * meet. Fields that are genuinely named differently need an explicit alias —
+ * see the alias map in the route that owns them.
  */
 function canonicalKey(key: string): string {
-  return key.replace(/[[\]\s_/.-]/g, "").toLowerCase();
+  return key
+    .replace(/_x([0-9a-fA-F]{4})_/g, (_, hex: string) =>
+      String.fromCharCode(parseInt(hex, 16))
+    )
+    .replace(/[[\]\s_/.-]/g, "")
+    .toLowerCase();
 }
 
 /**
