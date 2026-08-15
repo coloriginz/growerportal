@@ -1799,3 +1799,13 @@ git commit -m "fix: read import key and base url from environment"
 - De import-sleutel staat niet meer in de broncode
 
 **Wat er nog niet staat, en in plan 2 komt:** de backfill per leverancier met de opzoekvraag en de maandbrokken, de knop op de leverancierspagina, en het admin-scherm om de schema's en de wachtrij te bedienen. Tot dan worden de schema's aangepast met een script tegen de database.
+
+### Aantekeningen voor plan 2
+
+Uit de kwaliteitsreview van taak 1. Geen van deze punten blokkeert dit plan; ze worden pas relevant zodra het bedieningsscherm er komt.
+
+**Validatie hoort op het scherm, niet in het schema.** Niets garandeert dat precies één van `intervalMin` en `atTime` gezet is — Prisma kan daar geen CHECK op leggen. `isDue` test eerst `intervalMin`, dus bij allebei gevuld wordt `atTime` stil genegeerd, en bij allebei leeg draait de ronde nooit. Zodra het admin-scherm die velden bewerkbaar maakt, hoort de controle daar te zitten.
+
+**Het wachtrijscherm wil per job de cijfers van zijn batch tonen**, en `importBatchId` is een losse string zonder Prisma-relatie. Dat volgt bewust het patroon van de drie staging-tabellen, maar het betekent wel een tweede query met handmatige koppeling. Als dat scherm er komt is het moment om te wegen of er alsnog een relatie op moet.
+
+**`SyncJob` groeit onbeperkt** — ongeveer 26.000 rijen per jaar uit de uurronde, plus zo'n 110 per leverancier-backfill. Voor Postgres is dat niets en de indexen raken alleen het kleine `pending`/`dispatched`-deel. Het telt pas voor de paginering van het wachtrijscherm.
