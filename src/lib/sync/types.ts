@@ -26,20 +26,12 @@ export type QueryWindow = {
   from: Date;
   /** Exclusief: de query gebruikt `< to`, zodat aangrenzende brokken niet overlappen. */
   to: Date;
-  /** Fabric rel_id_leverancier. Alleen gevuld bij een backfill voor één leverancier. */
-  supplierFabricId?: number | null;
+  /**
+   * Fabric rel_id_leverancier. Alleen gevuld bij een backfill voor één leverancier.
+   * Geen `| null`: `Supplier.fabricId` is nullable in het schema, en een `null` hier
+   * zou stilzwijgend de leveranciersfilter laten vallen — dan haalt een backfill voor
+   * een leverancier zonder fabricId per ongeluk het hele warehouse op. Een aanroeper
+   * met een `number | null` moet dat eerst zelf oplossen, niet deze functie.
+   */
+  supplierFabricId?: number;
 };
-
-/**
- * Bepaalt naar welke portal Power Automate het resultaat terugstuurt. Komt uit
- * de omgevingsvariabele van de deployment en nooit uit een request — anders kan
- * één verkeerde aanroep testdata naar productie duwen.
- */
-export type SyncEnv = "test" | "production";
-
-export function resolveSyncEnv(): SyncEnv | null {
-  const env = process.env.NEXT_PUBLIC_APP_ENV;
-  if (env === "production") return "production";
-  if (env === "test") return "test";
-  return null; // development: niets versturen, Power Automate kan localhost niet bereiken
-}

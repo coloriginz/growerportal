@@ -6,7 +6,9 @@ export function isoDate(date: Date): string {
 /**
  * Zet een leveranciers-id om naar een veilig SQL-fragment. Dit is het enige wat
  * tussen een id en willekeurige SQL staat, dus het gaat door Number() heen en
- * levert bij alles wat geen eindig getal is een lege clausule op.
+ * levert bij alles wat geen veilig geheel getal is (inclusief exponentnotatie,
+ * Infinity, NaN en waarden boven Number.MAX_SAFE_INTEGER) een lege clausule op.
+ * Geen Math.trunc: een niet-geheel getal wordt geweigerd, niet afgekapt.
  */
 export function supplierClause(
   column: string,
@@ -14,6 +16,6 @@ export function supplierClause(
 ): string {
   if (supplierFabricId === null || supplierFabricId === undefined) return "";
   const id = Number(supplierFabricId);
-  if (!Number.isFinite(id)) return "";
-  return `AND ${column} = ${Math.trunc(id)}`;
+  if (!Number.isSafeInteger(id)) return "";
+  return `AND ${column} = ${id}`;
 }
