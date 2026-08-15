@@ -1,11 +1,19 @@
 # Ontwerp: van DAX naar SQL, met portal-gestuurde sync en backfill
 
-> **Status:** ontwerp, nog niet gebouwd. Stap 0 (T5) is blokkerend.
+> **Status:** deels vervangen. Stap 0 (T5) is geslaagd op 15 augustus 2026 — zie
+> [§3](#3-voorwaarde-vooraf-t5-de-inkomende-webhook-werkt). Op dat resultaat is een ruimer ontwerp
+> gemaakt: [2026-08-15-portal-gestuurde-sync-design.md](2026-08-15-portal-gestuurde-sync-design.md).
+> Dáár staat nu de architectuur, het datamodel, de backfill en de fasering.
+>
+> **Wat hier nog geldt:** de testladder T1–T5 met uitkomsten (§2, §3), de onderbouwing van de
+> endpoint-volgorde (§6), en de analyse van correcties die buiten elk venster vallen (§9).
+> **Wat vervangen is:** §4 (architectuur), §5 (componenten en contract), §8 (brokgrootte — de portal
+> hakt, per maand) en §11 (fasering).
 > **Datum:** 15 augustus 2026
 > **Aanleiding:** de import draait op DAX-queries via Power Automate. De payload uit
 > `marts.fct_salesheets_costs` is al bewezen via SQL (T1–T3 in
-> [power-automate-sql-fabric.md](../../power-automate-sql-fabric.md)), maar de HTTP-push erna
-> faalde en de backfill is nog handwerk met losse CSV's.
+> [power-automate-sql-fabric.md](../../power-automate-sql-fabric.md)); de HTTP-push erna faalde op de
+> kolomnamen en werkt sinds `c053418`. De backfill is nog handwerk met losse CSV's.
 > **Context:** de portal is nog niet in gebruik door kwekers. Er kan ruim getest, leeggegooid en
 > opnieuw opgebouwd worden zonder dat iemand daar last van heeft.
 
@@ -24,6 +32,14 @@ Drie dingen aan de huidige keten:
    sinds 13 augustus zowel `[Shkost ID]` als `shkost_id`. De ontvangkant hoeft dus niet mee te
    veranderen met de bron.
 
+   Op 15 augustus kwam daar een derde spelling bij. De SQL Server-connector serialiseert zijn
+   `ResultSets` via een DataSet, en die XML-codeert kolomnamen met een spatie: een view die aliast
+   naar `[Shkost ID]` komt binnen als `Shkost_x0020_ID`. `canonicalKey()` streepte de underscores weg
+   maar liet `x0020` als letterlijke tekst staan, dus geen enkele sleutel matchte en alle 4.141 rijen
+   vielen af. Sinds `c053418` worden `_xHHHH_`-escapes eerst gedecodeerd. **Reken hierop bij de andere
+   vier endpoints:** elke view die naar leesbare namen aliast raakt dit. Wil je het bij de bron
+   voorkomen, alias dan naar `shkost_id` in plaats van `[Shkost ID]`.
+
 ---
 
 ## 2. Genomen beslissingen
@@ -32,59 +48,72 @@ Drie dingen aan de huidige keten:
 |---|---|---|
 | **Regie** | de portal triggert Power Automate via een webhook | de portal bepaalt wat er opgehaald wordt; Power Automate doet het zware werk waar Vercel-functies te kort voor draaien |
 | **Detectie** | vast tijdvenster op `levering_datum`, gelijk aan nu | één ding tegelijk veranderen. Sleutelvergelijking kan later, zie [§9](#9-later-mogelijk-sleutelvergelijking) |
-| **Venstergrootte** | **eerst vaststellen**, zie hieronder | "gelijk aan nu" is nog geen getal |
+| **Venstergrootte** | SQL staat bewust breder dan DAX; **getal nog vastleggen**, zie hieronder | het verschil in rijaantallen is verklaard, de waarde staat nergens |
 | **Query** | in de Power Automate-flow, met het bestand in `scripts/sql/` als bron van waarheid | volledige eigen regie over de query; het bestand in de repo dekt het gemis aan versiebeheer af |
 | **Rollout** | direct omzetten, geen parallelle vergelijking | er zijn geen gebruikers, dus er valt niets te beschermen |
 | **Brokgrootte** | **nog open** | zie [§8](#8-open-punt-wie-hakt-een-grote-backfill-in-stukken) — het contract dwingt hier niets af, dus de keuze is uitgesteld zonder gevolgen |
 
 ### Het venster is nog geen getal
 
-"Gelijk aan nu" moet nog een waarde krijgen, want de twee bronnen leveren aantoonbaar niet hetzelfde
-op. De DAX-query levert gemiddeld 2.061 kostenregels per run; de SQL-variant uit T3 met een venster
-van 45 dagen leverde er 3.983. Wat het venster van de huidige DAX-query precies is, staat nergens
-vastgelegd.
+De twee bronnen leveren aantoonbaar niet hetzelfde op. In de run van 15 augustus stuurde de
+DAX-stap 2.496 kostenregels en de SQL-stap 4.141, in dezelfde cyclus. Dat verschil is **bewust**: de
+SQL-query staat op een breder tijdvenster. Het is dus geen fout, maar de waarde staat nergens
+vastgelegd — niet die van DAX en niet die van SQL.
 
-Stel dat vast vóór stap 1 van de fasering, anders vergelijk je in [§10](#10-testaanpak) twee
-verschillende periodes met elkaar en lijkt elk verschil een fout. Twee manieren: de DAX-query in de
-flow uitlezen, of het venster afleiden uit `MIN(levering_datum)` over één binnengekomen batch.
+Leg beide alsnog vast, want [§10](#10-testaanpak) leunt erop. Stap 2 van de testaanpak vergelijkt
+test (SQL) met productie (DAX) en gaat er stilzwijgend van uit dat dezelfde bronperiode wordt
+opgehaald. Zolang de vensters verschillen is elk verschil in rijaantallen verwacht en zegt de
+vergelijking niets. Twee manieren om het DAX-venster te achterhalen: de query in de flow uitlezen, of
+het afleiden uit `MIN(levering_datum)` over één binnengekomen batch.
 
 ---
 
-## 3. Voorwaarde vooraf (T5): werkt de inkomende webhook?
+## 3. Voorwaarde vooraf (T5): de inkomende webhook werkt
 
-Sluit aan op de testladder T1–T4. **Bouw niets voordat dit slaagt**, want het hele ontwerp hangt op
-deze trigger.
+> **Geslaagd op 15 augustus 2026.** Het hele ontwerp hing op deze trigger; die twijfel is weg.
 
-Te testen: een flow met de trigger *"When an HTTP request is received"*, aangeroepen met body
-`{ "van": "2026-08-01", "tot": "2026-08-15" }`, die die twee waarden doorgeeft aan de SQL-actie.
+De trigger *"When an HTTP request is received"* is gewoon beschikbaar in de tenant. Geen
+premium-blokkade, geen DLP-weigering — de twee risico's die hier stonden zijn geen van beide
+uitgekomen. Getest met een flow die `{ "van": "2026-08-01", "tot": "2026-08-15" }` aanneemt en die
+twee waarden doorgeeft; ze kwamen allebei aan in de run.
 
-Twee dingen kunnen dit blokkeren, allebei tenantbeleid waar wij niet over gaan:
+| aanroep | antwoord |
+|---|---|
+| POST met geldige handtekening | `202 Accepted` in 419 ms, run `08584147832591736472967323627CU12` |
+| GET met geldige handtekening | `400 Bad Request` — de trigger accepteert alleen POST |
+| POST met verminkte handtekening | `401 AuthorizationFailed` |
 
-- **Licentie.** De Request-trigger is een premium connector. Zonder Power Automate Premium op het
-  account waaronder de flow draait verschijnt hij niet, of faalt het opslaan.
-- **DLP.** Dezelfde soort beleid die "Execute a SQL query" kan blokkeren kan ook inkomende
-  HTTP-triggers uitzetten. Dat T1–T3 mochten draaien zegt hier niets over.
+Die laatste regel is de rechtvaardiging voor *"Who can trigger the flow?"* op `Anyone`: de
+handtekening authenticeert echt. De alternatieven ("Any user in my tenant", "Specific users") eisen
+een Entra-token bij elke aanroep, en dat betekent een app-registratie plus client-credentials-flow
+aan de Vercel-kant. Onnodig zwaar voor server-to-server verkeer met een geheime URL.
 
-Slaagt het, leg dan meteen vast: **de webhook-URL is een geheim.** Hij draagt een handtekening in de
-querystring, dus wie hem heeft kan de flow starten. Hij hoort in de Vercel-env-vars — niet in de
-repo, en niet in `scripts/sql/`.
+### Instellingen die werken
 
-### Terugval als T5 faalt
+- **Who can trigger the flow:** `Anyone`
+- **Method** en **Relative path:** leeg. Leeg betekent POST-only, en een relative path werkt alleen
+  als Method óók ingevuld is. We hebben het niet nodig: vijf flows, elk met een eigen URL.
+- **Geen Response-actie.** De trigger antwoordt dan met `202 Accepted` en draait door. Dat is precies
+  wat [§4](#4-architectuur) wil — een Response-actie zou de portal laten wachten tot de SQL klaar is,
+  en dat haalt de Vercel-functietimeout niet.
+- De flow slaat niet op met alleen een trigger; er moet minstens één actie onder staan.
 
-**Omgekeerde besturing (voorkeur).** Power Automate houdt zijn eigen schema, maar begint elke run
-met een vraag aan de portal:
+### De webhook-URL is een geheim
 
-```
-GET /api/sync/next  ->  { "van": "2026-08-01", "tot": "2026-08-15" }
-```
+Hij draagt de handtekening in de querystring, dus wie hem heeft kan de flow starten. Hij hoort in de
+Vercel-env-vars als `PA_WEBHOOK_<ENDPOINT>_URL` — niet in de repo, niet in `scripts/sql/`, en niet in
+een gespreks- of ticketlog.
 
-De portal bepaalt dan nog steeds *wat* er opgehaald wordt, alleen niet *wanneer*. Backfill werkt
-ook: zet een andere periode klaar en de eerstvolgende run pikt hem op. Kost één uitgaande call in de
-flow en heeft geen premium nodig. Vrijwel gelijkwaardig aan het origineel.
+De URL van de testflow ís door zo'n log gegaan. Die flow is daarom wegwerp en zijn sleutel wordt
+geroteerd; hij wordt voorlopig alleen op test gebruikt. De vijf echte flows krijgen hun URL
+rechtstreeks van Power Automate naar Vercel, zonder tussenstop.
 
-**Terug naar het huidige model.** Vast venster in de flow, backfill als losse handmatige flow. Dan
-verdwijnt de regie en blijft een gepauzeerde flow onzichtbaar — tenzij de portal bijhoudt wanneer
-hij een run *verwacht* en alarmeert als die uitblijft.
+### Terugval, mocht dit ooit alsnog omvallen
+
+Tenantbeleid kan veranderen. Gebeurt dat, keer dan de besturing om: Power Automate houdt zijn eigen
+schema en begint elke run met `GET /api/sync/next -> { "van": ..., "tot": ... }`. De portal bepaalt
+dan nog steeds *wat* er opgehaald wordt, alleen niet *wanneer*, en er is geen premium voor nodig.
+Backfill werkt ook: zet een andere periode klaar en de eerstvolgende run pikt hem op.
 
 ---
 
@@ -221,10 +250,13 @@ vraag staat sinds 12 augustus open.
 
 ## 10. Testaanpak
 
-1. **T5 — webhook.** Blokkerend, zie [§3](#3-voorwaarde-vooraf-t5-werkt-de-inkomende-webhook).
+1. ~~**T5 — webhook.**~~ Geslaagd op 15 augustus, zie
+   [§3](#3-voorwaarde-vooraf-t5-de-inkomende-webhook-werkt).
 2. **Per endpoint, test tegen productie.** Test wordt via SQL gevuld, productie draait nog op DAX.
-   Twee gescheiden databases met dezelfde bronperiode, dus rijaantallen en bedragen zijn regelrecht
-   te vergelijken. Geen dubbele schrijfacties, dus een verschil is een echt verschil.
+   Twee gescheiden databases, dus rijaantallen en bedragen zijn regelrecht te vergelijken — **maar
+   alleen als beide hetzelfde tijdvenster ophalen**, en dat is nu niet zo (zie
+   [§2](#het-venster-is-nog-geen-getal)). Leg de vensters eerst gelijk, anders vergelijk je twee
+   periodes en lijkt elk verschil een fout.
 3. **Reconciliatie tegen de bron.** De scripts in `scripts/recon-*.js` liggen klaar. Draai ze na de
    overstap opnieuw voor PCFUP en COLBFL en kijk of de cijfers bewegen.
 4. **Generale repetitie van de herbouw.** Gooi op test de acht Fabric-tabellen leeg, backfill alles
@@ -236,22 +268,38 @@ vraag staat sinds 12 augustus open.
 
 ## 11. Fasering
 
-| stap | inhoud |
-|---|---|
-| 0 | T5 webhook-test — **blokkerend** |
-| 1 | `costs` omzetten (T3 al bewezen), venster en trigger valideren |
-| 2 | overige vier endpoints, in de volgorde van [§6](#6-volgorde-van-de-endpoints) |
-| 3 | generale repetitie herbouw op test |
-| 4 | productie omzetten, DAX-flows uit |
+| stap | inhoud | stand |
+|---|---|---|
+| 0 | T5 webhook-test | **af** — 15 augustus |
+| 1 | `costs` omzetten (T3 al bewezen), venster en trigger valideren, DAX-kostenstap op test uit | loopt |
+| 2 | overige vier endpoints, in de volgorde van [§6](#6-volgorde-van-de-endpoints) | |
+| 3 | generale repetitie herbouw op test | |
+| 4 | productie omzetten, DAX-flows uit | |
 
-Drie dingen staan hier los van maar moeten opgelost zijn **vóór stap 3**, anders herhaalt de herbouw
-bestaande fouten:
+### Nu meteen, in stap 1
 
-- **De growers-flow draait sinds 12 augustus 18:01 niet meer**, op geen van beide omgevingen. De
-  andere vier draaien wel. Oorzaak onbekend.
+**Op test draaien de kosten twee keer per cyclus.** Op 15 augustus liep om 16:58:08 de DAX-stap
+(2.496 rijen) en negen seconden later de SQL-stap (4.141 rijen). Beide doen upserts op
+`fabricShkostId` in dezelfde tabel en beide herberekenen de salessheet-totalen. Vóór `c053418` viel
+dat niet op, want de SQL-stap faalde altijd. Zolang de bronnen hetzelfde rekenen merk je niets — de
+laatste run wint — maar lopen ze uiteen, dan hangt het resultaat af van de volgorde waarin de stappen
+toevallig eindigen. Zet de DAX-kostenstap op test uit nu de SQL-versie werkt.
+
+De data zelf is na die dubbele run wel gecontroleerd en gezond: bij nul salessheets wijkt
+`totalCosts` af van de som van de kostenregels, bij nul wijkt `netResult` af van turnover − costs, en
+alle 54.997 kostenregels hebben een `fabricShkostId`.
+
+### Vóór stap 3
+
+Anders herhaalt de herbouw bestaande fouten:
+
 - **Het stille overslaan in de lots-import** moet tellen en loggen ([§6](#6-volgorde-van-de-endpoints)).
 - **De import-API-key roteren.** Die staat in commit `b35a896` in de git-historie. Nieuwe waarde in
   Vercel, in de lokale `.env` en in de flows.
+- **De handtekening van de testwebhook roteren** ([§3](#de-webhook-url-is-een-geheim)).
+- **De growers-flow controleren.** Hij stond tussen 12 en 15 augustus stil op beide omgevingen; op
+  15 augustus draaide hij weer mee in de testronde (2.799 rijen, 4 bijgewerkt). De flow zelf werkt
+  dus, maar of het schema uit zichzelf loopt of dat die run handmatig was, is niet vastgesteld.
 
 ---
 
