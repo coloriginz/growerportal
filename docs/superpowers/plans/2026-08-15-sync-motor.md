@@ -467,7 +467,8 @@ Expected: `200` met een array van één object met de velden `een` en `nu`
 Create `src/lib/sync/dispatch.ts`:
 
 ```typescript
-import { resolveSyncEnv, type SyncEndpoint } from "./types";
+import { resolveSyncEnv } from "@/lib/env";
+import type { SyncEndpoint } from "./types";
 
 export class DispatchError extends Error {
   constructor(message: string, readonly status?: number) {
@@ -854,10 +855,15 @@ export async function dispatchNext(): Promise<string | null> {
   });
 
   try {
+    // supplierFabricId is nullable in de database maar niet in QueryWindow: een
+    // ontbrekend id mag geen leeg filter worden, want dan haalt de query het hele
+    // warehouse op in plaats van één leverancier. Hier is dat onschadelijk omdat
+    // een reguliere ronde geen filter hoort te hebben; plan 2 moet bij het
+    // klaarzetten van een backfill afdwingen dat het id gevuld is.
     const query = buildQuery(job.endpoint as SyncEndpoint, {
       from: job.windowFrom,
       to: job.windowTo,
-      supplierFabricId: job.supplierFabricId,
+      supplierFabricId: job.supplierFabricId ?? undefined,
     });
     await fetchInto(job.endpoint as SyncEndpoint, batch.id, query);
     return job.id;
@@ -1013,7 +1019,7 @@ Create `src/app/api/sync/tick/route.ts`:
 ```typescript
 import { NextRequest, NextResponse } from "next/server";
 import { tick } from "@/lib/sync/runner";
-import { resolveSyncEnv } from "@/lib/sync/types";
+import { resolveSyncEnv } from "@/lib/env";
 
 export const maxDuration = 60;
 
@@ -1325,6 +1331,21 @@ git commit -m "refactor: extract shared import wrapper, accept external batchId"
 
 **Files:** geen wijzigingen; dit is een controle op de omgeving.
 
+- [ ] **Step 0: Controleer de drie onbewezen kolomnamen**
+
+Van de kolommen in de costs-query zijn er drie nooit tegen de echte tabel gedraaid: `laatste_ontvangstdatum`, `laatste_aanmelddatum` en `rel_id_leverancier`. `scripts/sql/recon-fabric-kosten.sql` selecteert dertien kolommen uit `marts.fct_salesheets_costs` en deze drie zitten er geen van alle bij.
+
+`rel_id_leverancier` is de gevaarlijkste: die zit alleen op het backfill-pad, dus een verkeerde naam faalt pas in plan 2, in het pad dat het minst gedraaid wordt. Controleer alle drie nu:
+
+```bash
+ASK="$PA_WEBHOOK_ASK_URL" node -e "
+(async()=>{const r=await fetch(process.env.ASK,{method:'POST',headers:{'Content-Type':'application/json'},
+body:JSON.stringify({env:'test',query:\"SELECT TOP 1 * FROM marts.fct_salesheets_costs\"})});
+console.log(Object.keys((await r.json())[0]).join('\n'));})()"
+```
+
+Expected: de lijst bevat `laatste_ontvangstdatum`, `laatste_aanmelddatum` en `rel_id_leverancier`. Heten ze anders, pas dan `src/lib/sync/queries/costs.ts` aan vóór je verder gaat.
+
 - [ ] **Step 1: Push naar test**
 
 ```bash
@@ -1401,6 +1422,8 @@ const sql = neon(process.env.DATABASE_URL);
 ```
 
 Voorlopig alleen `costs`, want de andere vier query-bouwers bestaan nog niet. Die komen in taak 11.
+
+**Voor het runbook: `NEXT_PUBLIC_APP_ENV` is niet live te wijzigen.** Next.js vervangt `NEXT_PUBLIC_*` bij het bouwen, ook in servercode. Die variabele in Vercel omzetten heeft dus geen enkel effect tot er opnieuw gedeployd is — juist voor de variabele die bepaalt of data naar test of naar productie terugkomt. Wie hem ooit als noodrem wil gebruiken, denkt dat hij hem heeft omgezet terwijl er niets verandert. De echte noodrem is `SyncSchedule.enabled` op `false` zetten; die staat in de database en werkt onmiddellijk.
 
 - [ ] **Step 6: Controleer na een uur dat de ronde vanzelf gedraaid heeft**
 
@@ -1506,6 +1529,8 @@ WHERE levering_datum >= '${isoDate(from)}'
 ```
 
 Vul de kolomlijst aan met wat je in stap 1 hebt gevonden, in de volgorde van stap 2.
+
+**Bouw de vensters met `Date.UTC`, niet met date-fns.** `isoDate()` snijdt af op UTC, maar `startOfMonth`/`startOfDay` uit date-fns — dat dit project al gebruikt — rekenen in lokale tijd. In Amsterdamse zomertijd wordt `new Date(2026, 7, 1)` het tijdstip `2026-07-31T22:00:00Z`, en `isoDate` maakt daar `2026-07-31` van: een dag te vroeg. Vercel draait op UTC en je werkstation op CET, dus dit gedraagt zich lokaal anders dan op productie en je ziet het pas na een deploy.
 
 **`suppliers` en `growers` kennen geen datumvenster.** Hun bouwers negeren `from` en `to` en gebruiken alleen het leveranciersfilter. Dat is geen slordigheid maar de kern van waarom een backfill stamdata niet in maandbrokken hakt:
 
