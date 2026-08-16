@@ -42,8 +42,19 @@ function localDay(at: Date): string {
   return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
 }
 
-function parseAtTime(atTime: string): number {
-  const [hh, mm] = atTime.split(":").map(Number);
+/**
+ * "03:00" -> 180. Geeft null bij onzin. Zonder die controle wordt de
+ * vergelijking NaN, valt de tijdpoort stilzwijgend weg, en verandert de
+ * nachtronde in een "eens per lokale dag, zo vroeg mogelijk"-ronde.
+ */
+function parseAtTime(atTime: string): number | null {
+  const match = /^(\d{1,2}):(\d{2})$/.exec(atTime.trim());
+  if (!match) return null;
+
+  const hh = Number(match[1]);
+  const mm = Number(match[2]);
+  if (hh > 23 || mm > 59) return null;
+
   return hh * 60 + mm;
 }
 
@@ -60,7 +71,10 @@ export function isDue(schedule: ScheduleState, now: Date): boolean {
   // Ronde op tijdstip: due zodra het lokale tijdstip voorbij is en er vandaag
   // nog niet gedraaid is.
   if (schedule.atTime != null) {
-    if (minutesOfDay(now) < parseAtTime(schedule.atTime)) return false;
+    const at = parseAtTime(schedule.atTime);
+    // Liever niet draaien dan op een gegokt tijdstip draaien.
+    if (at === null) return false;
+    if (minutesOfDay(now) < at) return false;
     if (!schedule.lastRunAt) return true;
     return localDay(schedule.lastRunAt) !== localDay(now);
   }

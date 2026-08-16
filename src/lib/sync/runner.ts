@@ -3,10 +3,13 @@ import { prisma } from "@/lib/db";
 import { isDue, windowFor, type ScheduleState } from "./schedule";
 import { inChainOrder, isSyncEndpoint, type SyncEndpoint } from "./types";
 import { buildQuery } from "./queries";
-import { fetchInto } from "./dispatch";
+import { fetchInto, describeError, DispatchError } from "./dispatch";
 
 /** Een job die langer dan dit onderweg is, is dood. */
 const STALE_MINUTES = 15;
+
+/** Zoveel pogingen krijgt een job voordat hij zijn ronde meesleurt. */
+const MAX_ATTEMPTS = 3;
 
 /**
  * Zet één ronde klaar: per endpoint een job, in de verplichte volgorde.
@@ -52,6 +55,8 @@ type ClaimedJob = {
   windowFrom: Date;
   windowTo: Date;
   supplierFabricId: number | null;
+  /** Al opgehoogd door de claim: bij de eerste poging staat hier 1. */
+  attempts: number;
 };
 
 /**
@@ -82,7 +87,7 @@ async function claimNextJob(): Promise<ClaimedJob | null> {
       LIMIT 1
       FOR UPDATE SKIP LOCKED
     )
-    RETURNING id, endpoint, "windowFrom", "windowTo", "supplierFabricId"`;
+    RETURNING id, endpoint, "windowFrom", "windowTo", "supplierFabricId", attempts`;
 
   return rows[0] ?? null;
 }
@@ -92,7 +97,8 @@ async function claimNextJob(): Promise<ClaimedJob | null> {
  *
  * Twee losse velden in plaats van één job-id: de cron-ingang moet kunnen zien
  * of er zojuist iets hard misging of dat er simpelweg niets te doen was. Beide
- * `null` betekent: de wachtrij was leeg of er stond er al één uit.
+ * `null` betekent: de wachtrij was leeg, er stond er al één uit, of de job is na
+ * een tijdelijke fout teruggezet en probeert het straks nog eens.
  */
 export async function dispatchNext(): Promise<{
   dispatched: string | null;
@@ -128,12 +134,49 @@ export async function dispatchNext(): Promise<{
     await fetchInto(job.endpoint as SyncEndpoint, batch.id, query);
     return { dispatched: job.id, failed: null };
   } catch (error) {
-    // DispatchError erft van Error, dus dit dekt beide: de kale melding, zonder
-    // het "Error: "-voorvoegsel dat String(error) eraan plakt.
-    const message = error instanceof Error ? error.message : String(error);
+    // describeError haalt ook undici's `cause` op: "fetch failed" alleen zegt niets.
+    const message = describeError(error);
+
+    if (isTransient(error) && job.attempts < MAX_ATTEMPTS) {
+      // Een luide, goedkoop te herhalen fout mag de ronde niet kosten: terug in
+      // de wachtrij op zijn eigen plek, de rest van de ronde blijft staan.
+      await retryJob(job.id, message, batch.id);
+      console.warn(
+        `[sync] job ${job.id} (${job.endpoint}) poging ${job.attempts}/${MAX_ATTEMPTS} mislukt, opnieuw in de wachtrij: ${message}`
+      );
+      return { dispatched: null, failed: null };
+    }
+
     await failJob(job.id, message, batch.id);
     return { dispatched: null, failed: job.id };
   }
+}
+
+/**
+ * Mag deze fout opnieuw geprobeerd worden? Alleen als het aan de overkant lag en
+ * vanzelf over kan gaan: een netwerkfout of timeout (DispatchError zonder
+ * status), throttling (429), of een gateway die omviel (5xx).
+ *
+ * Een andere 4xx is een configuratiefout — 401 met een verkeerde sleutel gaat
+ * met herhalen niet weg. Alles wat geen DispatchError is (een gooiende
+ * buildQuery bijvoorbeeld) is ontbrekende code, en die schrijft zichzelf niet.
+ */
+function isTransient(error: unknown): boolean {
+  if (!(error instanceof DispatchError)) return false;
+  if (error.status === undefined) return true;
+  return error.status === 429 || error.status >= 500;
+}
+
+/** Terug in de wachtrij, zonder de ronde af te breken. */
+async function retryJob(jobId: string, message: string, batchId: string) {
+  await prisma.syncJob.update({
+    where: { id: jobId },
+    data: { status: "pending", dispatchedAt: null, lastError: message.slice(0, 1000) },
+  });
+  await prisma.importBatch.update({
+    where: { id: batchId },
+    data: { status: "error", errorMessage: message.slice(0, 1000), completedAt: new Date() },
+  });
 }
 
 async function failJob(jobId: string, message: string, batchId?: string) {
@@ -186,7 +229,7 @@ export async function reapStaleJobs(now: Date): Promise<number> {
   for (const job of stale) {
     const message = `Geen resultaat binnen ${STALE_MINUTES} minuten`;
     // Drie pogingen: opnieuw ophalen is veilig omdat alle endpoints upserten.
-    const retry = job.attempts < 3;
+    const retry = job.attempts < MAX_ATTEMPTS;
 
     await prisma.syncJob.update({
       where: { id: job.id },
@@ -211,12 +254,31 @@ export async function reapStaleJobs(now: Date): Promise<number> {
 export async function tick(now: Date = new Date()) {
   const reaped = await reapStaleJobs(now);
 
-  const schedules = await prisma.syncSchedule.findMany();
+  // De volgorde bepaalt welke ronde als eerste in de wachtrij belandt. De
+  // nachtronde gaat voor: die brengt suppliers en growers mee, en zonder die
+  // twee gooit de lots-import partijen stilzwijgend weg. Schema's op tijdstip
+  // (atTime gevuld) dus vóór schema's op interval, met de naam als tiebreaker
+  // zodat de volgorde ook bij een derde schema vastligt.
+  const schedules = await prisma.syncSchedule.findMany({
+    orderBy: [{ atTime: { sort: "asc", nulls: "last" } }, { name: "asc" }],
+  });
   let enqueued = 0;
   for (const schedule of schedules) {
     if (isDue(schedule, now)) enqueued += await enqueueRun(schedule, now);
   }
 
   const { dispatched, failed } = await dispatchNext();
+
+  // Een gefaalde ronde is verder nergens zichtbaar: enqueueRun stempelt
+  // lastRunAt bij het klaarzetten, dus het "overdue"-alarm gaat hier niet van
+  // af. De functielogs zijn vandaag het enige kanaal dat er is.
+  if (failed) {
+    const job = await prisma.syncJob.findUnique({
+      where: { id: failed },
+      select: { endpoint: true, lastError: true },
+    });
+    console.warn(`[sync] job ${failed} (${job?.endpoint}) gefaald: ${job?.lastError}`);
+  }
+
   return { reaped, enqueued, dispatched, failed };
 }

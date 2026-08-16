@@ -53,6 +53,20 @@ check(
   isDue({ ...nightly, lastRunAt: new Date("2026-01-14T02:05:00Z") }, new Date("2026-01-15T02:05:00Z"))
 );
 
+// Een onleesbare atTime mag niet stilzwijgend in "elke dag zo vroeg mogelijk"
+// veranderen: dan draait de nachtronde midden in de handelsdag.
+check(
+  "nachtronde: onleesbare atTime is nooit due",
+  !isDue(
+    { ...nightly, atTime: "kwart over drie", lastRunAt: null },
+    new Date("2026-08-15T09:00:00Z")
+  )
+);
+check(
+  "nachtronde: lege atTime is nooit due",
+  !isDue({ ...nightly, atTime: "", lastRunAt: null }, new Date("2026-08-15T09:00:00Z"))
+);
+
 const w = windowFor(45, new Date("2026-08-15T10:00:00Z"));
 check("venster eindigt in de toekomst", w.to > new Date("2026-08-15T10:00:00Z"));
 check(
