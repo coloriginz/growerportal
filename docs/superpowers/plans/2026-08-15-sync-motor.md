@@ -1739,7 +1739,11 @@ git commit -m "feat: log silently skipped lots per supplier, show growers in adm
 
 ### Task 13: De overige vier routes op de omhulling zetten
 
-Deze taak is losgekoppeld van de rest: de motor werkt al zonder. Doe hem zodra de keten stabiel draait, zodat een fout hier niet met een fout in de motor verward kan worden.
+> **Volgordecorrectie, 16 augustus.** Deze taak stond hier als losgekoppelde opruiming, "te doen zodra de keten stabiel draait". Dat is verkeerd: **hij is een voorwaarde voor taak 11 stap 7**, de eerste volledige ketting.
+>
+> Alleen een route die de meegestuurde `batchId` accepteert kan zijn job op `done` zetten. Met alleen `costs` omgezet liep de ketting vast op `suppliers`: de data kwam gewoon binnen (673 rijen bijgewerkt, 2045 ms), maar de route negeerde de `batchId`, maakte zijn eigen batch aan, en raakte de job niet aan. Die bleef `dispatched` staan tot de opruimer hem na een kwartier terugzette — wachtend op een bevestiging die per constructie nooit kon komen. Er stonden toen twee batches voor één import: die van de portal eeuwig op `running`, die van de route op `success`.
+>
+> Doe deze taak dus vóór je de nachtronde aanzet. De motor werkt inderdaad zonder, maar alleen voor `costs`.
 
 **Files:**
 - Modify: `src/app/api/import/suppliers/route.ts`, `growers/route.ts`, `lots/route.ts`, `orders/route.ts`
