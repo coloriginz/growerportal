@@ -383,7 +383,14 @@ Dit is handwerk in de browser, geen code. Zonder deze taak kan taak 5 niet getes
 ```
 
 - Actie 1: SQL Server → *Execute a SQL query (V2)*, verbinding op Fabric `wh_transform`, query = `@triggerBody()?['query']`. Hernoem de actie naar `SQL`.
-- Actie 2: *Response*, statuscode 200, body = `@body('SQL')?['ResultSets']?['Table1']`
+- Actie 2: *Response*, statuscode 200, body:
+
+```
+@coalesce(body('SQL')?['ResultSets']?['Table1'], json('[]'))
+```
+
+**De `coalesce` is niet optioneel.** Een query die nul rijen oplevert laat `Table1` op `null` staan, en de flow antwoordt dan met een lege body van nul bytes in plaats van `[]` — status 200, niets erin. Geverifieerd tegen de echte bron op 16 augustus. Zonder `coalesce` loopt elke aanroep die toevallig niets oplevert stuk op het uitlezen van het antwoord.
+
 - Opslaan en de URL bewaren als `PA_WEBHOOK_ASK_URL`
 
 - [ ] **Step 2: Maak de flow "sync — haal op"**
@@ -424,10 +431,12 @@ In de If-no tak: *Terminate* met status `Failed`. Zonder deze controle kan ieman
 
 ```
 {
-  "@{triggerBody()?['endpoint']}": @{body('SQL')?['ResultSets']?['Table1']},
+  "@{triggerBody()?['endpoint']}": @{coalesce(body('SQL')?['ResultSets']?['Table1'], json('[]'))},
   "batchId": "@{triggerBody()?['batchId']}"
 }
 ```
+
+**Ook hier is de `coalesce` niet optioneel**, en hier is hij ernstiger dan in flow 1. Levert de query nul rijen op, dan is `Table1` gelijk aan `null` en wordt de body letterlijk `{"costs": ,"batchId":"…"}` — ongeldige JSON. Een rustige nacht zonder nieuwe kostenregels zou de sync dan laten falen met een foutmelding die nergens naar wijst. Met `coalesce` komt er een lege lijst binnen en antwoorden de import-routes gewoon met `received: 0`.
 
 - **Geen Response-actie.** De trigger antwoordt dan met `202 Accepted` en draait door. Een Response-actie zou de portal laten wachten tot de SQL klaar is, en dat haalt de functietimeout niet.
 - Opslaan en de URL bewaren als `PA_WEBHOOK_FETCH_URL`
@@ -501,7 +510,13 @@ export async function ask<T = Record<string, unknown>>(query: string): Promise<T
       response.status
     );
   }
-  return (await response.json()) as T[];
+
+  // Tweede laag naast de coalesce in de flow zelf: een query zonder rijen kan een
+  // lege body opleveren in plaats van [], en dat is een geldig "niets gevonden".
+  // De flow kan later door iemand anders aangepast worden, dus vertrouw er niet op.
+  const text = await response.text();
+  if (text.trim() === "") return [];
+  return JSON.parse(text) as T[];
 }
 
 /**
