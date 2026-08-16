@@ -35,3 +35,13 @@ export function supplierViaPartijenClause(value: number | null | undefined): str
   if (id === null) return "";
   return `AND parthdr_id IN (SELECT parthdr_id FROM marts.fct_partijen WHERE rel_id_leverancier = ${id})`;
 }
+
+/**
+ * dim_kweker heeft geen rel_id_leverancier — die koppeling loopt via de
+ * partijen die de kweker heeft geleverd aan die leverancier.
+ */
+export function growerViaPartijenClause(value: number | null | undefined): string {
+  const id = safeSupplierId(value);
+  if (id === null) return "";
+  return `AND rel_id_kweker IN (SELECT rel_id_kweker FROM marts.fct_partijen WHERE rel_id_leverancier = ${id})`;
+}
