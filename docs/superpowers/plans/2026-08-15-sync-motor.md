@@ -1443,11 +1443,22 @@ Voorlopig alleen `costs`, want de andere vier query-bouwers bestaan nog niet. Di
 
 **Voor het runbook: `NEXT_PUBLIC_APP_ENV` is niet live te wijzigen.** Next.js vervangt `NEXT_PUBLIC_*` bij het bouwen, ook in servercode. Die variabele in Vercel omzetten heeft dus geen enkel effect tot er opnieuw gedeployd is — juist voor de variabele die bepaalt of data naar test of naar productie terugkomt. Wie hem ooit als noodrem wil gebruiken, denkt dat hij hem heeft omgezet terwijl er niets verandert. De echte noodrem is `SyncSchedule.enabled` op `false` zetten; die staat in de database en werkt onmiddellijk.
 
-- [ ] **Step 6: Controleer na een uur dat de ronde vanzelf gedraaid heeft**
+- [ ] **Step 6: Controleer dat de ronde bij een tweede tick opnieuw klaargezet wordt**
 
-Kijk op `/admin/imports` of er een nieuwe `costs`-batch bij staat, of draai het script uit stap 4 opnieuw.
+**Op test vuurt de cron niet.** `develop` is een preview-deployment van het hoofdproject, en Vercel draait cronjobs uitsluitend op production-deployments. Dat blijft zo — er komt geen apart Vercel-project naast. Op test roep je de tick dus met de hand aan; het automatische pad wordt pas op productie voor het eerst echt gedraaid.
 
-Expected: een tweede batch, ongeveer een uur na de eerste, zonder dat iemand iets heeft afgevuurd
+Wacht daarom niet op een ronde die vanzelf komt. Vuur de tick een uur na de eerste opnieuw af en controleer dat er een nieuwe ronde klaargezet is:
+
+```bash
+node -e "
+(async()=>{const r=await fetch('https://growerportal.test.apps.coloriginz.com/api/sync/tick',
+{method:'POST',headers:{Authorization:'Bearer '+process.env.CRON_SECRET}});
+console.log(r.status, await r.text());})()"
+```
+
+Expected: `{"reaped":0,"enqueued":1,...}` — het interval van zestig minuten is verstreken, dus `isDue` geeft waar en er komt een nieuwe job in de wachtrij.
+
+Wil je het automatische pad tóch op test beproeven zonder een tweede Vercel-project, dan is een GitHub Actions-workflow met een `schedule`-trigger die deze URL aanroept de goedkoopste weg. Eén bestand, de sleutel als repository secret. Niet nodig om verder te kunnen, wel de enige manier om de klok zelf te testen vóór productie.
 
 ---
 
@@ -1785,6 +1796,21 @@ const sql = neon(process.env.DATABASE_URL);
 ```
 
 Expected: geen twee `costs`-batches meer binnen dezelfde minuut
+
+- [ ] **Step 7: Vóór de merge naar `main` — eerst het schema, dan pas de deploy**
+
+Dit is de enige plek in dit plan waar de volgorde onherstelbaar fout kan gaan.
+
+`vercel.json` staat in de repo-root en gaat dus mee naar `main`. Zodra dat gemerged is begint de cron op productie te tikken, en die roept `tick()` aan, en die bevraagt `SyncJob` en `SyncSchedule`. Die tabellen staan nu **alleen op test**: `prisma db push` is nooit tegen de productiedatabase gedraaid. Zonder die tabellen faalt elke tick met een 500, elke vijf minuten, tot iemand het merkt.
+
+Doe het daarom in deze volgorde:
+
+1. Schema naar productie: `DATABASE_URL` en `DIRECT_URL` uit `.env.production` gebruiken en `npx prisma db push` draaien. Controleer daarna dat `SyncJob` en `SyncSchedule` er echt staan.
+2. De twee schemaregels aanmaken op productie met `scripts/seed-sync-schedules.ts`, tegen dezelfde omgeving. Ze staan op `enabled: false`, dus de cron tikt en doet niets — precies wat je wilt tot je bewust aanzet.
+3. `CRON_SECRET` moet op productie staan. (Staat er al.)
+4. Pas dan mergen.
+
+Controleer na de merge in de Vercel-logs dat `/api/sync/tick` elke vijf minuten een `200` geeft met `{"reaped":0,"enqueued":0,"dispatched":null,"failed":null}`. Dat is het bewijs dat de klok loopt en dat er niets gebeurt — de gezonde toestand vóór het aanzetten.
 
 ---
 
