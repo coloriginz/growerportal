@@ -3,7 +3,7 @@ import { prisma } from "@/lib/db";
 import { isDue, windowFor, type ScheduleState } from "./schedule";
 import { inChainOrder, isSyncEndpoint, type SyncEndpoint } from "./types";
 import { buildQuery } from "./queries";
-import { fetchInto, DispatchError } from "./dispatch";
+import { fetchInto } from "./dispatch";
 
 /** Een job die langer dan dit onderweg is, is dood. */
 const STALE_MINUTES = 15;
@@ -22,20 +22,25 @@ export async function enqueueRun(
   const window = windowFor(schedule.windowDays, now);
   const runId = randomUUID();
 
-  await prisma.syncJob.createMany({
-    data: endpoints.map((endpoint, index) => ({
-      runId,
-      sequence: index,
-      endpoint,
-      windowFrom: window.from,
-      windowTo: window.to,
-      source: schedule.name === "nightly" ? "nightly" : "schedule",
-    })),
-  });
+  // In één transactie: valt het proces tussen beide schrijfacties om, dan staan
+  // de jobs klaar terwijl het schema nog due is en zet de volgende tick dezelfde
+  // ronde nog eens klaar.
+  await prisma.$transaction(async (tx) => {
+    await tx.syncJob.createMany({
+      data: endpoints.map((endpoint, index) => ({
+        runId,
+        sequence: index,
+        endpoint,
+        windowFrom: window.from,
+        windowTo: window.to,
+        source: schedule.name === "nightly" ? "nightly" : "schedule",
+      })),
+    });
 
-  await prisma.syncSchedule.update({
-    where: { name: schedule.name },
-    data: { lastRunAt: now },
+    await tx.syncSchedule.update({
+      where: { name: schedule.name },
+      data: { lastRunAt: now },
+    });
   });
 
   return endpoints.length;
@@ -82,14 +87,23 @@ async function claimNextJob(): Promise<ClaimedJob | null> {
   return rows[0] ?? null;
 }
 
-/** Verstuurt de volgende job, als er een klaarstaat. */
-export async function dispatchNext(): Promise<string | null> {
+/**
+ * Verstuurt de volgende job, als er een klaarstaat.
+ *
+ * Twee losse velden in plaats van één job-id: de cron-ingang moet kunnen zien
+ * of er zojuist iets hard misging of dat er simpelweg niets te doen was. Beide
+ * `null` betekent: de wachtrij was leeg of er stond er al één uit.
+ */
+export async function dispatchNext(): Promise<{
+  dispatched: string | null;
+  failed: string | null;
+}> {
   const job = await claimNextJob();
-  if (!job) return null;
+  if (!job) return { dispatched: null, failed: null };
 
   if (!isSyncEndpoint(job.endpoint)) {
     await failJob(job.id, `Onbekend endpoint: ${job.endpoint}`);
-    return null;
+    return { dispatched: null, failed: job.id };
   }
 
   const batch = await prisma.importBatch.create({
@@ -112,12 +126,13 @@ export async function dispatchNext(): Promise<string | null> {
       supplierFabricId: job.supplierFabricId ?? undefined,
     });
     await fetchInto(job.endpoint as SyncEndpoint, batch.id, query);
-    return job.id;
+    return { dispatched: job.id, failed: null };
   } catch (error) {
-    const message =
-      error instanceof DispatchError ? error.message : String(error);
+    // DispatchError erft van Error, dus dit dekt beide: de kale melding, zonder
+    // het "Error: "-voorvoegsel dat String(error) eraan plakt.
+    const message = error instanceof Error ? error.message : String(error);
     await failJob(job.id, message, batch.id);
-    return null;
+    return { dispatched: null, failed: job.id };
   }
 }
 
@@ -202,6 +217,6 @@ export async function tick(now: Date = new Date()) {
     if (isDue(schedule, now)) enqueued += await enqueueRun(schedule, now);
   }
 
-  const dispatched = await dispatchNext();
-  return { reaped, enqueued, dispatched };
+  const { dispatched, failed } = await dispatchNext();
+  return { reaped, enqueued, dispatched, failed };
 }
