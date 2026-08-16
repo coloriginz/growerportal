@@ -1056,6 +1056,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ dryRun: true, reason: "development" });
   }
 
+  // tick() geeft { reaped, enqueued, dispatched, failed } terug. Die laatste is
+  // er zodat een cron-run zichtbaar maakt dat er zojuist iets hard misging, in
+  // plaats van dat "niets verstuurd" en "verzending mislukt" er hetzelfde uitzien.
   const result = await tick();
   return NextResponse.json(result);
 }
@@ -1095,7 +1098,7 @@ curl_equivalent() {
 curl_equivalent
 ```
 
-Expected: `200 {"dryRun":true,"reason":"development"}` — lokaal is `NEXT_PUBLIC_APP_ENV` niet `test` of `production`
+Expected: `200 {"dryRun":true,"reason":"development"}` als `NEXT_PUBLIC_APP_ENV` lokaal op `development` staat. Staat hij op `test` — en dat is nu het geval in `.env` — dan krijg je een echte tick in de vorm `{"reaped":0,"enqueued":0,"dispatched":null,"failed":null}`. Beide uitkomsten zijn goed; wat je hier controleert is dat de route antwoordt en het token afdwingt. Met de schema's op `enabled: false` doet een echte tick niets.
 
 - [ ] **Step 4: Controleer dat een verkeerd token wordt geweigerd**
 
@@ -1855,3 +1858,9 @@ Uit de kwaliteitsreview van taak 1. Geen van deze punten blokkeert dit plan; ze 
 **Het wachtrijscherm wil per job de cijfers van zijn batch tonen**, en `importBatchId` is een losse string zonder Prisma-relatie. Dat volgt bewust het patroon van de drie staging-tabellen, maar het betekent wel een tweede query met handmatige koppeling. Als dat scherm er komt is het moment om te wegen of er alsnog een relatie op moet.
 
 **`SyncJob` groeit onbeperkt** — ongeveer 26.000 rijen per jaar uit de uurronde, plus zo'n 110 per leverancier-backfill. Voor Postgres is dat niets en de indexen raken alleen het kleine `pending`/`dispatched`-deel. Het telt pas voor de paginering van het wachtrijscherm.
+
+**Een lopende backfill vertraagt de reguliere ronde.** De eerste `NOT EXISTS` in de claim-query is globaal, niet per `runId`: staat er één job onderweg, dan mag er niets bij. Dat is precies wat §10 wil ("er staat er hoogstens één tegelijk uit"), maar het betekent wel dat een backfill van veertig maandbrokken de nachtronde kan opschuiven. Zolang een brok binnen enkele seconden klaar is valt dat weg in de ruis; wordt een brok traag, dan is dit de plek om een uitzondering te maken voor het reguliere schema.
+
+**Een backfill zonder `fabricId` haalt het hele warehouse op.** `supplierFabricId` is nullable in `SyncJob` maar niet in `QueryWindow`; de runner zet `null` om naar `undefined`, en dat betekent "geen filter". Voor een reguliere ronde klopt dat, voor een backfill is het rampzalig. Het klaarzetten van backfill-jobs moet afdwingen dat het id gevuld is — in de code die de brokken maakt, niet in de query-bouwer.
+
+**Een mislukte poging laat zijn batch achter.** Zet `reapStaleJobs` een job terug op `pending`, dan blijft `importBatchId` naar de gefaalde batch wijzen tot de volgende verzending hem overschrijft. Die `error`-batch blijft dus in de importmonitor staan zonder job die er nog naar verwijst. Waarschijnlijk gewenst — het wás een echte mislukte poging — maar het wachtrijscherm moet er niet over struikelen.
