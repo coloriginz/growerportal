@@ -1,5 +1,5 @@
 import type { QueryWindow } from "../types";
-import { isoDate, supplierClause } from "./helpers";
+import { isoDate, supplierViaPartijenClause } from "./helpers";
 
 export function costsQuery({ from, to, supplierFabricId }: QueryWindow): string {
   return `
@@ -18,6 +18,6 @@ SELECT
 FROM marts.fct_salesheets_costs
 WHERE levering_datum >= '${isoDate(from)}'
   AND levering_datum <  '${isoDate(to)}'
-  ${supplierClause("rel_id_leverancier", supplierFabricId)}
+  ${supplierViaPartijenClause(supplierFabricId)}
 `.trim();
 }
