@@ -184,6 +184,14 @@ rijtelling vóór een grote brok. De portal wacht daarop, en dat mag omdat het a
 klein is. Deze flow post nergens naartoe, dus `env` heeft er geen routerende betekenis; hij gaat mee
 zodat de run-historie van beide flows op dezelfde manier te lezen is.
 
+**Klein antwoord is niet hetzelfde als goedkope vraag.** Op 16 augustus liep een `COUNT(*)` met een
+rekenkundige vergelijking over `marts.fct_orders` sinds 1 juli in een 504 na ruim twee minuten — één
+regel antwoord, maar een volledige scan eronder. Systeemviews doen hetzelfde: `INFORMATION_SCHEMA.COLUMNS`
+en `.TABLES` geven allebei een 502 door deze connector; kolommen opzoeken gaat met `SELECT TOP 1 *` en
+dan naar de sleutels kijken. Voor de onboarding-backfill betekent dit: `MIN(levering_datum)` gefilterd
+op één leverancier is prima, maar een telling over de hele tabel niet. Begrens elke vraag op een
+leverancier of een periode, of laat hem via de haal-flow lopen.
+
 **haal op** verplaatst alle echte data. De portal wacht nooit.
 
 ### Het contract
