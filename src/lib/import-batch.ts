@@ -68,7 +68,25 @@ export async function runImport<Row>(
     }
   };
 
-  const rawRows = Array.isArray(body[options.bodyKey]) ? body[options.bodyKey] : [];
+  // Een ontbrekende of niet-array sleutel is een fout, geen lege import. Anders
+  // levert een flow die de verkeerde sleutel stuurt een geslaagde import van
+  // niets op — precies de stilte die dit ontwerp zichtbaar hoort te maken.
+  // Een lege array blijft geldig: dat is wat een rustige nacht oplevert.
+  const rawRows = body[options.bodyKey];
+  if (!Array.isArray(rawRows)) {
+    const problem = {
+      error: `Body key "${options.bodyKey}" is missing or not an array`,
+      expectedKey: options.bodyKey,
+      received: rawRows === undefined ? "missing" : rawRows === null ? "null" : typeof rawRows,
+      keysReceived:
+        body && typeof body === "object" && !Array.isArray(body) ? Object.keys(body) : [],
+    };
+    const summary = JSON.stringify(problem);
+    await finish({ status: "error", errorMessage: summary });
+    await markJobFailed(batchId, summary);
+    return NextResponse.json({ error: problem }, { status: 400 });
+  }
+
   const rows = normalizeImportKeys(rawRows, options.schemaKeys, options.aliases ?? {});
 
   const parsed = z.object({ rows: z.array(options.rowSchema) }).safeParse({ rows });
