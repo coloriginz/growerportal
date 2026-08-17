@@ -577,7 +577,9 @@ Standard auction quality codes (110, 120, 130, 154, 160, 170) mapped in `quality
 
 ### Commands
 ```bash
-npm run dev          # Start dev server (fails from cmd.exe: NODE_OPTIONS='...' is POSIX syntax — use bash)
+# npm run dev fails on Windows: npm shells scripts through cmd.exe, which chokes on
+# the POSIX NODE_OPTIONS='...' prefix. Bash does not help. Invoke next directly:
+NODE_OPTIONS='--max-old-space-size=2048' npx next dev
 npm run check        # Run the check scripts in scripts/checks/ (pure functions, no test framework)
 npm run build        # Production build
 npx prisma db push   # Push schema changes (NOT migrate dev)
