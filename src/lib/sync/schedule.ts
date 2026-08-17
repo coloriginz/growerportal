@@ -121,3 +121,83 @@ export function windowForEndpoint(
   const days = Number.isSafeInteger(raw) && raw > 0 ? raw : schedule.windowDays;
   return windowFor(days, now);
 }
+
+export type AdviesVeld = "windowDays" | "windowOverrides" | "intervalMin" | "endpoints" | "schema";
+export type ScheduleAdvies = { veld: AdviesVeld; melding: string };
+
+/** Kosten zijn pas na drie weken compleet; zie de meting in het ontwerp. */
+const COSTS_MINIMUM_DAGEN = 21;
+
+type AdviesInvoer = {
+  enabled: boolean;
+  intervalMin: number | null;
+  atTime: string | null;
+  endpoints: string[];
+  windowDays: number;
+  windowOverrides: unknown;
+};
+
+function vensterVoor(schedule: AdviesInvoer, endpoint: string): number {
+  const map =
+    schedule.windowOverrides && typeof schedule.windowOverrides === "object" &&
+    !Array.isArray(schedule.windowOverrides)
+      ? (schedule.windowOverrides as Record<string, unknown>)
+      : {};
+  const raw = Number(map[endpoint]);
+  return Number.isSafeInteger(raw) && raw > 0 ? raw : schedule.windowDays;
+}
+
+/**
+ * Waarschuwt bij instellingen die aantoonbaar data laten missen, zonder ze te
+ * weigeren. Blokkeren zou betekenen dat wie iets bewust anders wil het alsnog
+ * in de database gaat zetten, en dan is er helemaal geen zicht meer op.
+ *
+ * Een uitgezet schema levert geen waarschuwingen op: dat draait niet, dus het
+ * mist ook niets.
+ */
+export function windowAdvies(schedule: AdviesInvoer): ScheduleAdvies[] {
+  if (!schedule.enabled) return [];
+  const advies: ScheduleAdvies[] = [];
+
+  if (schedule.intervalMin == null && schedule.atTime == null) {
+    advies.push({
+      veld: "schema",
+      melding: "Without an interval or a time of day this schedule never runs.",
+    });
+  }
+
+  if (schedule.intervalMin != null && schedule.intervalMin < 5) {
+    advies.push({
+      veld: "intervalMin",
+      melding: "The cron ticks every five minutes, so a shorter interval changes nothing.",
+    });
+  }
+
+  if (schedule.endpoints.length === 0) {
+    advies.push({ veld: "endpoints", melding: "This schedule has nothing to fetch." });
+  }
+
+  // Hoe vaak deze ronde draait, in dagen. Een ronde op tijdstip draait dagelijks.
+  const frequentieDagen = schedule.intervalMin != null ? schedule.intervalMin / 1440 : 1;
+
+  for (const endpoint of schedule.endpoints) {
+    const venster = vensterVoor(schedule, endpoint);
+
+    if (endpoint === "costs" && venster < COSTS_MINIMUM_DAGEN) {
+      advies.push({
+        veld: "windowOverrides",
+        melding: `Costs settle weeks after delivery: one week in, 45% of the cost lines exist, two weeks in 88%. Below ${COSTS_MINIMUM_DAGEN} days this misses cost lines every run, without an error.`,
+      });
+      continue; // de frequentiecontrole hieronder voegt hier niets aan toe
+    }
+
+    if (venster < frequentieDagen * 2) {
+      advies.push({
+        veld: schedule.windowDays === venster ? "windowDays" : "windowOverrides",
+        melding: `The window for ${endpoint} is narrower than two runs. Miss one run and the window slides past deliveries that were never fetched.`,
+      });
+    }
+  }
+
+  return advies;
+}
