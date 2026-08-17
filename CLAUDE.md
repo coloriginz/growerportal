@@ -68,7 +68,7 @@ The codebase uses specific terminology that maps to the business domain:
 |-------|-----------|
 | Framework | Next.js 15 (App Router) + React 19 + TypeScript (strict) |
 | Database | PostgreSQL via Neon (serverless) |
-| ORM | Prisma 6 with `@prisma/adapter-neon` |
+| ORM | Prisma 6, plain `PrismaClient` (no driver adapter, despite what older notes said) |
 | Auth | NextAuth.js v5 beta (JWT strategy, Credentials provider) |
 | UI | Tailwind CSS 4 + shadcn/ui (Base UI primitives) |
 | Icons | Remix Icons (`@remixicon/react`) |
@@ -224,6 +224,8 @@ Role switching, supplier switching, and transporter switching are only available
 - **StagingKbtPartij** — Raw lot data from Fabric (partijen).
 - **StagingKbtOrder** — Raw transaction data from Fabric (orders/orderregels).
 - **StagingKbtShcost** — Raw salessheet cost data from Fabric.
+- **SyncJob** — One endpoint over one window, optionally scoped to a supplier. Carries `runId`/`sequence` (chain order, unique together), `status`, `attempts`, `importBatchId`.
+- **SyncSchedule** — Two rows, `intraday` and `nightly`. Interval or time of day, endpoints, window, and per-endpoint window overrides.
 
 ### Other Entities
 - **Company** — Multi-tenant company entity (Coloriginz, OZ Import, MyPeony). Determines branding.
@@ -297,9 +299,36 @@ Fabric DAX query -> Power Automate -> POST /api/import/* (JSON array)
 - All imports use **upsert** (INSERT ON CONFLICT UPDATE) via Prisma or raw SQL
 - Fabric IDs (`fabricId`, `fabricPartId`, `fabricParthdrId`, `fabricOrdregId`, `fabricShkostId`) are used as match keys
 - Costs import recalculates SalesSheet totals (totalTurnover from lots, totalCosts from cost lines, netResult = turnover - costs) via raw SQL CTE
-- Column names are matched case- and separator-insensitively by `normalizeImportKeys()` in `import-auth.ts`, so every route accepts both DAX output (`[Naam]`) and raw SQL warehouse columns (`kost_naam`). Fields whose name differs beyond spelling get an explicit alias per route
+- Column names are matched case- and separator-insensitively by `normalizeImportKeys()` in `import-auth.ts`, so every route accepts DAX output (`[Naam]`), raw SQL warehouse columns (`kost_naam`) and the XML-escaped form the SQL Server connector produces for names with spaces (`Shkost_x0020_ID`). Fields whose name differs beyond spelling get an explicit alias per route
 - Dutch decimal format in Fabric ("42,39") — parsed with `parseFloat(str.replace(",", "."))`
 - Each import creates an ImportBatch record for monitoring
+
+### Portal-driven sync (replaces the Power Automate schedule)
+
+The portal decides when to sync and builds the SQL itself; Power Automate only executes it.
+
+```
+Vercel Cron (every 5 min) -> POST /api/sync/tick
+   reads SyncSchedule, queues SyncJobs in chain order, dispatches one at a time
+   -> POST <PA_WEBHOOK_FETCH_URL> { env, endpoint, batchId, query }   -> 202
+      PA runs the SQL, posts rows to <base for env>/api/import/<endpoint>
+   -> the import route reuses batchId and marks the SyncJob done
+```
+
+- **Chain order `suppliers -> growers -> lots -> orders -> costs` is enforced by the queue**, not by convention. The lots import silently drops partijen whose supplier does not exist; that is how COLXROOD and COLXBAK lost 317 salessheets.
+- **Two schedules**, rows in `SyncSchedule`: `intraday` (lots+orders, 2-day window, every 6h) and `nightly` (all five, 7 days, `windowOverrides: {costs: 28}`). Costs need a wider window because settlement runs weeks behind delivery — after one week only 45% of cost lines exist, after three weeks all of them.
+- **`windowDays` is how long the sync may be broken before data is missed for good.** The window slides past unfetched deliveries and they do not come back; a backfill is the only repair.
+- **Two Power Automate flows.** `PA_WEBHOOK_ASK_URL` answers small questions synchronously (`MIN(levering_datum)`, row counts); `PA_WEBHOOK_FETCH_URL` moves data and returns 202. Both URLs are secrets and live only in env vars. The `env` field decides which portal PA posts back to and is derived from `NEXT_PUBLIC_APP_ENV`, never from the request.
+- **Query builders live in `src/lib/sync/queries/`** as typed functions, not `.sql` files — a Vercel function cannot read arbitrary files off disk.
+- **All five import routes share `runImport()` in `src/lib/import-batch.ts`** and accept an optional `batchId`. Without one they open their own batch, so the old DAX flows keep working.
+
+### Querying Fabric
+
+- **Do not trust a Fabric column because its name fits.** Three were wrong in one day: `leverancier_contact_inkoper` is not the account manager (`leverancier_verantwoordelijke` is), `vor_omzet` is not the settlement turnover (it is `vor_aantal * afrekenprijs_per_steel`), and `inkoopfust_volume` is a trolley fraction, not the stem count (`inkoop_factuur_aantal` is). Check candidate columns against data the portal already holds.
+- **System views fail through the SQL connector**: `INFORMATION_SCHEMA.COLUMNS` and `.TABLES` both return 502. Discover columns with `SELECT TOP 1 *` and read the keys.
+- **The ask flow is for cheap questions.** A `COUNT(*)` over a full fact table times out at 504; scope every question to a supplier or a period.
+- `marts.fct_salesheets_costs` has no `rel_id_leverancier`; scope it through `parthdr_id IN (SELECT parthdr_id FROM marts.fct_partijen WHERE rel_id_leverancier = ?)`.
+- `marts.fct_orders` holds rows with all four keys null (6% over eight days, mostly `verkooptype = "Script aanpassen"`). The portal cannot place them; the query filters them out.
 
 ### Salessheet PDF Import
 
@@ -388,6 +417,7 @@ Matched PDFs are uploaded to Vercel Blob and linked via `SalesSheet.pdfDocumentI
 | `/api/import/lots` | POST | Bulk upsert lots + salessheets from Fabric |
 | `/api/import/orders` | POST | Bulk upsert transactions from Fabric |
 | `/api/import/costs` | POST | Bulk upsert salessheet costs + recalculate totals |
+| `/api/sync/tick` | GET, POST | Cron entrypoint: reap stale jobs, queue due rounds, dispatch the next job (`CRON_SECRET` bearer) |
 | `/api/shipments/import-email` | POST | Import salessheet PDFs |
 
 ### API Conventions
@@ -547,7 +577,8 @@ Standard auction quality codes (110, 120, 130, 154, 160, 170) mapped in `quality
 
 ### Commands
 ```bash
-npm run dev          # Start dev server (Turbopack)
+npm run dev          # Start dev server (fails from cmd.exe: NODE_OPTIONS='...' is POSIX syntax — use bash)
+npm run check        # Run the check scripts in scripts/checks/ (pure functions, no test framework)
 npm run build        # Production build
 npx prisma db push   # Push schema changes (NOT migrate dev)
 npx prisma generate  # Generate Prisma client (stop dev server first on Windows!)
@@ -587,10 +618,10 @@ Supplier accounts are created via admin UI with activation emails.
 ## Deployment
 
 - **Platform**: Vercel with two deployment targets
-- **Test**: Auto-deploys from `develop` branch
+- **Test**: preview deployment of the same project, auto-deploys from `develop`. **Vercel Cron only fires on production deployments, so the sync clock does not tick on test** — drive `/api/sync/tick` by hand there
 - **Production**: Deploys from `main` branch
 - **Database**: Separate Neon projects for test and production (not Neon branches)
-- `vercel.json` runs `prisma generate` before build
+- `vercel.json` holds only the cron definition; `prisma generate` runs from the `build` script in `package.json`
 - Never push directly to `main` without approval
 
 ---
@@ -632,7 +663,7 @@ Supplier accounts are created via admin UI with activation emails.
 - Import routes use separate API key, not session auth
 
 ### Known Security Considerations
-- Import API key comparison uses `!==` (timing attack vector — fix planned with `crypto.timingSafeEqual`)
+- Import API key comparison is constant-time over SHA-256 digests. `IMPORT_API_KEY_PREVIOUS` is accepted alongside `IMPORT_API_KEY` so keys can be rotated without a gap; drop it once the flows are migrated
 - Blob uploads use `access: "public"` — financial documents accessible if URL known (fix planned)
 - Fust types endpoint lacks `requireAuth()` (fix planned)
 - No rate limiting on login attempts
@@ -652,7 +683,6 @@ Full audit report in `tasks/audit.md` (11 CRITICAL, 26 HIGH, 35 MEDIUM, 18 LOW).
 - useFetch race condition — AbortController added
 
 **Remaining critical/high (see `tasks/audit.md`):**
-- Timing-safe API key comparison needed
 - Blob uploads should be private with signed URLs
 - Fust order status transitions not validated
 - Fust invoice charges can be created twice
