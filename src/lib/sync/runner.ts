@@ -1,6 +1,6 @@
 import { randomUUID } from "crypto";
 import { prisma } from "@/lib/db";
-import { isDue, windowFor, type ScheduleState } from "./schedule";
+import { isDue, windowForEndpoint, type ScheduleState } from "./schedule";
 import { inChainOrder, isSyncEndpoint, type SyncEndpoint } from "./types";
 import { buildQuery } from "./queries";
 import { fetchInto, describeError, DispatchError } from "./dispatch";
@@ -16,13 +16,12 @@ const MAX_ATTEMPTS = 3;
  * Retourneert het aantal aangemaakte jobs.
  */
 export async function enqueueRun(
-  schedule: ScheduleState & { endpoints: string[] },
+  schedule: ScheduleState & { endpoints: string[]; windowOverrides?: unknown },
   now: Date
 ): Promise<number> {
   const endpoints = inChainOrder(schedule.endpoints);
   if (endpoints.length === 0) return 0;
 
-  const window = windowFor(schedule.windowDays, now);
   const runId = randomUUID();
 
   // In één transactie: valt het proces tussen beide schrijfacties om, dan staan
@@ -30,14 +29,19 @@ export async function enqueueRun(
   // ronde nog eens klaar.
   await prisma.$transaction(async (tx) => {
     await tx.syncJob.createMany({
-      data: endpoints.map((endpoint, index) => ({
-        runId,
-        sequence: index,
-        endpoint,
-        windowFrom: window.from,
-        windowTo: window.to,
-        source: schedule.name === "nightly" ? "nightly" : "schedule",
-      })),
+      // Het venster staat gematerialiseerd op de job, dus een retry haalt exact
+      // hetzelfde op. Per endpoint berekend: costs kijkt verder terug dan de rest.
+      data: endpoints.map((endpoint, index) => {
+        const window = windowForEndpoint(schedule, endpoint, now);
+        return {
+          runId,
+          sequence: index,
+          endpoint,
+          windowFrom: window.from,
+          windowTo: window.to,
+          source: schedule.name === "nightly" ? "nightly" : "schedule",
+        };
+      }),
     });
 
     await tx.syncSchedule.update({

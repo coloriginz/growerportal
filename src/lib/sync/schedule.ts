@@ -96,3 +96,28 @@ export function windowFor(windowDays: number, now: Date): QueryWindow {
 
   return { from, to };
 }
+
+/**
+ * Het venster voor één endpoint binnen een ronde. Valt terug op windowDays van
+ * de ronde; een uitzondering in windowOverrides gaat voor.
+ *
+ * Kosten hebben een breder venster nodig dan partijen en orderregels: die
+ * ontstaan bij levering, kosten bij afrekenen — en dat gebeurt weken later.
+ */
+export function windowForEndpoint(
+  schedule: { windowDays: number; windowOverrides?: unknown },
+  endpoint: string,
+  now: Date
+): QueryWindow {
+  const overrides =
+    schedule.windowOverrides &&
+    typeof schedule.windowOverrides === "object" &&
+    !Array.isArray(schedule.windowOverrides)
+      ? (schedule.windowOverrides as Record<string, unknown>)
+      : {};
+  const raw = Number(overrides[endpoint]);
+  // Een onbruikbare waarde valt terug op het venster van de ronde in plaats van
+  // te gooien: een typefout in de uitzonderingskaart mag de sync niet stilzetten.
+  const days = Number.isSafeInteger(raw) && raw > 0 ? raw : schedule.windowDays;
+  return windowFor(days, now);
+}

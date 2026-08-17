@@ -1,4 +1,4 @@
-import { isDue, windowFor } from "../../src/lib/sync/schedule";
+import { isDue, windowFor, windowForEndpoint } from "../../src/lib/sync/schedule";
 
 let failures = 0;
 function check(label: string, condition: boolean, detail?: string) {
@@ -73,6 +73,35 @@ check(
   "venster kijkt 45 dagen terug",
   w.from.toISOString().slice(0, 10) === "2026-07-01",
   w.from.toISOString()
+);
+
+// Vensters per endpoint: costs kijkt verder terug omdat afrekenen weken na
+// leveren gebeurt.
+const nu = new Date("2026-08-17T10:00:00Z");
+const rond = { windowDays: 7, windowOverrides: { costs: 28 } };
+
+const l = windowForEndpoint(rond, "lots", nu);
+const c = windowForEndpoint(rond, "costs", nu);
+check(
+  "lots krijgt het venster van de ronde",
+  l.from.toISOString().slice(0, 10) === "2026-08-10",
+  l.from.toISOString()
+);
+check(
+  "costs krijgt de uitzondering",
+  c.from.toISOString().slice(0, 10) === "2026-07-20",
+  c.from.toISOString()
+);
+check("beide eindigen op hetzelfde moment", l.to.getTime() === c.to.getTime());
+check(
+  "onbruikbare uitzondering valt terug op de ronde",
+  windowForEndpoint({ windowDays: 7, windowOverrides: { costs: "veel" } }, "costs", nu).from.getTime() ===
+    l.from.getTime()
+);
+check(
+  "geen uitzonderingskaart is geldig",
+  windowForEndpoint({ windowDays: 7, windowOverrides: null }, "costs", nu).from.getTime() ===
+    l.from.getTime()
 );
 
 process.exit(failures ? 1 : 0);

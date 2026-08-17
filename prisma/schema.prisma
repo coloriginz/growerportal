@@ -970,4 +970,9 @@ model SyncSchedule {
   endpoints   String[]
   windowDays  Int       // rollend venster; moet ruimer zijn dan de tijd tussen twee nachtrondes, anders verdwijnen partijen van nieuwe leveranciers
   lastRunAt   DateTime?
+
+  /// Venster per endpoint waar het afwijkt van windowDays, bv. {"costs": 28}.
+  /// Kosten hebben een breder venster nodig omdat afrekenen weken na leveren
+  /// gebeurt; partijen en orderregels ontstaan bij levering en hebben dat niet.
+  windowOverrides Json?
 }

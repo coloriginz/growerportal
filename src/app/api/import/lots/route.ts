@@ -3,6 +3,10 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { runImport } from "@/lib/import-batch";
 
+// Vercel kapt een functie zonder dit af op de standaardlimiet; de lots- en
+// orders-import over een breed venster halen die niet.
+export const maxDuration = 300;
+
 const partijSchema = z.object({
   part_id: z.number(),
   parthdr_id: z.number(),
