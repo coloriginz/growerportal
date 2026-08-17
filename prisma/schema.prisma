@@ -937,3 +937,42 @@ model StagingKbtShcost {
   @@index([shkostId])
   @@index([importBatchId])
 }
+
+// ─── SYNC ENGINE (Fabric sync jobs & schedules) ─────────
+
+model SyncJob {
+  id               String    @id @default(uuid())
+  runId            String
+  sequence         Int
+  endpoint         String    // "suppliers", "growers", "lots", "orders", "costs"
+  windowFrom       DateTime
+  windowTo         DateTime
+  supplierFabricId Int?      // rel_id_leverancier; alleen gevuld bij een backfill voor één leverancier
+  source           String    // "schedule", "nightly", "backfill"
+  status           String    @default("pending") // "pending", "dispatched", "done", "failed", "cancelled"
+  attempts         Int       @default(0)
+  importBatchId    String?
+  lastError        String?
+  createdAt        DateTime  @default(now())
+  dispatchedAt     DateTime?
+  completedAt      DateTime?
+
+  @@index([status, createdAt])
+  @@unique([runId, sequence])
+  @@index([importBatchId])
+}
+
+model SyncSchedule {
+  name        String    @id
+  enabled     Boolean   @default(true)
+  intervalMin Int?
+  atTime      String?   // nachtronde, "03:00" in Europe/Amsterdam — niet UTC
+  endpoints   String[]
+  windowDays  Int       // rollend venster; moet ruimer zijn dan de tijd tussen twee nachtrondes, anders verdwijnen partijen van nieuwe leveranciers
+  lastRunAt   DateTime?
+
+  /// Venster per endpoint waar het afwijkt van windowDays, bv. {"costs": 28}.
+  /// Kosten hebben een breder venster nodig omdat afrekenen weken na leveren
+  /// gebeurt; partijen en orderregels ontstaan bij levering en hebben dat niet.
+  windowOverrides Json?
+}

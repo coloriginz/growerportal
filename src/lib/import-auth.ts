@@ -1,9 +1,28 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createHash, timingSafeEqual } from "crypto";
+
+/**
+ * Vergelijkt twee sleutels in constante tijd. De vergelijking loopt over de
+ * SHA-256-digests en niet over de sleutels zelf, want `timingSafeEqual` eist
+ * gelijke lengtes — en een lengtecontrole vooraf zou juist verraden hoe lang de
+ * echte sleutel is.
+ */
+function sleutelsGelijk(a: string, b: string): boolean {
+  const ha = createHash("sha256").update(a).digest();
+  const hb = createHash("sha256").update(b).digest();
+  return timingSafeEqual(ha, hb);
+}
 
 /**
  * Validate import API key from request header.
- * Set IMPORT_API_KEY in environment variables.
  * Power Automate sends: Authorization: Bearer <key>
+ *
+ * Twee sleutels worden geaccepteerd: `IMPORT_API_KEY` en, als die gezet is,
+ * `IMPORT_API_KEY_PREVIOUS`. Dat maakt roteren mogelijk zonder onderbreking:
+ * zet de nieuwe sleutel als IMPORT_API_KEY en de oude als PREVIOUS, werk daarna
+ * de flows één voor één om, en haal PREVIOUS pas weg als ze allemaal over zijn.
+ * Zonder die overlap is er altijd een moment waarop de flow een sleutel stuurt
+ * die de portal niet kent, en op productie draaien de oude DAX-flows nog.
  */
 export function requireImportAuth(request: NextRequest): NextResponse | null {
   const apiKey = process.env.IMPORT_API_KEY;
@@ -20,7 +39,9 @@ export function requireImportAuth(request: NextRequest): NextResponse | null {
   }
 
   const token = authHeader.replace(/^Bearer\s+/i, "");
-  if (token !== apiKey) {
+  const previous = process.env.IMPORT_API_KEY_PREVIOUS;
+  const geldig = sleutelsGelijk(token, apiKey) || (!!previous && sleutelsGelijk(token, previous));
+  if (!geldig) {
     return NextResponse.json({ error: "Invalid API key" }, { status: 401 });
   }
 
@@ -34,16 +55,27 @@ export function requireImportAuth(request: NextRequest): NextResponse | null {
  * comes from. A DAX query wraps names in brackets, the SQL warehouse returns
  * the raw column, and the schemas here were written in a third style again:
  *
- *   "[Shkost ID]"  (DAX)  ->  shkostid
- *   "shkost_id"    (SQL)  ->  shkostid
- *   "Shkost ID"    (schema)  ->  shkostid
+ *   "[Shkost ID]"       (DAX)     ->  shkostid
+ *   "shkost_id"         (SQL)     ->  shkostid
+ *   "Shkost_x0020_ID"   (XML)     ->  shkostid
+ *   "Shkost ID"         (schema)  ->  shkostid
  *
- * Stripping separators and case is enough to make those meet. Fields that are
- * genuinely named differently need an explicit alias — see IMPORT_ALIASES in
- * the route that owns them.
+ * The XML form appears when a column name containing a space passes through a
+ * step that encodes it as an XML element name: a space becomes `_x0020_`, the
+ * standard `_xHHHH_` escape. Those are decoded first, because `x0020` would
+ * otherwise survive as literal text and never match anything.
+ *
+ * After that, stripping separators and case is enough to make the spellings
+ * meet. Fields that are genuinely named differently need an explicit alias —
+ * see the alias map in the route that owns them.
  */
 function canonicalKey(key: string): string {
-  return key.replace(/[[\]\s_/.-]/g, "").toLowerCase();
+  return key
+    .replace(/_x([0-9a-fA-F]{4})_/g, (_, hex: string) =>
+      String.fromCharCode(parseInt(hex, 16))
+    )
+    .replace(/[[\]\s_/.-]/g, "")
+    .toLowerCase();
 }
 
 /**
