@@ -16,8 +16,17 @@ type Handler<Row> = (
 
 type Options<Row> = {
   endpoint: string;
-  /** De sleutel waaronder de rijen in de body staan, bv. "costs". */
-  bodyKey: string;
+  /**
+   * De sleutel waaronder de rijen in de body staan, bv. "costs". Meerdere
+   * waarden mag: dan wordt de eerste gebruikt die een array bevat.
+   *
+   * Dat is nodig omdat de sleutel bij één endpoint afwijkt van de endpoint-naam.
+   * De lots-route heet `lots` maar verwachtte alleen `partijen`, een naam uit de
+   * DAX-tijd. De portal-gestuurde sync bouwt de sleutel op uit de endpoint-naam
+   * en stuurt dus `lots`. Beide accepteren houdt de oude flows werkend zonder de
+   * nieuwe te breken.
+   */
+  bodyKey: string | readonly string[];
   rowSchema: z.ZodType<Row>;
   schemaKeys: readonly string[];
   aliases?: Readonly<Record<string, readonly string[]>>;
@@ -72,12 +81,19 @@ export async function runImport<Row>(
   // levert een flow die de verkeerde sleutel stuurt een geslaagde import van
   // niets op — precies de stilte die dit ontwerp zichtbaar hoort te maken.
   // Een lege array blijft geldig: dat is wat een rustige nacht oplevert.
-  const rawRows = body[options.bodyKey];
+  const accepted = Array.isArray(options.bodyKey) ? options.bodyKey : [options.bodyKey];
+  const usedKey = accepted.find((key) => Array.isArray(body[key]));
+  const rawRows = usedKey === undefined ? undefined : body[usedKey];
   if (!Array.isArray(rawRows)) {
     const problem = {
-      error: `Body key "${options.bodyKey}" is missing or not an array`,
-      expectedKey: options.bodyKey,
-      received: rawRows === undefined ? "missing" : rawRows === null ? "null" : typeof rawRows,
+      error: `Body key ${accepted.map((k) => `"${k}"`).join(" or ")} is missing or not an array`,
+      expectedKey: accepted.length === 1 ? accepted[0] : accepted,
+      received: accepted.some((k) => k in body)
+        ? accepted
+            .filter((k) => k in body)
+            .map((k) => `${k}: ${body[k] === null ? "null" : typeof body[k]}`)
+            .join(", ")
+        : "missing",
       keysReceived:
         body && typeof body === "object" && !Array.isArray(body) ? Object.keys(body) : [],
     };

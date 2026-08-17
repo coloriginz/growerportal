@@ -54,7 +54,10 @@ function deriveArticleGroup(productName: string): string {
 export async function POST(request: NextRequest) {
   return runImport(request, {
     endpoint: "lots",
-    bodyKey: "partijen",
+    // "partijen" is de naam die de DAX-flows sturen; "lots" die de
+    // portal-gestuurde sync gebruikt, want die bouwt de sleutel op uit de
+    // endpoint-naam. Beide moeten werken zolang de oude flows nog draaien.
+    bodyKey: ["partijen", "lots"],
     rowSchema: partijSchema,
     schemaKeys: partijKeys,
     aliases: partijAliases,
