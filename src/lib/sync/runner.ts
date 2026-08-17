@@ -8,6 +8,13 @@ import { fetchInto, describeError, DispatchError } from "./dispatch";
 /** Een job die langer dan dit onderweg is, is dood. */
 const STALE_MINUTES = 15;
 
+/**
+ * Een batch zonder job die langer dan dit op 'running' staat, is dood. Ruim
+ * boven de 300 seconden functielimiet van de import-routes, dus een import die
+ * nog echt aan het werk is raakt hij niet.
+ */
+const ORPHAN_BATCH_MINUTES = 60;
+
 /** Zoveel pogingen krijgt een job voordat hij zijn ronde meesleurt. */
 const MAX_ATTEMPTS = 3;
 
@@ -223,7 +230,9 @@ async function cancelRestOfRun(jobId: string): Promise<void> {
  * gevallen, de SQL liep vast, of de terugpost kwam niet aan. Zonder dit blijft
  * een batch eeuwig op 'running' staan — precies het gat dat er nu zit.
  */
-export async function reapStaleJobs(now: Date): Promise<number> {
+export async function reapStaleJobs(
+  now: Date
+): Promise<{ reaped: number; orphanBatches: number }> {
   const cutoff = new Date(now.getTime() - STALE_MINUTES * 60000);
   const stale = await prisma.syncJob.findMany({
     where: { status: "dispatched", dispatchedAt: { lt: cutoff } },
@@ -251,12 +260,39 @@ export async function reapStaleJobs(now: Date): Promise<number> {
     if (!retry) await cancelRestOfRun(job.id);
   }
 
-  return stale.length;
+  return { reaped: stale.length, orphanBatches: await reapOrphanBatches(now) };
+}
+
+/**
+ * De lus hierboven vindt vastlopers via SyncJob.importBatchId. Een batch waar
+ * nooit een job bij hoorde — een handmatige import, of een oude flow die is
+ * omgevallen — blijft daardoor eeuwig op 'running' staan en telt mee als
+ * "loopt nog" in het admin-scherm. Die zet dit op 'error'.
+ *
+ * De leeftijdsgrens is de hele veiligheid: hij mag geen import raken die nog
+ * bezig is. Daarom ORPHAN_BATCH_MINUTES ruim boven de functielimiet, en de
+ * NOT EXISTS zodat een batch waar wél een job bij hoort altijd van de lus
+ * hierboven blijft.
+ */
+async function reapOrphanBatches(now: Date): Promise<number> {
+  const cutoff = new Date(now.getTime() - ORPHAN_BATCH_MINUTES * 60000);
+  const message = `Opgeruimd: stond langer dan ${ORPHAN_BATCH_MINUTES} minuten op 'running' zonder dat er ooit een afronding kwam`;
+
+  return prisma.$executeRaw`
+    UPDATE "ImportBatch" b SET
+      status = 'error',
+      "errorMessage" = ${message},
+      "completedAt" = ${now}
+    WHERE b.status = 'running'
+      AND b."startedAt" < ${cutoff}
+      AND NOT EXISTS (
+        SELECT 1 FROM "SyncJob" j WHERE j."importBatchId" = b.id
+      )`;
 }
 
 /** Eén tick: opruimen, kijken of er een ronde due is, en de volgende versturen. */
 export async function tick(now: Date = new Date()) {
-  const reaped = await reapStaleJobs(now);
+  const { reaped, orphanBatches } = await reapStaleJobs(now);
 
   // De volgorde bepaalt welke ronde als eerste in de wachtrij belandt. De
   // nachtronde gaat voor: die brengt suppliers en growers mee, en zonder die
@@ -284,5 +320,5 @@ export async function tick(now: Date = new Date()) {
     console.warn(`[sync] job ${failed} (${job?.endpoint}) gefaald: ${job?.lastError}`);
   }
 
-  return { reaped, enqueued, dispatched, failed };
+  return { reaped, orphanBatches, enqueued, dispatched, failed };
 }

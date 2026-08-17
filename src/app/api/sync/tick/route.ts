@@ -22,7 +22,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ dryRun: true, reason: "development" });
   }
 
-  // tick() geeft { reaped, enqueued, dispatched, failed } terug. Die laatste is
+  // tick() geeft { reaped, orphanBatches, enqueued, dispatched, failed } terug. Die laatste is
   // er zodat een cron-run zichtbaar maakt dat er zojuist iets hard misging, in
   // plaats van dat "niets verstuurd" en "verzending mislukt" er hetzelfde uitzien.
   const result = await tick();
