@@ -15,12 +15,18 @@
  *   8. grower_all.csv    → POST /api/import/growers
  */
 
+import "dotenv/config";
 import { createReadStream } from "fs";
 import { parse } from "csv-parse";
 import path from "path";
 
-const API_BASE = "https://growerportal.test.apps.coloriginz.com";
-const API_KEY = "grp_import_2026_kX9mQ4wT7nR2vL8pF3jH6cY1dA5sE0bG";
+// Sleutel en doel-URL komen uit de omgeving. De sleutel stond hier hardgecodeerd
+// en zit daardoor voorgoed in de git-historie; dat is de reden dat hij geroteerd
+// is. De URL erbij, zodat dit script niet stilzwijgend naar test schrijft terwijl
+// je productie bedoelde.
+const API_BASE = process.env.API_BASE ?? "https://growerportal.test.apps.coloriginz.com";
+const API_KEY = process.env.IMPORT_API_KEY;
+if (!API_KEY) throw new Error("IMPORT_API_KEY ontbreekt — zet hem in .env");
 const BATCH_SIZE = 10000;
 const INPUT_DIR = path.resolve(__dirname, "../private_input/PBI/backfill");
 
