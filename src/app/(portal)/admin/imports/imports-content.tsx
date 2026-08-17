@@ -70,7 +70,7 @@ interface ImportBatchResponse {
   };
 }
 
-const ENDPOINTS = ["suppliers", "lots", "orders", "costs"] as const;
+const ENDPOINTS = ["suppliers", "growers", "lots", "orders", "costs"] as const;
 
 function timeAgo(dateStr: string): string {
   const now = Date.now();

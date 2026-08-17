@@ -149,6 +149,17 @@ async function upsertLots(partijen: Partij[]) {
     lotUpdated = 0;
   let skipped = 0;
 
+  /**
+   * Welke leveranciers hun partijen zien verdwijnen omdat ze nog niet in de
+   * portal bestaan. Dit overslaan gebeurde tot nu toe zonder enig spoor, en zo
+   * zijn COLXROOD en COLXBAK 317 salessheets kwijtgeraakt: de import meldde
+   * netjes "success" en niemand kon zien wát er niet was aangekomen.
+   */
+  const skippedByRelId = new Map<number, number>();
+  const noteSkipped = (relId: number, aantal: number) => {
+    skippedByRelId.set(relId, (skippedByRelId.get(relId) ?? 0) + aantal);
+  };
+
   const ssUpdateData: { fabricParthdrId: number; deliveryDate: string }[] = [];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const ssCreateData: any[] = [];
@@ -158,6 +169,7 @@ async function upsertLots(partijen: Partij[]) {
     const supplierId = supplierMap.get(firstRow.rel_id_leverancier);
     if (!supplierId) {
       skipped += rows.length;
+      noteSkipped(firstRow.rel_id_leverancier, rows.length);
       continue;
     }
 
@@ -519,6 +531,7 @@ async function upsertLots(partijen: Partij[]) {
       const supplierId = supplierMap.get(row.rel_id_leverancier);
       if (!supplierId) {
         correctionsSkipped++;
+        noteSkipped(row.rel_id_leverancier, 1);
         continue;
       }
 
@@ -596,6 +609,12 @@ async function upsertLots(partijen: Partij[]) {
       salesSheets: { created: ssCreated, updated: ssUpdated },
       lots: { created: lotCreated, updated: lotUpdated },
       corrections: { created: correctionsCreated, deleted: correctionsDeleted, skipped: correctionsSkipped },
+      // Per rel_id hoeveel er is weggegooid omdat de leverancier ontbrak. De
+      // drukste vijftig, want bij een backfill over jaren kunnen dit er honderden
+      // zijn en de melding staat in een databasekolom.
+      skippedSuppliers: Object.fromEntries(
+        [...skippedByRelId.entries()].sort((a, b) => b[1] - a[1]).slice(0, 50)
+      ),
     },
     extra: {
       salesSheets: { created: ssCreated, updated: ssUpdated },
