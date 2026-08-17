@@ -169,6 +169,21 @@ check(
 );
 
 check(
+  "een te smalle uitzondering wijst naar windowOverrides, ook als hij gelijk is aan windowDays",
+  velden(
+    windowAdvies({
+      ...basis,
+      atTime: null,
+      intervalMin: 1440,
+      endpoints: ["lots"],
+      windowDays: 1,
+      windowOverrides: { lots: 1 },
+    })
+  ).includes("windowOverrides"),
+  "de waarschuwing hoort bij het veld dat de waarde levert, niet bij het veld met hetzelfde getal"
+);
+
+check(
   "een uitgezet schema waarschuwt nergens over",
   windowAdvies({ ...basis, enabled: false, endpoints: [], windowDays: 1 }).length === 0
 );

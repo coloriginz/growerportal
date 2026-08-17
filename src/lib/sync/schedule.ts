@@ -137,14 +137,25 @@ type AdviesInvoer = {
   windowOverrides: unknown;
 };
 
-function vensterVoor(schedule: AdviesInvoer, endpoint: string): number {
+/**
+ * Het venster voor één endpoint, plus waar het vandaan komt. Die herkomst is
+ * nodig om de waarschuwing bij het juiste invoerveld te zetten: afleiden uit
+ * "is de waarde gelijk aan windowDays" gaat mis zodra iemand een uitzondering
+ * instelt die toevallig hetzelfde getal heeft.
+ */
+function vensterVoor(
+  schedule: AdviesInvoer,
+  endpoint: string
+): { dagen: number; uitUitzondering: boolean } {
   const map =
     schedule.windowOverrides && typeof schedule.windowOverrides === "object" &&
     !Array.isArray(schedule.windowOverrides)
       ? (schedule.windowOverrides as Record<string, unknown>)
       : {};
   const raw = Number(map[endpoint]);
-  return Number.isSafeInteger(raw) && raw > 0 ? raw : schedule.windowDays;
+  return Number.isSafeInteger(raw) && raw > 0
+    ? { dagen: raw, uitUitzondering: true }
+    : { dagen: schedule.windowDays, uitUitzondering: false };
 }
 
 /**
@@ -181,7 +192,7 @@ export function windowAdvies(schedule: AdviesInvoer): ScheduleAdvies[] {
   const frequentieDagen = schedule.intervalMin != null ? schedule.intervalMin / 1440 : 1;
 
   for (const endpoint of schedule.endpoints) {
-    const venster = vensterVoor(schedule, endpoint);
+    const { dagen: venster, uitUitzondering } = vensterVoor(schedule, endpoint);
 
     if (endpoint === "costs" && venster < COSTS_MINIMUM_DAGEN) {
       advies.push({
@@ -193,7 +204,7 @@ export function windowAdvies(schedule: AdviesInvoer): ScheduleAdvies[] {
 
     if (venster < frequentieDagen * 2) {
       advies.push({
-        veld: schedule.windowDays === venster ? "windowDays" : "windowOverrides",
+        veld: uitUitzondering ? "windowOverrides" : "windowDays",
         melding: `The window for ${endpoint} is narrower than two runs. Miss one run and the window slides past deliveries that were never fetched.`,
       });
     }
