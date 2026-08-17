@@ -108,6 +108,13 @@ check(
 const ordersPlain = ordersQuery(sampleWindow);
 check("orders: bevat de brontabel", ordersPlain.includes("marts.fct_orders"));
 check(
+  "orders: weert regels zonder partij",
+  /part_id IS NOT NULL/.test(ordersPlain) &&
+    /parthdr_id IS NOT NULL/.test(ordersPlain) &&
+    /rel_id_kweker IS NOT NULL/.test(ordersPlain) &&
+    /rel_id_leverancier IS NOT NULL/.test(ordersPlain)
+);
+check(
   "orders: venster begint inclusief op _datum_key_vertrek",
   /_datum_key_vertrek\s*>=\s*'2026-07-01'/.test(ordersPlain)
 );
