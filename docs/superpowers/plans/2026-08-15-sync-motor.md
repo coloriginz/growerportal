@@ -1999,14 +1999,25 @@ De sleutel staat hardgecodeerd in `scripts/backfill.ts:23` en daarmee in de git-
 node -e "console.log('grp_import_' + require('crypto').randomBytes(24).toString('hex'))"
 ```
 
-- [ ] **Step 2: Zet hem overal tegelijk om**
+- [ ] **Step 2: Roteer met twee geldige sleutels naast elkaar**
 
-In deze volgorde, zodat er geen moment is waarop de flow een sleutel stuurt die de portal niet kent:
+> **Correctie, 17 augustus.** Hier stond een opeenvolgende omzetting: eerst Vercel, dan de flow, dan de rest. Die werkt niet zonder onderbreking. Zet je de portal eerst om, dan stuurt de flow een sleutel die hij niet meer kent; zet je de flow eerst om, dan weigert de portal hem. Op productie draaien de oude DAX-flows nog, dus dat gat is echt.
 
-1. Vercel test → `IMPORT_API_KEY` → redeploy afwachten
-2. de HTTP-actie in de flow "sync — haal op" → header `Authorization: Bearer <nieuw>`
-3. lokale `.env`
-4. Vercel productie en de oude DAX-flows, zolang die nog draaien
+`requireImportAuth` accepteert daarom `IMPORT_API_KEY` en, zolang die gezet is, `IMPORT_API_KEY_PREVIOUS`. De vergelijking loopt in constante tijd over SHA-256-digests — hashen omzeilt de eis van gelijke lengtes van `timingSafeEqual` zonder een lengtecontrole die juist verraadt hoe lang de echte sleutel is. Dertien controles in `scripts/checks/import-auth.ts` dekken alle drie de fases.
+
+1. Nieuwe sleutel als `IMPORT_API_KEY` in Vercel, oude als `IMPORT_API_KEY_PREVIOUS`, redeploy afwachten. Beide werken nu.
+2. De flows één voor één omzetten, in eigen tempo.
+3. `IMPORT_API_KEY_PREVIOUS` weghalen en opnieuw deployen. **Deze stap is de enige die niet vergeten mag worden**, want zolang die variabele bestaat blijft de gelekte sleutel geldig en heeft de rotatie geen zin gehad.
+
+**Alleen test hoeft geroteerd te worden.** De gelekte sleutel — hardgecodeerd in `scripts/backfill.ts`, en daarmee in de git-historie, de flowdefinities en een gesprekslog — was de testsleutel. Productie heeft een andere en die is nergens langsgekomen. Dat is precies de opbrengst van gescheiden sleutels per omgeving, en de reden om dat zo te houden.
+
+**Houd ze verschillend, ook nu er één paar flows beide omgevingen bedient.** De flow kiest de sleutel dan op dezelfde manier als de base-URL, met een `Compose` naast `BaseUrl`:
+
+```
+@if(equals(triggerBody()?['env'], 'production'), '<productiesleutel>', '<testsleutel>')
+```
+
+Daarmee is de sleutel een tweede, onafhankelijke controle op de routeringsbeslissing: gaat `env` ooit mis, dan volgt een 401 in plaats van dat testdata stilzwijgend in productie belandt en netjes wordt geaccepteerd.
 
 - [ ] **Step 3: Haal de sleutel uit het backfill-script**
 
