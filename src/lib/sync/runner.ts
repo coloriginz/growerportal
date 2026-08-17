@@ -46,7 +46,7 @@ export async function enqueueRun(
           endpoint,
           windowFrom: window.from,
           windowTo: window.to,
-          source: schedule.name === "nightly" ? "nightly" : "schedule",
+          source: schedule.name,
         };
       }),
     });
