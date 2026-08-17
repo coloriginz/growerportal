@@ -1658,15 +1658,183 @@ git commit -m "feat: add query builders for remaining four endpoints"
 
 ---
 
-### Task 12: De blinde vlekken dichten
+### Task 12: Vensters per endpoint, en de blinde vlekken dichten
 
-Twee dingen die nu onzichtbaar zijn en die vóór de backfill uit plan 2 opgelost moeten zijn.
+> **Uitgebreid op 17 augustus** na de eerste volledige ketting op test. Die liep vast op `lots`, en dat legde twee dingen bloot die hier thuishoren.
 
 **Files:**
-- Modify: `src/app/api/import/lots/route.ts`
+- Modify: `prisma/schema.prisma` (één kolom op `SyncSchedule`)
+- Modify: `src/lib/sync/schedule.ts`, `src/lib/sync/runner.ts`
+- Modify: alle vijf `src/app/api/import/*/route.ts` (`maxDuration`)
+- Modify: `src/app/api/import/lots/route.ts` (overslaan tellen)
 - Modify: `src/app/(portal)/admin/imports/imports-content.tsx:72`
+- Modify: `scripts/seed-sync-schedules.ts`
 
-- [ ] **Step 1: Tel en log het stille overslaan in de lots-import**
+#### Waarom dit erbij komt
+
+De ketting van 17 augustus deed `suppliers` (673 rijen, 874 ms) en `growers` (2800 rijen, 817 ms) vlekkeloos, en stierf toen op `lots`: batch op `running`, nul rijen ontvangen, functie afgekapt voordat er iets werd weggeschreven. Twee oorzaken.
+
+**De import-routes hebben geen `maxDuration`**, dus Vercel kapt ze af op de standaardlimiet. Bij `costs` viel dat nooit op — 4.013 rijen in 2,9 seconden — maar `lots` doet zwaarder werk per rij.
+
+**Eén venster voor de hele ketting werkt niet**, want de endpoints verschillen te veel in dichtheid en in wat ze nodig hebben. Gemeten over twee dagen, geëxtrapoleerd naar 45:
+
+| endpoint | 2 dagen | over 45 dagen | oude DAX-flow stuurde |
+|---|---|---|---|
+| partijen | 507 | ~11.400 | 553 |
+| orders | 1.799 | ~40.500 | 1.680 – 3.389 |
+| kosten | 0 | 4.141 (gemeten) | 2.156 – 2.496 |
+
+Partijen en orderregels ontstaan bij levering, dus terugkijken heeft daar weinig zin. Kosten ontstaan bij afrekenen, en dat duurt. Kostenregels per leverweek, genormaliseerd naar het aantal partijen van diezelfde week:
+
+| weken terug | regels | per partij | volledig |
+|---|---|---|---|
+| 0 | 59 | 0,02 | ~10% |
+| 1 | 409 | 0,10 | ~45% |
+| 2 | 621 | 0,19 | ~88% |
+| 3 t/m 9 | 768 – 1183 | 0,20 – 0,23 | vol |
+
+Kosten zijn dus na drie weken compleet. Een venster van 7 dagen zou daar 55% van de vorige week missen, elke nacht opnieuw, zonder één foutmelding.
+
+**Waarom geen aparte kosten-ronde.** Dat was de eerste gedachte, en het is verkeerd: `costs` in een eigen ronde betekent dat de garantie vervalt dat `lots` er eerst was. Een kostenregel waarvan de levering nog geen salessheet heeft wordt stilzwijgend overgeslagen. Het venster hoort dus bij het endpoint, niet bij de ronde — dan blijft het één ronde met de volgorde intact.
+
+**Wat `windowDays` eigenlijk betekent.** Het is het antwoord op de vraag *hoe lang mag de sync stuk zijn voordat data definitief mist*. Schuift het venster door over leveringen die nooit zijn opgehaald, dan komen die niet meer terug. Zeven dagen is dus geen technische marge maar de tijd die je hebt om een storing op te merken. Dat maakt de backfill uit plan 2 het gereedschap voor een gat dat langer duurde dan het venster.
+
+#### De doelconfiguratie
+
+| ronde | endpoints | venster | ritme |
+|---|---|---|---|
+| `intraday` | lots, orders | 2 dagen | elke 6 uur (`intervalMin: 360`) |
+| `nightly` | alle vijf, in volgorde | 7 dagen, **costs 28** | 03:00 |
+
+`short` verdwijnt; `intraday` komt ervoor in de plaats. Vaste klokstijden (10:00/16:00/22:00) zijn bewust niet gekozen: `intervalMin` bestaat al en de exacte tijden doen niet ter zake. Wordt het schuiven ooit hinderlijk, dan moet `atTime` een lijst worden — een schemawijziging plus een aanpassing aan `isDue`.
+
+- [ ] **Step 1: Zet `maxDuration` op de vijf import-routes**
+
+Bovenaan elke `src/app/api/import/*/route.ts`:
+
+```typescript
+export const maxDuration = 300;
+```
+
+Vercel Pro staat tot 300 seconden toe. Dit is de directe oorzaak dat `lots` stierf, en het geldt voor alle vijf: `orders` is qua volume de zwaarste en die is nog nooit over een breed venster gedraaid.
+
+- [ ] **Step 2: Voeg de vensteruitzondering toe aan het schema**
+
+In `prisma/schema.prisma`, op `SyncSchedule`:
+
+```prisma
+  /// Venster per endpoint waar het afwijkt van windowDays, bv. {"costs": 28}.
+  /// Kosten hebben een breder venster nodig omdat afrekenen weken na leveren
+  /// gebeurt; partijen en orderregels ontstaan bij levering en hebben dat niet.
+  windowOverrides Json?
+```
+
+Daarna `npx prisma db push` tegen de testdatabase.
+
+Een uitzonderingskaart in plaats van een venster per endpoint uitschrijven: dan blijft de regel leesbaar als "7 dagen, behalve costs".
+
+- [ ] **Step 3: Laat `windowFor` het venster per endpoint bepalen**
+
+`windowFor(windowDays, now)` in `src/lib/sync/schedule.ts` blijft bestaan zoals hij is. Voeg ernaast toe:
+
+```typescript
+/**
+ * Het venster voor één endpoint binnen een ronde. Valt terug op windowDays van
+ * de ronde; een uitzondering in windowOverrides gaat voor.
+ */
+export function windowForEndpoint(
+  schedule: { windowDays: number; windowOverrides: unknown },
+  endpoint: string,
+  now: Date
+): QueryWindow {
+  const overrides =
+    schedule.windowOverrides &&
+    typeof schedule.windowOverrides === "object" &&
+    !Array.isArray(schedule.windowOverrides)
+      ? (schedule.windowOverrides as Record<string, unknown>)
+      : {};
+  const raw = Number(overrides[endpoint]);
+  const days = Number.isSafeInteger(raw) && raw > 0 ? raw : schedule.windowDays;
+  return windowFor(days, now);
+}
+```
+
+Een onbruikbare waarde in de uitzonderingskaart valt terug op het venster van de ronde in plaats van te gooien: een typefout in het admin-scherm van plan 2 mag de sync niet stilzetten.
+
+- [ ] **Step 4: Gebruik het per job in `enqueueRun`**
+
+In `src/lib/sync/runner.ts` berekent `enqueueRun` nu één venster voor de hele ronde. Bereken het per endpoint:
+
+```typescript
+await tx.syncJob.createMany({
+  data: endpoints.map((endpoint, index) => {
+    const window = windowForEndpoint(schedule, endpoint, now);
+    return {
+      runId,
+      sequence: index,
+      endpoint,
+      windowFrom: window.from,
+      windowTo: window.to,
+      source: schedule.name === "nightly" ? "nightly" : "schedule",
+    };
+  }),
+});
+```
+
+Het venster staat daarmee nog steeds gematerialiseerd op de job, dus een retry haalt exact hetzelfde op.
+
+- [ ] **Step 5: Controleer met een script dat de vensters per endpoint verschillen**
+
+Breid `scripts/checks/schedule.ts` uit:
+
+```typescript
+import { windowForEndpoint } from "../../src/lib/sync/schedule";
+
+const nu = new Date("2026-08-17T10:00:00Z");
+const rond = { windowDays: 7, windowOverrides: { costs: 28 } };
+
+const l = windowForEndpoint(rond, "lots", nu);
+const c = windowForEndpoint(rond, "costs", nu);
+check("lots krijgt het venster van de ronde",
+  l.from.toISOString().slice(0, 10) === "2026-08-10", l.from.toISOString());
+check("costs krijgt de uitzondering",
+  c.from.toISOString().slice(0, 10) === "2026-07-20", c.from.toISOString());
+check("beide eindigen op hetzelfde moment", l.to.getTime() === c.to.getTime());
+check("onbruikbare uitzondering valt terug op de ronde",
+  windowForEndpoint({ windowDays: 7, windowOverrides: { costs: "veel" } }, "costs", nu)
+    .from.getTime() === l.from.getTime());
+check("geen uitzonderingskaart is geldig",
+  windowForEndpoint({ windowDays: 7, windowOverrides: null }, "costs", nu)
+    .from.getTime() === l.from.getTime());
+```
+
+Run: `npm run check`
+Expected: alle bestaande controles plus deze vijf op PASS
+
+- [ ] **Step 6: Zet de doelconfiguratie in het seed-script**
+
+Werk `scripts/seed-sync-schedules.ts` bij: `intraday` in plaats van `short`, en `nightly` met de nieuwe waarden. Beide op `enabled: false`, want aanzetten blijft een bewuste handeling.
+
+```typescript
+{ name: "intraday", enabled: false, intervalMin: 360,
+  endpoints: ["lots", "orders"], windowDays: 2 }
+
+{ name: "nightly", enabled: false, atTime: "03:00",
+  endpoints: ["suppliers", "growers", "lots", "orders", "costs"],
+  windowDays: 7, windowOverrides: { costs: 28 } }
+```
+
+Het script is idempotent met `update: {}`, dus bestaande regels worden niet overschreven. Verwijder de oude `short`-regel met de hand tegen de testdatabase en draai het script daarna.
+
+- [ ] **Step 7: Ruim batches op die zonder job op `running` blijven staan**
+
+`reapStaleJobs` in `src/lib/sync/runner.ts` vindt vastlopers via `SyncJob.importBatchId`. Een batch waar nooit een job bij hoorde blijft daardoor eeuwig `running`. Op test staan er tien van uit mei 2026 — oude `lots`- en `orders`-imports die op een timeout zijn omgevallen, met nul ontvangen records, en niemand heeft het in drie maanden gemerkt. Dat is exact het gat dat dit ontwerp zegt te dichten.
+
+Voeg aan `reapStaleJobs` een tweede opruimregel toe: batches die langer dan een uur op `running` staan en waar geen enkele `SyncJob` naar verwijst, gaan op `error` met een melding die zegt dat ze zijn opgeruimd omdat er nooit een afronding kwam. Een uur is ruim boven de 300 seconden functielimiet, dus een lopende import raakt hij niet.
+
+Geef het aantal opgeruimde batches terug in het resultaat van `tick()`, naast `reaped`, zodat het zichtbaar is.
+
+- [ ] **Step 8: Tel en log het stille overslaan in de lots-import**
 
 In `src/app/api/import/lots/route.ts` staat de plek waar een partij wordt overgeslagen omdat de leverancier niet bestaat (`if (!supplierId)`). Houd daar bij welke `rel_id`'s het betreft:
 
@@ -1689,7 +1857,7 @@ details: {
 
 Zonder dit herhaalt een backfill precies de fout waardoor COLXROOD en COLXBAK 317 salessheets kwijtraakten, en zie je het opnieuw niet.
 
-- [ ] **Step 2: Controleer dat het zichtbaar wordt**
+- [ ] **Step 9: Controleer dat het zichtbaar wordt**
 
 Draai een lots-ronde op test en kijk in `ImportBatch.details`:
 
@@ -1707,7 +1875,7 @@ const sql = neon(process.env.DATABASE_URL);
 
 Expected: een `skippedSuppliers`-object met `rel_id` als sleutel en het aantal overgeslagen partijen als waarde
 
-- [ ] **Step 3: Voeg growers toe aan het admin-scherm**
+- [ ] **Step 10: Voeg growers toe aan het admin-scherm**
 
 In `src/app/(portal)/admin/imports/imports-content.tsx` staat op regel 72:
 
@@ -1723,12 +1891,12 @@ const ENDPOINTS = ["suppliers", "growers", "lots", "orders", "costs"];
 
 De growers-route schrijft wel batches weg met `endpoint: "growers"`, maar die zijn nu onzichtbaar in de KPI-kaarten en het filter.
 
-- [ ] **Step 4: Controleer het scherm**
+- [ ] **Step 11: Controleer het scherm**
 
 Open `/admin/imports` op test.
 Expected: vijf KPI-kaarten in plaats van vier, met `growers` erbij en een gevulde "last sync"
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 12: Commit**
 
 ```bash
 git add src/app/api/import/lots/route.ts "src/app/(portal)/admin/imports/imports-content.tsx"
