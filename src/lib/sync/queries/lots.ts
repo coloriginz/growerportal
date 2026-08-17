@@ -23,7 +23,12 @@ SELECT
   p.art_id,
   p.reden_id_correctie,
   p.inkoop_factuur_colli     AS "Inkoopfactuur colli",
-  p.inkoopfust_volume        AS "Inkoopfactuur volume",
+  -- Niet inkoopfust_volume: dat is een fustfractie (0,053 tot 0,16) en geen
+  -- aantal stelen. De portal gebruikt dit veld als totalStems, en dat is een
+  -- geheel getal. Geverifieerd tegen zes partijen: inkoop_factuur_aantal komt
+  -- exact overeen met wat de portal heeft; de twee die afwijken zijn lager in
+  -- de portal, wat past bij toegepaste correcties.
+  p.inkoop_factuur_aantal    AS "Inkoopfactuur volume",
   p.inslag_aantal_correctie  AS "Inslag aantal correctie",
   p.facttypesub              AS "Facttype Sub"
 FROM marts.fct_partijen p

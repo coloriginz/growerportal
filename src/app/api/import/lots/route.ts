@@ -36,7 +36,14 @@ const partijKeys = Object.keys(partijSchema.shape);
 const partijAliases = {
   // The one column in marts.fct_partijen whose name differs beyond spelling.
   // The rest matches once case, spaces and underscores are ignored.
-  "Inkoopfactuur volume": ["inkoopfust_volume"],
+  //
+  // This used to point at inkoopfust_volume, which was wrong and never noticed
+  // because only the DAX flow ran and that supplied the field directly.
+  // inkoopfust_volume is a trolley fraction (0.053 to 0.16); this field feeds
+  // totalStems and invoicedVolume, both integers, so the first SQL-driven round
+  // died on "invalid input syntax for type integer: 0.16". Verified against six
+  // lots: inkoop_factuur_aantal matches what the portal already holds.
+  "Inkoopfactuur volume": ["inkoop_factuur_aantal"],
 } as const;
 
 /** Classify a Facttype Sub value into base lot or correction */
