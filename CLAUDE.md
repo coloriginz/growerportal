@@ -614,6 +614,8 @@ Supplier accounts are created via admin UI with activation emails.
 - **Database changes**: Use `prisma db push`, not `prisma migrate dev`.
 - **Emails**: Use CID inline attachments (base64 Buffer), never external image URLs.
 - `useSearchParams()` requires Suspense boundary.
+- **Zod 4, not 3**: `z.record(keySchema, valueSchema)` requires *every* key to be present. For a partial map like `windowOverrides` use `z.partialRecord()`, or a save with `{}` is rejected.
+- **Prisma `Json?` fields**: writing `null` does not type-check against the update input — use `Prisma.JsonNull` to store a JSON null, or `undefined` to leave the column alone.
 
 ---
 

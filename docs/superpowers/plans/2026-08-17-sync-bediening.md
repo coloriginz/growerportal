@@ -756,4 +756,6 @@ git commit -m "feat: show the window, round and skipped suppliers in the import 
 - De historie vertelt niet alleen wat er binnenkwam maar ook over welk venster, bij welke ronde, en welke leveranciers zijn overgeslagen
 - "Wanneer liep dit schema voor het laatst helemaal goed" is beantwoord, en dat vult het gat dat `lastRunAt` per constructie niet kon vullen
 
+**Bekende verfijning, bewust niet gedaan.** `ScheduleAdvies` draagt wel het veld waar een waarschuwing bij hoort, maar niet het endpoint. Waarschuwingen over uitzonderingen stapelen daardoor onder één kopje in plaats van onder het invoerveld van het endpoint waar ze over gaan. Met vijf endpoints en één bijzondere regel (`costs`) is dat zelden zichtbaar, en de melding noemt het endpoint zelf. Een `endpoint?: string` op `ScheduleAdvies` lost het op zodra het gaat storen.
+
 **Wat er niet in zit:** de backfill per leverancier. Die krijgt een eigen ontwerp, nu tegen een wachtrij die bediend kan worden.
