@@ -109,7 +109,7 @@ tabel hierboven.
 **Interfaces:**
 - Produces: `lastImportBatchId String?` op `Lot`, `Transaction`, `Grower`, `SalesSheetCost`, met index. Taken 2 tot en met 5 vullen hem.
 
-- [ ] **Step 1: Voeg het veld toe aan de vier modellen**
+- [x] **Step 1: Voeg het veld toe aan de vier modellen**
 
 Op elk van `Lot`, `Transaction`, `Grower` en `SalesSheetCost`:
 
@@ -122,7 +122,7 @@ Op elk van `Lot`, `Transaction`, `Grower` en `SalesSheetCost`:
   @@index([lastImportBatchId])
 ```
 
-- [ ] **Step 2: Push het schema naar de testdatabase**
+- [x] **Step 2: Push het schema naar de testdatabase**
 
 Controleer eerst wat er zou gebeuren, want deze tabellen bevatten echte data:
 
@@ -135,7 +135,7 @@ Expected: uitsluitend `ALTER TABLE ... ADD COLUMN` en `CREATE INDEX`. **Zie je e
 Daarna: `npx prisma db push`
 Expected: `Your database is now in sync with your Prisma schema.`
 
-- [ ] **Step 3: Controleer dat de vier kolommen er staan**
+- [x] **Step 3: Controleer dat de vier kolommen er staan**
 
 ```bash
 node -e "
@@ -151,7 +151,7 @@ const sql=neon(process.env.DATABASE_URL);
 
 Expected: `Grower, Lot, SalesSheetCost, Transaction`
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add prisma/schema.prisma
@@ -168,11 +168,11 @@ git commit -m "feat: add lastImportBatchId to the four imported models"
 **Interfaces:**
 - Consumes: `lastImportBatchId` uit taak 1, `batchId` uit de handler-signatuur van `runImport`
 
-- [ ] **Step 1: Neem het batch-id aan**
+- [x] **Step 1: Neem het batch-id aan**
 
 De `POST` roept nu aan met `handler: async (partijen) => ...`. Maak daar `async (partijen, batchId) =>` van en geef het door aan `upsertLots(partijen, batchId)`.
 
-- [ ] **Step 2: Zet het in de Lot-upsert**
+- [x] **Step 2: Zet het in de Lot-upsert**
 
 De rauwe `INSERT INTO "Lot"` (rond regel 443) wordt aangeroepen met `$executeRawUnsafe(query, JSON.stringify(lotJsonData))`. Het batch-id is voor de hele aanroep hetzelfde, dus het hoeft niet in elke JSON-rij — geef het als tweede parameter mee.
 
@@ -186,7 +186,7 @@ En de aanroep wordt `$executeRawUnsafe(query, JSON.stringify(lotJsonData), batch
 
 Die derde plek is de belangrijkste en de makkelijkste om te vergeten: zonder die regel krijgt een bijgewerkte partij de herkomst van de ronde die hem ooit aanmaakte, niet die van de ronde die hem zojuist aanraakte.
 
-- [ ] **Step 3: Verifieer tegen een echte ronde**
+- [x] **Step 3: Verifieer tegen een echte ronde**
 
 Start de dev-server, log in als admin, en druk op **Run now** bij `intraday` in de Schema's-tab. Duw de wachtrij door met **Advance queue** tot de lots-job klaar is.
 
@@ -208,7 +208,7 @@ const sql=neon(process.env.DATABASE_URL);
 
 Expected: het aantal partijen met die herkomst is gelijk aan `recordsCreated + recordsUpdated` van die batch. Is het nul, dan is stap 2 niet aangekomen; is het alleen gelijk aan `recordsCreated`, dan ontbreekt de regel in `DO UPDATE SET`.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/app/api/import/lots/route.ts
@@ -222,29 +222,29 @@ git commit -m "feat: record which run last touched each lot"
 **Files:**
 - Modify: `src/app/api/import/orders/route.ts`
 
-- [ ] **Step 1: Neem het batch-id aan en geef het door aan `upsertOrders`**
+- [x] **Step 1: Neem het batch-id aan en geef het door aan `upsertOrders`**
 
 Zelfde patroon als taak 2 stap 1.
 
-- [ ] **Step 2: Zet het in de Transaction-insert**
+- [x] **Step 2: Zet het in de Transaction-insert**
 
 De rauwe `INSERT INTO "Transaction"` staat rond regel 285. Deze route werkt met delete-en-opnieuw-invoegen, dus er is geen `ON CONFLICT DO UPDATE` — alleen een kolomlijst en een `SELECT`. Twee plekken dus, niet drie.
 
 Geef het batch-id als extra parameter mee, net als bij lots.
 
-- [ ] **Step 3: Zet het ook in de Grower-createMany**
+- [x] **Step 3: Zet het ook in de Grower-createMany**
 
 Deze route maakt ook kwekers aan (`prisma.grower.createMany`, rond regel 167). Voeg `lastImportBatchId: batchId` toe aan de data die daar wordt opgebouwd.
 
 Dat `Grower` door twee routes geschreven wordt is bestaand gedrag; het betekent alleen dat de herkomst van een kweker van beide kan komen. Dat is juist informatief.
 
-- [ ] **Step 4: Verifieer tegen een echte ronde**
+- [x] **Step 4: Verifieer tegen een echte ronde**
 
 Zelfde aanpak als taak 2 stap 3, maar dan voor `Transaction` en de laatste `orders`-batch.
 
 Expected: het aantal transacties met die herkomst is gelijk aan `recordsCreated` van die batch. Deze route telt `recordsUpdated` altijd als nul omdat hij verwijdert en opnieuw invoegt, dus vergelijk alleen met `recordsCreated`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/app/api/import/orders/route.ts
@@ -258,21 +258,21 @@ git commit -m "feat: record which run last touched each transaction"
 **Files:**
 - Modify: `src/app/api/import/growers/route.ts`
 
-- [ ] **Step 1: Neem het batch-id aan en geef het door**
+- [x] **Step 1: Neem het batch-id aan en geef het door**
 
-- [ ] **Step 2: Zet het in de update-lus**
+- [x] **Step 2: Zet het in de update-lus**
 
 Deze route gebruikt geen rauwe SQL maar `prisma.grower.update()` in een lus (rond regel 82). Voeg `lastImportBatchId: batchId` toe aan de `data` van die update.
 
 Let op: deze route werkt vrijwel alleen bij — van 2.800 ontvangen rijen zijn er doorgaans twee gewijzigd en 2.638 onbekend in de portal. Het aantal kwekers dat na een ronde de nieuwe herkomst draagt is dus klein, en dat is correct.
 
-- [ ] **Step 3: Verifieer tegen een echte ronde**
+- [x] **Step 3: Verifieer tegen een echte ronde**
 
 Zet met **Run now** een `nightly`-ronde klaar en duw hem door tot de growers-job klaar is. Controleer dat het aantal kwekers met die herkomst gelijk is aan `recordsUpdated` van die batch.
 
 Expected: een klein getal, meestal onder de tien. Nul is verdacht — dan is er niets bijgewerkt óf het veld komt niet aan; controleer welke van de twee door naar `recordsUpdated` te kijken.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/app/api/import/growers/route.ts
@@ -288,9 +288,9 @@ De lastigste van de vier: drie schrijfpaden.
 **Files:**
 - Modify: `src/app/api/import/costs/route.ts`
 
-- [ ] **Step 1: Neem het batch-id aan en geef het door aan `upsertCosts`**
+- [x] **Step 1: Neem het batch-id aan en geef het door aan `upsertCosts`**
 
-- [ ] **Step 2: Pad 1 — de rauwe UPDATE**
+- [x] **Step 2: Pad 1 — de rauwe UPDATE**
 
 `prisma.$executeRawUnsafe` met `UPDATE "SalesSheetCost" AS t SET ... FROM jsonb_array_elements($1::jsonb)`. Voeg toe aan de `SET`:
 
@@ -300,21 +300,21 @@ De lastigste van de vier: drie schrijfpaden.
 
 en geef het batch-id als tweede parameter mee.
 
-- [ ] **Step 3: Pad 2 — de createMany**
+- [x] **Step 3: Pad 2 — de createMany**
 
 `prisma.salesSheetCost.createMany({ data: costCreateData })`. Voeg `lastImportBatchId: batchId` toe aan elk object dat in `costCreateData` wordt gestopt.
 
-- [ ] **Step 4: Pad 3 — de terugval op losse creates**
+- [x] **Step 4: Pad 3 — de terugval op losse creates**
 
 Als `createMany` faalt valt de route terug op `prisma.salesSheetCost.create()` per rij. Die gebruikt dezelfde objecten uit `costCreateData`, dus als stap 3 goed is gedaan is dit pad automatisch gedekt. **Controleer dat expliciet** en meld het — als die terugval eigen objecten opbouwt, moet het daar ook bij.
 
-- [ ] **Step 5: Verifieer tegen een echte ronde**
+- [x] **Step 5: Verifieer tegen een echte ronde**
 
 Zelfde aanpak. Expected: het aantal kostenregels met die herkomst is gelijk aan `recordsCreated + recordsUpdated`.
 
 Deze is het meest de moeite waard om goed te controleren: bij de laatste nachtronde was dat 833 bijgewerkt en nul aangemaakt, dus als alleen pad 2 werkt en pad 1 niet, ziet het eruit alsof er niets is geraakt.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/app/api/import/costs/route.ts
@@ -334,7 +334,7 @@ git commit -m "feat: record which run last touched each cost line"
 **Interfaces:**
 - Produces: `type SkippedRelation = { relId: number; partijen: number; productie: number }` en `classificeerOvergeslagen(skipped): { kwekers: SkippedRelation[]; interneBoekingen: SkippedRelation[] }`
 
-- [ ] **Step 1: Laat de lots-import de productie-telling bijhouden**
+- [x] **Step 1: Laat de lots-import de productie-telling bijhouden**
 
 In `upsertLots` staat `skippedByRelId`, een `Map<number, number>`. Die wordt op twee plekken gevuld: bij het overslaan van een hele leveringsgroep, en bij het overslaan van een losse correctie.
 
@@ -344,7 +344,7 @@ Maak er een `Map<number, { partijen: number; productie: number }>` van. Een rij 
 
 **Bestaande batches houden de oude vorm.** De classificatie in stap 2 moet daar tegen kunnen: een getal in plaats van een object betekent "aantal partijen, productie onbekend".
 
-- [ ] **Step 2: Schrijf de controles (dit faalt nog)**
+- [x] **Step 2: Schrijf de controles (dit faalt nog)**
 
 Create `scripts/checks/skipped.ts`:
 
@@ -395,7 +395,7 @@ check("de drukste staat vooraan", gesorteerd.kwekers[0].relId === 2);
 process.exit(failures ? 1 : 0);
 ```
 
-- [ ] **Step 3: Draai het en zie het falen**
+- [x] **Step 3: Draai het en zie het falen**
 
 Run: `npx tsx scripts/checks/skipped.ts`
 Expected: FAIL, `classificeerOvergeslagen` bestaat nog niet
@@ -408,18 +408,18 @@ Dat de twijfel naar "kweker" valt is bewust. Iemand ten onrechte in de kwekersli
 
 Wees ruimhartig in wat je accepteert: een getal betekent de oude vorm, een niet-numerieke sleutel of waarde wordt overgeslagen, `null` levert twee lege lijsten. Sorteer beide lijsten aflopend op `partijen`.
 
-- [ ] **Step 5: Draai het en zie het slagen, en neem het op in `npm run check`**
+- [x] **Step 5: Draai het en zie het slagen, en neem het op in `npm run check`**
 
 Voeg `&& tsx scripts/checks/skipped.ts` toe aan het `check`-script in `package.json`.
 
 Run: `npm run check`
 Expected: de bestaande 124 controles plus de zeven nieuwe, alle op PASS
 
-- [ ] **Step 6: Verifieer de nieuwe vorm tegen een echte ronde**
+- [x] **Step 6: Verifieer de nieuwe vorm tegen een echte ronde**
 
 Draai een lots-ronde en kijk in `details.skippedSuppliers`. Expected: objecten in plaats van getallen, en bij `8623` (RC Productieorders) moet `productie` gelijk zijn aan `partijen`.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/app/api/import/lots/route.ts src/lib/sync/skipped.ts scripts/checks/skipped.ts package.json
