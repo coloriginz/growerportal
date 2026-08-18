@@ -27,7 +27,13 @@ import { useFetch } from "@/hooks/use-fetch";
 import { ErrorState } from "@/components/ui/error-state";
 import { useLanguage } from "@/components/providers/language-provider";
 import { SYNC_ENDPOINTS, inChainOrder } from "@/lib/sync/types";
-import { windowAdvies, type AdviesVeld, type ScheduleAdvies } from "@/lib/sync/schedule";
+import {
+  windowAdvies,
+  ketenAdvies,
+  type AdviesVeld,
+  type ScheduleAdvies,
+  type KetenAdvies,
+} from "@/lib/sync/schedule";
 import { timeAgo } from "./shared";
 
 // ─── Schedules Tab ────────────────────────────────────────
@@ -47,6 +53,8 @@ export interface ScheduleRow {
 
 export interface SchedulesResponse {
   schedules: ScheduleRow[];
+  /** Waarschuwingen over de samenhang tussen schema's, niet over één schema. */
+  chainWarnings: KetenAdvies[];
   stuckJobs: number;
 }
 
@@ -156,6 +164,28 @@ function WarningList({ warnings }: { warnings: ScheduleAdvies[] }) {
   );
 }
 
+/**
+ * De ketenwaarschuwingen. Zwaarder aangezet dan WarningList: dit is de fout die
+ * je in één klik maakt en waar je maanden later achter komt, dus hij mag niet
+ * dezelfde grootte hebben als "je venster is een dag te smal".
+ */
+function ChainWarnings({ warnings }: { warnings: KetenAdvies[] }) {
+  if (warnings.length === 0) return null;
+  return (
+    <div className="space-y-2">
+      {warnings.map((warning) => (
+        <div
+          key={warning.code}
+          className="flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200"
+        >
+          <RiAlertLine className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>{warning.melding}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function RunNowButton({ name, onRan }: { name: string; onRan: () => void }) {
   const [running, setRunning] = useState(false);
 
@@ -200,22 +230,38 @@ function RunNowButton({ name, onRan }: { name: string; onRan: () => void }) {
 
 function ScheduleEditor({
   schedule,
+  schedules,
   onCancel,
   onSaved,
 }: {
   schedule: ScheduleRow;
+  /** Alle schema's: de keten loopt over de schema's heen, dus dit ene is niet genoeg. */
+  schedules: ScheduleRow[];
   onCancel: () => void;
   onSaved: () => void;
 }) {
   const [form, setForm] = useState<EditForm>(() => formFrom(schedule));
   const [saving, setSaving] = useState(false);
-  const [confirmWarnings, setConfirmWarnings] = useState<ScheduleAdvies[] | null>(null);
+  const [confirmWarnings, setConfirmWarnings] = useState<string[] | null>(null);
 
   const liveWarnings = useMemo(() => {
     const payload = payloadFrom(form);
     if (!payload) return [];
     return windowAdvies(payload);
   }, [form]);
+
+  // De bewerkte waarden van dít schema naast de opgeslagen waarden van de rest.
+  // Zonder die combinatie zie je pas na opslaan dat je het vangnet weghaalde.
+  const liveChainWarnings = useMemo(
+    () =>
+      ketenAdvies([
+        ...schedules
+          .filter((s) => s.name !== schedule.name)
+          .map((s) => ({ enabled: s.enabled, endpoints: s.endpoints })),
+        { enabled: form.enabled, endpoints: form.endpoints },
+      ]),
+    [schedules, schedule.name, form.enabled, form.endpoints]
+  );
 
   const toggleEndpoint = (endpoint: string, checked: boolean) => {
     setForm((f) => ({
@@ -237,7 +283,12 @@ function ScheduleEditor({
       }
 
       if (!skipWarningCheck) {
-        const warnings = windowAdvies(payload);
+        // De ketenwaarschuwing gaat voorop in de bevestiging: hij weegt zwaarder
+        // dan een venster dat een dag te smal is.
+        const warnings = [
+          ...liveChainWarnings.map((w) => w.melding),
+          ...windowAdvies(payload).map((w) => w.melding),
+        ];
         if (warnings.length > 0) {
           setConfirmWarnings(warnings);
           return;
@@ -269,12 +320,14 @@ function ScheduleEditor({
         setSaving(false);
       }
     },
-    [form, schedule.name, onSaved]
+    [form, schedule.name, onSaved, liveChainWarnings]
   );
 
   return (
     <>
       <CardContent className="space-y-4 text-sm">
+        <ChainWarnings warnings={liveChainWarnings} />
+
         <div className="space-y-2">
           <Label>Status</Label>
           <div className="flex gap-2">
@@ -410,13 +463,13 @@ function ScheduleEditor({
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2 py-1">
-            {confirmWarnings?.map((warning, i) => (
+            {confirmWarnings?.map((melding, i) => (
               <div
                 key={i}
                 className="flex items-start gap-2 rounded-md bg-amber-50 p-2 text-xs text-amber-800 dark:bg-amber-950/30 dark:text-amber-200"
               >
                 <RiAlertLine className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                <span>{warning.melding}</span>
+                <span>{melding}</span>
               </div>
             ))}
           </div>
@@ -451,6 +504,7 @@ export function SchedulesTab() {
   if (error) return <ErrorState onRetry={handleRetry} />;
 
   const schedules = data?.schedules ?? [];
+  const chainWarnings = data?.chainWarnings ?? [];
   const stuckJobs = data?.stuckJobs ?? 0;
 
   return (
@@ -462,6 +516,9 @@ export function SchedulesTab() {
           {t("common.refresh")}
         </Button>
       </div>
+
+      {/* Chain warnings: over de schema's heen, dus boven de kaarten */}
+      <ChainWarnings warnings={chainWarnings} />
 
       {/* Stuck jobs banner */}
       {stuckJobs > 0 && (
@@ -508,6 +565,7 @@ export function SchedulesTab() {
                 {editing ? (
                   <ScheduleEditor
                     schedule={schedule}
+                    schedules={schedules}
                     onCancel={() => setEditingName(null)}
                     onSaved={handleSaved}
                   />

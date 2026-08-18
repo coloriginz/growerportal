@@ -188,4 +188,93 @@ check(
   windowAdvies({ ...basis, enabled: false, endpoints: [], windowDays: 1 }).length === 0
 );
 
+// ─── Ketenwaarschuwingen over de schema's heen ─────────────
+
+import { ketenAdvies } from "../../src/lib/sync/schedule";
+
+const intradayNu = { enabled: true, endpoints: ["lots", "orders"] };
+const nightlyNu = {
+  enabled: true,
+  endpoints: ["suppliers", "growers", "lots", "orders", "costs"],
+};
+
+const codes = (a: ReturnType<typeof ketenAdvies>) => a.map((x) => x.code);
+
+check(
+  "de huidige twee schema's geven geen ketenwaarschuwing",
+  ketenAdvies([intradayNu, nightlyNu]).length === 0,
+  JSON.stringify(ketenAdvies([intradayNu, nightlyNu]))
+);
+
+check(
+  "nightly uitgezet waarschuwt",
+  codes(ketenAdvies([intradayNu, { ...nightlyNu, enabled: false }])).includes(
+    "leveranciersronde-ontbreekt"
+  ),
+  "zonder nachtronde komt er nooit meer een nieuwe leverancier binnen"
+);
+
+check(
+  "nightly uitgezet waarschuwt ook dat lots dan weggegooid worden",
+  codes(ketenAdvies([intradayNu, { ...nightlyNu, enabled: false }])).includes(
+    "lots-zonder-leveranciers"
+  )
+);
+
+check(
+  "suppliers weggehaald bij nightly waarschuwt",
+  codes(
+    ketenAdvies([
+      intradayNu,
+      { ...nightlyNu, endpoints: ["growers", "lots", "orders", "costs"] },
+    ])
+  ).includes("leveranciersronde-ontbreekt")
+);
+
+check(
+  "growers weggehaald bij nightly waarschuwt",
+  codes(
+    ketenAdvies([
+      intradayNu,
+      { ...nightlyNu, endpoints: ["suppliers", "lots", "orders", "costs"] },
+    ])
+  ).includes("leveranciersronde-ontbreekt"),
+  "growers hangt aan dezelfde ketenkop als suppliers"
+);
+
+check(
+  "alleen intraday ingeschakeld waarschuwt",
+  ketenAdvies([intradayNu, { ...nightlyNu, enabled: false }]).length === 2
+);
+
+check(
+  "intraday met suppliers en growers erbij waarschuwt niet, ook zonder nachtronde",
+  ketenAdvies([
+    { enabled: true, endpoints: ["suppliers", "growers", "lots", "orders"] },
+    { ...nightlyNu, enabled: false },
+  ]).length === 0,
+  "de keten is compleet zolang één ingeschakeld schema de kop meebrengt"
+);
+
+check(
+  "intraday met alleen suppliers erbij waarschuwt nog steeds over growers",
+  codes(
+    ketenAdvies([
+      { enabled: true, endpoints: ["suppliers", "lots", "orders"] },
+      { ...nightlyNu, enabled: false },
+    ])
+  ).includes("leveranciersronde-ontbreekt"),
+  "suppliers alleen is niet genoeg: growers hoort bij dezelfde kop"
+);
+
+check(
+  "een verzameling zonder lots waarschuwt niet over weggegooide partijen",
+  !codes(
+    ketenAdvies([{ enabled: true, endpoints: ["suppliers", "growers"] }])
+  ).includes("lots-zonder-leveranciers")
+);
+
+check("een lege verzameling waarschuwt over de ontbrekende ketenkop",
+  codes(ketenAdvies([])).includes("leveranciersronde-ontbreekt"));
+
 process.exit(failures ? 1 : 0);

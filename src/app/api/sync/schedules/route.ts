@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireAuth } from "@/lib/api-helpers";
-import { windowAdvies } from "@/lib/sync/schedule";
+import { windowAdvies, ketenAdvies } from "@/lib/sync/schedule";
 
 export async function GET() {
   const { error } = await requireAuth(["admin"]);
@@ -55,6 +55,10 @@ export async function GET() {
       lastSuccessAt: laatstGoed.get(s.name) ?? null,
       warnings: windowAdvies(s),
     })),
+    // De ketenwaarschuwingen staan naast de schema's en niet erin: ze gaan over
+    // de verzameling als geheel, en een kopie per kaart zou lezen als twee
+    // losse problemen in plaats van één.
+    chainWarnings: ketenAdvies(schedules),
     stuckJobs: vastgelopen,
   });
 }

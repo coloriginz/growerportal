@@ -212,3 +212,53 @@ export function windowAdvies(schedule: AdviesInvoer): ScheduleAdvies[] {
 
   return advies;
 }
+
+/**
+ * Waarschuwingen over de samenhang tússen schema's.
+ *
+ * `ScheduleAdvies` heeft een `veld`, want elke waarschuwing daar hoort bij één
+ * invoerveld van één schema. Dat werkt hier niet: de ketenafhankelijkheid zit
+ * niet in een veld en niet in een schema, maar in de verzameling. Vandaar een
+ * eigen vorm met een `code` in plaats van een `veld` — het scherm zet ze
+ * bovenaan in plaats van bij een invoer, en de controles kunnen op de code
+ * sturen zonder de meldingstekst te lezen.
+ */
+export type KetenAdviesCode = "leveranciersronde-ontbreekt" | "lots-zonder-leveranciers";
+export type KetenAdvies = { code: KetenAdviesCode; melding: string };
+
+type KetenInvoer = { enabled: boolean; endpoints: string[] };
+
+/**
+ * De lots-import zoekt de leverancier op en gooit de partij stilzwijgend weg
+ * als die er nog niet is. Zo zijn ooit 317 afrekeningen verdwenen zonder dat er
+ * ergens een fout stond. Twee handelingen halen dat vangnet weg — de nachtronde
+ * uitzetten, of `suppliers`/`growers` eruit vinken — en allebei zien er op het
+ * scherm uit als één klik zonder gevolgen.
+ */
+export function ketenAdvies(schedules: readonly KetenInvoer[]): KetenAdvies[] {
+  const actief = schedules.filter((s) => s.enabled);
+  const advies: KetenAdvies[] = [];
+
+  const heeftKetenkop = actief.some(
+    (s) => s.endpoints.includes("suppliers") && s.endpoints.includes("growers")
+  );
+  if (!heeftKetenkop) {
+    advies.push({
+      code: "leveranciersronde-ontbreekt",
+      melding:
+        "No enabled schedule fetches both suppliers and growers. New suppliers never reach the portal, and the lots import silently discards every lot that belongs to one.",
+    });
+  }
+
+  const heeftLots = actief.some((s) => s.endpoints.includes("lots"));
+  const heeftSuppliers = actief.some((s) => s.endpoints.includes("suppliers"));
+  if (heeftLots && !heeftSuppliers) {
+    advies.push({
+      code: "lots-zonder-leveranciers",
+      melding:
+        "A schedule fetches lots while no enabled schedule fetches suppliers. Lots of suppliers that are not in the portal yet are dropped without an error — this is how 317 salessheets once disappeared.",
+    });
+  }
+
+  return advies;
+}
