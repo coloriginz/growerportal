@@ -37,7 +37,17 @@ export async function GET() {
     }
   }
 
-  const vastgelopen = await prisma.syncJob.count({ where: { status: "dispatched" } });
+  // Vastgelopen is niet hetzelfde als onderweg. Een job die net verstuurd is
+  // hoort er even over te doen; pas als hij langer dan de opruimdrempel op
+  // 'dispatched' staat is er iets mis. Zonder die grens gaat de waarschuwing af
+  // bij normaal gebruik, en dan leer je hem wegkijken.
+  const STALE_MINUTEN = 15;
+  const vastgelopen = await prisma.syncJob.count({
+    where: {
+      status: "dispatched",
+      dispatchedAt: { lt: new Date(Date.now() - STALE_MINUTEN * 60000) },
+    },
+  });
 
   return NextResponse.json({
     schedules: schedules.map((s) => ({
