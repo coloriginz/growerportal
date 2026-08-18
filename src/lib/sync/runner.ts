@@ -60,6 +60,17 @@ export async function enqueueRun(
   return endpoints.length;
 }
 
+/**
+ * Zet een ronde klaar zonder naar het schema te kijken. Voor de knop "run now":
+ * lastRunAt wordt gewoon gestempeld, zodat de eerstvolgende tick er niet nóg een
+ * ronde bovenop zet.
+ */
+export async function enqueueRunNow(name: string, now: Date = new Date()): Promise<number> {
+  const schedule = await prisma.syncSchedule.findUnique({ where: { name } });
+  if (!schedule) throw new Error(`Unknown schedule '${name}'`);
+  return enqueueRun(schedule, now);
+}
+
 type ClaimedJob = {
   id: string;
   endpoint: string;

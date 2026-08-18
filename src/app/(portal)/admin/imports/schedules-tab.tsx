@@ -15,7 +15,13 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { RiRefreshLine, RiAlertLine, RiErrorWarningLine, RiEditLine } from "@remixicon/react";
+import {
+  RiRefreshLine,
+  RiAlertLine,
+  RiErrorWarningLine,
+  RiEditLine,
+  RiPlayCircleLine,
+} from "@remixicon/react";
 import { toast } from "sonner";
 import { useFetch } from "@/hooks/use-fetch";
 import { ErrorState } from "@/components/ui/error-state";
@@ -147,6 +153,48 @@ function WarningList({ warnings }: { warnings: ScheduleAdvies[] }) {
         </div>
       ))}
     </div>
+  );
+}
+
+function RunNowButton({ name, onRan }: { name: string; onRan: () => void }) {
+  const [running, setRunning] = useState(false);
+
+  const run = useCallback(async () => {
+    setRunning(true);
+    try {
+      const res = await fetch(`/api/sync/schedules/${name}/run`, { method: "POST" });
+      const body = await res.json().catch(() => null);
+      if (!res.ok) {
+        const message = typeof body?.error === "string" ? body.error : "Failed to enqueue a run";
+        toast.error(message);
+        return;
+      }
+      const enqueued = typeof body?.enqueued === "number" ? body.enqueued : 0;
+      toast.success(
+        enqueued > 0
+          ? `Enqueued ${enqueued} job${enqueued === 1 ? "" : "s"} for "${name}"`
+          : `"${name}" has no endpoints to enqueue`
+      );
+      onRan();
+    } catch {
+      toast.error("Failed to enqueue a run");
+    } finally {
+      setRunning(false);
+    }
+  }, [name, onRan]);
+
+  return (
+    <Button
+      variant="ghost"
+      size="icon"
+      className="h-7 w-7"
+      onClick={run}
+      disabled={running}
+      title="Run now"
+      aria-label="Run now"
+    >
+      <RiPlayCircleLine className={`h-4 w-4 ${running ? "animate-pulse" : ""}`} />
+    </Button>
   );
 }
 
@@ -443,6 +491,7 @@ export function SchedulesTab() {
                     ) : (
                       <Badge variant="outline">Disabled</Badge>
                     )}
+                    {!editing && <RunNowButton name={schedule.name} onRan={refetch} />}
                     {!editing && (
                       <Button
                         variant="ghost"
