@@ -160,7 +160,7 @@ export function SkippedDialog({ batch, onClose }: { batch: ImportBatch; onClose:
 
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-4xl max-h-[80vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <RiAlertLine className="h-5 w-5 text-amber-600 dark:text-amber-400" />

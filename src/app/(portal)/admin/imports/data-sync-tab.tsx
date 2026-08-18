@@ -537,7 +537,7 @@ export function DataSyncTab() {
         open={!!detailBatch}
         onOpenChange={(open) => { if (!open) setDetailBatch(null); }}
       >
-        <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-lg max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-red-600 dark:text-red-400 flex items-center gap-2">
               <RiErrorWarningLine className="h-5 w-5" />
