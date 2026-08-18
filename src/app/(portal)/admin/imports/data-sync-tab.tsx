@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import {
   Table,
   TableBody,
@@ -29,7 +30,11 @@ import {
   RiErrorWarningLine,
   RiTimeLine,
   RiAlertLine,
+  RiCheckLine,
+  RiLoader4Line,
+  RiSkipForwardLine,
 } from "@remixicon/react";
+import { toast } from "sonner";
 import { useFetch } from "@/hooks/use-fetch";
 import { ErrorState } from "@/components/ui/error-state";
 import { useLanguage } from "@/components/providers/language-provider";
@@ -42,6 +47,96 @@ import {
   type ImportBatch,
   type ImportBatchResponse,
 } from "./shared";
+import type { SchedulesResponse } from "./schedules-tab";
+
+// ─── Running round types (GET /api/sync/jobs) ─────────────
+
+interface SyncJobRow {
+  id: string;
+  runId: string;
+  sequence: number;
+  endpoint: string;
+  status: "pending" | "dispatched" | "done" | "failed" | "cancelled";
+  attempts: number;
+  lastError: string | null;
+}
+
+interface SyncRun {
+  runId: string;
+  source: string;
+  jobs: SyncJobRow[];
+}
+
+interface JobsResponse {
+  runs: SyncRun[];
+}
+
+function JobStatusBadge({ status }: { status: SyncJobRow["status"] }) {
+  switch (status) {
+    case "pending":
+      return <Badge variant="outline">Pending</Badge>;
+    case "dispatched":
+      return (
+        <Badge className="bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
+          <RiLoader4Line className="mr-1 h-3 w-3 animate-spin" />
+          Dispatched
+        </Badge>
+      );
+    case "done":
+      return (
+        <Badge className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
+          <RiCheckLine className="mr-1 h-3 w-3" />
+          Done
+        </Badge>
+      );
+    case "failed":
+      return (
+        <Badge className="bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400">
+          <RiErrorWarningLine className="mr-1 h-3 w-3" />
+          Failed
+        </Badge>
+      );
+    case "cancelled":
+      return <Badge variant="outline">Cancelled</Badge>;
+  }
+}
+
+function AdvanceQueueButton({ onAdvanced }: { onAdvanced: () => void }) {
+  const [advancing, setAdvancing] = useState(false);
+
+  const advance = useCallback(async () => {
+    setAdvancing(true);
+    try {
+      const res = await fetch("/api/sync/advance", { method: "POST" });
+      const body = await res.json().catch(() => null);
+      if (!res.ok) {
+        toast.error("Failed to advance the queue");
+        return;
+      }
+      if (body?.dryRun) {
+        toast.info(body.reason ?? "Not dispatching in this environment");
+      } else if (body?.dispatched) {
+        toast.success("Dispatched the next job");
+      } else if (body?.failed) {
+        toast.error("The dispatched job failed");
+      } else {
+        toast.info("Nothing to dispatch");
+      }
+      onAdvanced();
+    } catch {
+      toast.error("Failed to advance the queue");
+    } finally {
+      setAdvancing(false);
+    }
+  }, [onAdvanced]);
+
+  return (
+    <Button variant="outline" size="sm" onClick={advance} disabled={advancing}>
+      <RiSkipForwardLine className={`mr-2 h-4 w-4 ${advancing ? "animate-pulse" : ""}`} />
+      Advance queue
+    </Button>
+  );
+}
 
 // ─── Data Sync Tab (existing Fabric imports) ─────────────
 
@@ -62,21 +157,28 @@ export function DataSyncTab() {
   }, [endpointFilter, statusFilter, page]);
 
   const { data, loading, error, refetch } = useFetch<ImportBatchResponse>(url);
+  const { data: schedulesData, refetch: refetchSchedules } = useFetch<SchedulesResponse>("/api/sync/schedules");
+  const { data: jobsData, refetch: refetchJobs } = useFetch<JobsResponse>("/api/sync/jobs");
 
-  // Auto-refresh every 30 seconds
-  useEffect(() => {
-    const interval = setInterval(() => {
-      refetch();
-    }, 30000);
-    return () => clearInterval(interval);
-  }, [refetch]);
+  const runs = jobsData?.runs ?? [];
+  const hasDispatched = useMemo(
+    () => (jobsData?.runs ?? []).some((run) => run.jobs.some((job) => job.status === "dispatched")),
+    [jobsData]
+  );
 
-  // Stable callback for ErrorState
-  const handleRetry = useCallback(() => {
+  const refetchAll = useCallback(() => {
     refetch();
-  }, [refetch]);
+    refetchSchedules();
+    refetchJobs();
+  }, [refetch, refetchSchedules, refetchJobs]);
 
-  if (error) return <ErrorState onRetry={handleRetry} />;
+  // Auto-refresh: every 5 seconds while a job is dispatched, otherwise every 30
+  useEffect(() => {
+    const interval = setInterval(refetchAll, hasDispatched ? 5000 : 30000);
+    return () => clearInterval(interval);
+  }, [refetchAll, hasDispatched]);
+
+  if (error) return <ErrorState onRetry={refetchAll} />;
 
   const summary = data?.summary;
   const batches = data?.batches || [];
@@ -85,16 +187,90 @@ export function DataSyncTab() {
   const currentPage = data?.page ?? page;
   const pageStart = totalBatches === 0 ? 0 : (currentPage - 1) * 50 + 1;
   const pageEnd = Math.min(currentPage * 50, totalBatches);
+  const schedules = schedulesData?.schedules ?? [];
+  const stuckJobs = schedulesData?.stuckJobs ?? 0;
 
   return (
     <div className="space-y-8">
       {/* Refresh */}
       <div className="flex justify-end">
-        <Button variant="outline" size="sm" onClick={refetch} disabled={loading}>
+        <Button variant="outline" size="sm" onClick={refetchAll} disabled={loading}>
           <RiRefreshLine className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />
           {t("common.refresh")}
         </Button>
       </div>
+
+      {/* Health line: one row per schedule, the three-second glance */}
+      {schedules.length > 0 && (
+        <div className="space-y-1.5 rounded-md border p-3 text-sm">
+          {schedules.map((s) => (
+            <div key={s.name} className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <span className="font-medium capitalize">{s.name}</span>
+                {s.enabled ? (
+                  <Badge className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
+                    Enabled
+                  </Badge>
+                ) : (
+                  <Badge variant="outline">Disabled</Badge>
+                )}
+              </div>
+              <span className="text-muted-foreground">
+                last success {s.lastSuccessAt ? timeAgo(s.lastSuccessAt) : "never"}
+              </span>
+            </div>
+          ))}
+          {stuckJobs > 0 && (
+            <div className="flex items-center gap-1.5 pt-1 text-red-600 dark:text-red-400">
+              <RiErrorWarningLine className="h-4 w-4 shrink-0" />
+              <span>
+                {stuckJobs} job{stuckJobs === 1 ? "" : "s"} stuck in &quot;dispatched&quot;
+              </span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Running round: only visible while the queue has open work */}
+      {runs.length > 0 && (
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Running round</CardTitle>
+            <AdvanceQueueButton onAdvanced={refetchAll} />
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {runs.map((run) => (
+              <div key={run.runId} className="space-y-1.5">
+                <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground capitalize">
+                  {run.source}
+                </div>
+                <div className="space-y-1">
+                  {run.jobs.map((job) => (
+                    <div key={job.id} className="flex items-start justify-between gap-3 text-sm">
+                      <span className="capitalize">{job.endpoint}</span>
+                      <div className="flex flex-col items-end gap-1">
+                        <div className="flex items-center gap-2">
+                          <JobStatusBadge status={job.status} />
+                          {job.attempts > 1 && (
+                            <span className="text-xs text-muted-foreground">
+                              attempt {job.attempts}
+                            </span>
+                          )}
+                        </div>
+                        {job.status === "failed" && job.lastError && (
+                          <span className="max-w-xs text-right text-xs text-red-600 dark:text-red-400">
+                            {job.lastError}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
 
       {/* KPI Cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
