@@ -126,7 +126,7 @@ warehouse waarvan de naam iets anders belooft dan hij bevat, na de accountmanage
 
 | bestand | wijziging |
 |---|---|
-| `prisma/schema.prisma` | `lastImportBatchId String?` plus index op `Lot`, `Transaction`, `Grower` |
+| `prisma/schema.prisma` | `lastImportBatchId String?` plus index op `Lot`, `Transaction`, `Grower`, `SalesSheetCost` |
 | `src/app/api/import/lots/route.ts` | batch-id in de upsert; `skippedSuppliers` telt ook `productie` |
 | `src/app/api/import/orders/route.ts` | batch-id in de upsert |
 | `src/app/api/import/growers/route.ts` | batch-id in de upsert |
