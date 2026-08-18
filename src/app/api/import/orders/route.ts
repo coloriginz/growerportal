@@ -43,14 +43,14 @@ export async function POST(request: NextRequest) {
     rowSchema: orderSchema,
     schemaKeys: orderKeys,
     aliases: orderAliases,
-    handler: async (orders) => {
+    handler: async (orders, batchId) => {
       if (orders.length === 0) return { created: 0, updated: 0, skipped: 0 };
-      return upsertOrders(orders);
+      return upsertOrders(orders, batchId);
     },
   });
 }
 
-async function upsertOrders(orders: Order[]) {
+async function upsertOrders(orders: Order[], batchId: string | null) {
   // Build supplier lookup
   const supplierFabricIds = [...new Set(orders.map((o) => o.rel_id_leverancier))];
   const suppliers = await prisma.supplier.findMany({
@@ -145,6 +145,7 @@ async function upsertOrders(orders: Order[]) {
         fabricId: fabricKwekerId,
         supplierId,
         name: nameMap.get(fabricKwekerId) || null,
+        lastImportBatchId: batchId,
       });
       growersCreated++;
     }
@@ -155,10 +156,12 @@ async function upsertOrders(orders: Order[]) {
       `UPDATE "Grower" AS t
        SET
          name = u.val->>'name',
+         "lastImportBatchId" = $2,
          "updatedAt" = NOW()
        FROM jsonb_array_elements($1::jsonb) AS u(val)
        WHERE t."fabricId" = (u.val->>'fabricId')::int`,
-      JSON.stringify(growerUpdateData)
+      JSON.stringify(growerUpdateData),
+      batchId
     );
   }
 
@@ -285,7 +288,7 @@ async function upsertOrders(orders: Order[]) {
           `INSERT INTO "Transaction" (
              id, "lotId", "fabricOrdregId", "fabricGrowerId",
              date, "salesType", stems, "pricePerStem", amount,
-             "bronFeitExtra", "correctionReasonId",
+             "bronFeitExtra", "correctionReasonId", "lastImportBatchId",
              "createdAt", "updatedAt"
            )
            SELECT
@@ -300,10 +303,12 @@ async function upsertOrders(orders: Order[]) {
              COALESCE((v.val->>'amount')::numeric, 0),
              COALESCE(v.val->>'bronFeitExtra', 'origineel'),
              (v.val->>'correctionReasonId')::int,
+             $2,
              NOW(),
              NOW()
            FROM jsonb_array_elements($1::jsonb) AS v(val)`,
-          JSON.stringify(chunk)
+          JSON.stringify(chunk),
+          batchId
         );
       }
       txCreated = allTxData.length;
