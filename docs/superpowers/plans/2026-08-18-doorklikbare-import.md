@@ -438,13 +438,17 @@ git commit -m "feat: tell growers apart from internal production bookings"
 **Interfaces:**
 - Consumes: `classificeerOvergeslagen()` uit taak 6, `POST /api/admin/fabric-relations` (bestaat al)
 
-- [ ] **Step 1: Schrijf de route**
+- [x] **Step 1: Schrijf de route**
 
 `GET /api/admin/import-batches/[id]/skipped`, met `requireAuth(["admin"])`. Haalt de batch op, classificeert `details.skippedSuppliers`, joint op `FabricRelation` voor code, naam en land, en geeft twee lijsten terug.
 
+**`FabricRelation` heeft geen land.** De kolommen zijn `fabricId`, `code`, `name`, `accountManagerName`
+en `accountManagerCode`, meer niet. Het land komt daarom uit de `Grower` met hetzelfde rel_id wanneer die
+bestaat — dat vult drie van de vijftig regels; de rest toont een streepje.
+
 Een `rel_id` die niet in `FabricRelation` staat hoort er nog steeds in, met naam `null` — dan zie je tenminste dát er iets is. Geef ook per relatie terug of er al een `Supplier` met dat `fabricId` bestaat, zodat het scherm de knop kan verbergen.
 
-- [ ] **Step 2: Schrijf het paneel**
+- [x] **Step 2: Schrijf het paneel**
 
 Twee groepen onder elkaar: **Suppliers you may want to activate** en **Internal production bookings — these do not belong here**. Per regel de code, de naam, het land en het aantal weggegooide partijen. Bij de eerste groep een knop **Activate**, bij de tweede niet.
 
@@ -452,18 +456,26 @@ De knop roept `POST /api/admin/fabric-relations` aan met `fabricId` en `companyI
 
 Toon na afloop met `sonner` dat de leverancier is aangemaakt, en erbij dat zijn partijen bij de volgende ronde vanzelf binnenkomen — het venster is rollend, dus dat is de reparatie.
 
-- [ ] **Step 3: Hang het aan het aantal**
+- [x] **Step 3: Hang het aan het aantal**
 
 In `data-sync-tab.tsx` is de kolom **Skipped** al aanklikbaar wanneer er overgeslagen leveranciers zijn. Laat die nu dit paneel openen in plaats van de bestaande lijst.
 
-- [ ] **Step 4: Verifieer in de browser**
+**De kolom was niet meer aanklikbaar.** `skippedSuppliersOf` in `shared.tsx` filterde op
+`typeof waarde === "number"` en gaf sinds taak 6 dus een lege lijst terug voor elke nieuwe batch — precies
+de batches waar het om gaat. Vervangen door `skippedRelationCount`, dat `classificeerOvergeslagen`
+gebruikt en daarmee beide vormen leest. De oude lijst in de detaildialoog is weg; die dialoog toont nu
+alleen nog de fout.
+
+- [ ] **Step 4: Verifieer in de browser** — de routelogica is tegen de testdatabase geverifieerd
+(45 kwekers, 5 interne boekingen, alle vijf `*Productieorders`; een batch met de oude vorm zet alles bij
+de kwekers zonder te breken). Het echt activeren van een leverancier staat nog open.
 
 Open de skipped-dialoog van een `lots`-batch.
 Expected: `FFSEPFC` en `GCPDFAAL` in de bovenste groep met een Activate-knop, en `RCPROD`, `RCFTPROD`, `SCPRO` in de onderste zonder. Bij een batch van vóór taak 6 staat alles in de bovenste groep — dat is de oude vorm en dat klopt.
 
 **Activeer één leverancier echt**, bijvoorbeeld `GCPDFAAL`. Draai daarna een `intraday`-ronde en controleer dat zijn partijen nu wél binnenkomen: `recordsCreated` gaat omhoog en hij verdwijnt uit de overgeslagen-lijst. Dat is het bewijs dat de reparatie werkt.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/app/api/admin/import-batches "src/app/(portal)/admin/imports"

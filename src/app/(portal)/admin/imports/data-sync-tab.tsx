@@ -44,11 +44,12 @@ import {
   timeAgo,
   formatDuration,
   formatWindowRange,
-  skippedSuppliersOf,
+  skippedRelationCount,
   StatusBadge,
   type ImportBatch,
   type ImportBatchResponse,
 } from "./shared";
+import { SkippedDialog } from "./skipped-dialog";
 import type { SchedulesResponse } from "./schedules-tab";
 
 // ─── Running round types (GET /api/sync/jobs) ─────────────
@@ -151,9 +152,10 @@ export function DataSyncTab() {
   const [endpointFilter, setEndpointFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [page, setPage] = useState(1);
-  // Doubles as the "why is data missing" dialog: a batch with an error opens it
-  // in red, a successful batch with skipped suppliers opens it in neutral tone.
   const [detailBatch, setDetailBatch] = useState<ImportBatch | null>(null);
+  // De overgeslagen kant is een eigen paneel: daar staan relaties met een naam
+  // en een knop, niet een foutmelding.
+  const [skippedBatch, setSkippedBatch] = useState<ImportBatch | null>(null);
 
   const url = useMemo(() => {
     const params = new URLSearchParams();
@@ -424,7 +426,7 @@ export function DataSyncTab() {
                   </TableRow>
                 ) : (
                   batches.map((batch) => {
-                    const skipped = skippedSuppliersOf(batch);
+                    const skippedRelations = skippedRelationCount(batch);
                     return (
                     <TableRow key={batch.id}>
                       <TableCell className="whitespace-nowrap">
@@ -462,9 +464,9 @@ export function DataSyncTab() {
                         {formatNumber(batch.recordsUpdated)}
                       </TableCell>
                       <TableCell className="text-right">
-                        {skipped.length > 0 ? (
+                        {skippedRelations > 0 ? (
                           <button
-                            onClick={() => setDetailBatch(batch)}
+                            onClick={() => setSkippedBatch(batch)}
                             className="text-amber-700 hover:underline cursor-pointer dark:text-amber-400"
                             title="Show skipped suppliers"
                           >
@@ -528,26 +530,19 @@ export function DataSyncTab() {
         </div>
       )}
 
-      {/* Detail dialog: an error batch opens in red, a successful batch with
-          skipped suppliers opens in neutral amber — same dialog, different tone,
-          so a clean import never reads as a failure. */}
+      {/* Error dialog. De overgeslagen kant zit in SkippedDialog hieronder: die
+          vraagt om namen en een knop, niet om een foutmelding, en samen in één
+          dialoog las een schone import als een mislukking. */}
       <Dialog
         open={!!detailBatch}
         onOpenChange={(open) => { if (!open) setDetailBatch(null); }}
       >
         <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
           <DialogHeader>
-            {detailBatch?.errorMessage ? (
-              <DialogTitle className="text-red-600 dark:text-red-400 flex items-center gap-2">
-                <RiErrorWarningLine className="h-5 w-5" />
-                Import Error — {detailBatch?.endpoint}
-              </DialogTitle>
-            ) : (
-              <DialogTitle className="flex items-center gap-2">
-                <RiAlertLine className="h-5 w-5 text-amber-600 dark:text-amber-400" />
-                Skipped suppliers — {detailBatch?.endpoint}
-              </DialogTitle>
-            )}
+            <DialogTitle className="text-red-600 dark:text-red-400 flex items-center gap-2">
+              <RiErrorWarningLine className="h-5 w-5" />
+              Import Error — {detailBatch?.endpoint}
+            </DialogTitle>
           </DialogHeader>
           <div className="space-y-3 text-sm">
             <div className="text-muted-foreground">
@@ -574,35 +569,19 @@ export function DataSyncTab() {
               </pre>
             )}
 
-            {detailBatch && skippedSuppliersOf(detailBatch).length > 0 && (
-              <div className="space-y-1.5">
-                <p className="text-xs text-muted-foreground">
-                  These suppliers don&apos;t exist in the portal yet, so their lots were
-                  skipped (rel_id, busiest first, top 50):
-                </p>
-                <div className="max-h-72 overflow-y-auto rounded-md border">
-                  <table className="w-full text-xs">
-                    <thead className="bg-muted text-muted-foreground">
-                      <tr>
-                        <th className="px-3 py-1.5 text-left font-medium">rel_id</th>
-                        <th className="px-3 py-1.5 text-right font-medium">Lots skipped</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {skippedSuppliersOf(detailBatch).map(([relId, count]) => (
-                        <tr key={relId} className="border-t">
-                          <td className="px-3 py-1 font-mono">{relId}</td>
-                          <td className="px-3 py-1 text-right">{formatNumber(count)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Los gemonteerd per batch, zodat de keuzes erin niet meeverhuizen naar de
+          volgende batch die je opent. */}
+      {skippedBatch && (
+        <SkippedDialog
+          key={skippedBatch.id}
+          batch={skippedBatch}
+          onClose={() => setSkippedBatch(null)}
+        />
+      )}
     </div>
   );
 }

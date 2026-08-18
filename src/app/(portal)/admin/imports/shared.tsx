@@ -1,4 +1,5 @@
 import { Badge } from "@/components/ui/badge";
+import { classificeerOvergeslagen } from "@/lib/sync/skipped";
 import {
   RiCheckLine,
   RiErrorWarningLine,
@@ -74,13 +75,14 @@ export function formatWindowRange(from: string, to: string): string {
   return `${windowDateFormat.format(new Date(from))} – ${windowDateFormat.format(new Date(to))}`;
 }
 
-/** rel_id -> skipped lot count, sorted busiest-first. Empty when the batch has none. */
-export function skippedSuppliersOf(batch: Pick<ImportBatch, "details">): [string, number][] {
-  const raw = batch.details?.skippedSuppliers;
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return [];
-  return Object.entries(raw as Record<string, unknown>)
-    .filter((entry): entry is [string, number] => typeof entry[1] === "number")
-    .sort((a, b) => b[1] - a[1]);
+/**
+ * Hoeveel relaties deze ronde oversloeg. Nul betekent: niets om door te klikken.
+ * Leest beide vormen van `skippedSuppliers`, want batches van vóór de
+ * productie-telling dragen nog een kaal getal per rel_id.
+ */
+export function skippedRelationCount(batch: Pick<ImportBatch, "details">): number {
+  const { kwekers, interneBoekingen } = classificeerOvergeslagen(batch.details?.skippedSuppliers);
+  return kwekers.length + interneBoekingen.length;
 }
 
 export function StatusBadge({ status }: { status: ImportBatch["status"] }) {
