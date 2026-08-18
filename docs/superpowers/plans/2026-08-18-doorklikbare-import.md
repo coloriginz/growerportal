@@ -44,6 +44,12 @@ Alle vier de routes negeren dat argument nu (`handler: async (costs) => ...`). E
 
 **Niet met Run now.** Power Automate post naar de *gedeployde* testomgeving: de portal stuurt nooit een callback-URL mee, hij zegt alleen `env: "test"` en de flow kiest daar zelf zijn base-URL bij. Dat is een bewuste veiligheidskeuze uit het sync-ontwerp, maar het betekent dat een ronde die je vanaf je lokale dev-server start de code test die op Vercel staat — niet die van jou. In taak 2 leverde dat een nul op die eruitzag als een bug maar het niet was.
 
+**Waarmee je vergelijkt verschilt per route.** `recordsCreated` telt niet overal hetzelfde. De
+lots-route rekent correcties mee in dat getal, en die belanden in `LotCorrection` — een andere tabel,
+zonder herkomstkolom. Vergelijk daar dus met `details.lots.created + details.lots.updated` en niet met
+de som van de batch-velden, anders lijkt er 68 te ontbreken terwijl alles klopt. Bij orders is
+`recordsUpdated` altijd nul omdat die verwijdert en opnieuw invoegt.
+
 **Wel met een directe POST naar de lokale route.** Bouw een payload met één bestaand record en één nieuw, post die naar `http://localhost:3000/api/import/<endpoint>` met `Authorization: Bearer $IMPORT_API_KEY`, en tel daarna hoeveel records het teruggegeven batch-id dragen. Zelfde route-code, zelfde database, echte data — en het raakt beide schrijfpaden.
 
 Ruim je testrecords daarna op, en herstel wat je hebt overschreven. Kun je een originele waarde niet terugvinden, meld dat dan; de eerstvolgende reguliere ronde overschrijft het meestal vanzelf.
@@ -512,5 +518,9 @@ git commit -m "feat: click through from a run to the records it touched"
 - Elk record dat de sync aanraakt draagt de ronde die hem het laatst aanraakte
 - Vanuit het importscherm klik je door naar wat er is aangemaakt en bijgewerkt
 - Een overgeslagen aantal wijst naar de leveranciers die ontbreken, gescheiden van interne boekingen, met de knop om ze aan te maken — en het rollende venster haalt hun partijen daarna vanzelf op
+
+**Wat er ook niet in zit: `LotCorrection`.** Een nachtronde maakt er zo'n 68 aan en die dragen geen
+herkomst; ze staan niet bij de vier modellen uit taak 1. Wie doorklikt op de aangemaakte partijen van
+een ronde ziet de correcties dus niet. Zelfde patroon, vijfde model — los toe te voegen.
 
 **Wat er niet in zit:** de overgeslagen orderregels. Die ronde gooit er per nacht 6.269 weg waarvan er maar 99 verklaard zijn; de rest heeft geen partij in de portal en wordt nergens geteld. Hetzelfde patroon als bij lots, maar een eigen wijziging — los te trekken zodra dit staat.
