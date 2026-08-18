@@ -226,6 +226,7 @@ Role switching, supplier switching, and transporter switching are only available
 - **StagingKbtShcost** — Raw salessheet cost data from Fabric.
 - **SyncJob** — One endpoint over one window, optionally scoped to a supplier. Carries `runId`/`sequence` (chain order, unique together), `status`, `attempts`, `importBatchId`.
 - **SyncSchedule** — Two rows, `intraday` and `nightly`. Interval or time of day, endpoints, window, and per-endpoint window overrides.
+- **Record provenance** — `Lot`, `Transaction`, `Grower` and `SalesSheetCost` carry `lastImportBatchId`, so the import screen can click through to what a run touched. It holds only the *last* run: a later run takes the origin over, and the screen says so rather than showing an unexplained empty list. `Supplier` and `LotCorrection` carry no origin.
 
 ### Other Entities
 - **Company** — Multi-tenant company entity (Coloriginz, OZ Import, MyPeony). Determines branding.
@@ -373,7 +374,9 @@ Matched PDFs are uploaded to Vercel Blob and linked via `SalesSheet.pdfDocumentI
 | `/api/admin/commercie` | GET | Commercie/admin users list |
 | `/api/admin/suppliers` | GET | Supplier management with aggregates |
 | `/api/admin/import-batches` | GET | Import batch history |
-| `/api/admin/fabric-relations` | GET | Fabric relation staging data |
+| `/api/admin/import-batches/[id]/records` | GET | The records one run created or updated, paginated |
+| `/api/admin/import-batches/[id]/skipped` | GET | The relations one run dropped, split into growers and internal bookings |
+| `/api/admin/fabric-relations` | GET, POST | Fabric relation staging data; POST activates one as a Supplier |
 | `/api/activate` | POST | Account activation (set password) |
 | `/api/forgot-password` | POST | Request password reset email |
 | `/api/reset-password` | POST | Reset password with token |
@@ -615,6 +618,9 @@ Supplier accounts are created via admin UI with activation emails.
 - **Emails**: Use CID inline attachments (base64 Buffer), never external image URLs.
 - `useSearchParams()` requires Suspense boundary.
 - **Zod 4, not 3**: `z.record(keySchema, valueSchema)` requires *every* key to be present. For a partial map like `windowOverrides` use `z.partialRecord()`, or a save with `{}` is rejected.
+- **Tailwind variants beat unprefixed utilities**: the base `DialogContent` carries `sm:max-w-sm`, so a plain `max-w-4xl` never applies on desktop no matter the order. Write `sm:max-w-4xl`. Three dialogs in `features/fust` still have this bug.
+- **Base UI `SelectValue` renders the raw value, not the item label.** Fine when the value is human-readable; pass a function as children when it is an id.
+- **Paginate on a unique sort.** `ORDER BY` on a non-unique key plus `OFFSET` lets Postgres return a row on two pages or on none — measured, not theoretical. Always append `{ id: "asc" }`.
 - **Prisma `Json?` fields**: writing `null` does not type-check against the update input — use `Prisma.JsonNull` to store a JSON null, or `undefined` to leave the column alone.
 
 ---

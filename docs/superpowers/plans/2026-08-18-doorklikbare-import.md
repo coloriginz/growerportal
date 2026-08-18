@@ -400,7 +400,7 @@ process.exit(failures ? 1 : 0);
 Run: `npx tsx scripts/checks/skipped.ts`
 Expected: FAIL, `classificeerOvergeslagen` bestaat nog niet
 
-- [ ] **Step 4: Schrijf de classificatie**
+- [x] **Step 4: Schrijf de classificatie**
 
 Create `src/lib/sync/skipped.ts`. De regel: een relatie waarvan **alle** overgeslagen partijen productieboekingen zijn, is een interne boeking; al het andere is een kweker.
 
@@ -524,8 +524,20 @@ In `data-sync-tab.tsx` worden de kolommen **Created** en **Updated** aanklikbaar
 bijgewerkte leveranciers zouden op een leeg paneel uitkomen. De reden staat wel in het antwoord van de
 route, voor het geval iemand er alsnog op belandt.
 
-- [ ] **Step 4: Verifieer in de browser** — de routelogica is tegen de testdatabase geverifieerd
-(zie hieronder); de klik zelf staat nog open.
+- [x] **Step 4: Verifieer in de browser** — gedaan op 18 augustus, in het scherm zelf.
+
+De 146 aangemaakte partijen van de laatste ronde bleken allemaal van Piazza Dei Fiori, de leverancier
+die een half uur eerder via het skipped-paneel was aangezet — het bewijs van taak 7 en taak 8 in één
+lijst. Paginering klopt (1-50 van 146, drie pagina's, geen overlap tussen pagina een en twee), het
+tabblad Updated toont de 417 andere, en een partijnummer landt op de partij met zijn orderregels. Ook
+de twee lastige gevallen zijn gezien: een volledig ingehaalde ronde (`costs` 22:20, 225 gemeld, 0
+gevonden) en een half ingehaalde (`growers` 22:20, 3 gemeld, 1 gevonden) leggen allebei uit waar het
+verschil zit.
+
+Twee dingen kwamen pas bij het klikken boven water: de aantallen waren wel knoppen maar zagen er niet
+uit als knoppen (alleen `hover:underline`, dus onzichtbaar tot je er toevallig overheen ging), en de
+uitleg over de correcties bleef staan op het tabblad Updated waar hij over iets anders gaat. Allebei
+gerepareerd.
 
 Per endpoint van de laatste ronde, vergeleken met wat de batch rapporteert:
 
