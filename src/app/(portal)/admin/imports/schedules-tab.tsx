@@ -112,39 +112,123 @@ function formFrom(schedule: ScheduleRow): EditForm {
   };
 }
 
-/** Parses the form into the request body, or null when it isn't submittable yet. */
-function payloadFrom(form: EditForm): {
+type SchedulePayload = {
   enabled: boolean;
   intervalMin: number | null;
   atTime: string | null;
   endpoints: string[];
   windowDays: number;
   windowOverrides: Record<string, number> | null;
-} | null {
-  const windowDays = Number(form.windowDays);
-  if (!Number.isFinite(windowDays)) return null;
+};
 
-  const intervalMin = form.mode === "interval" && form.intervalMin !== "" ? Number(form.intervalMin) : null;
-  if (form.mode === "interval" && form.intervalMin !== "" && !Number.isFinite(intervalMin)) return null;
+/**
+ * Per invoerveld hoogstens één melding. De sleutels lopen gelijk aan de sleutels
+ * die zod teruggeeft, zodat een serverweigering bij hetzelfde veld landt als een
+ * afkeuring hier; een uitzondering per endpoint krijgt `override:<endpoint>`.
+ */
+type FieldErrors = Record<string, string>;
 
-  const overrideEntries = Object.entries(form.overrides)
-    .filter(([endpoint]) => form.endpoints.includes(endpoint))
-    .filter(([, value]) => value !== "")
-    .map(([endpoint, value]) => [endpoint, Number(value)] as const);
-  const windowOverrides = overrideEntries.length > 0 ? Object.fromEntries(overrideEntries) : null;
+/**
+ * Leest een getalveld. Leeg is geen nul maar ontbrekende invoer: `Number("")`
+ * is 0, dus zonder deze scheiding glipt een leeg veld door de eindigheidstest,
+ * door de bevestigingsdialoog heen, en wordt het pas serverkant geweigerd — met
+ * een foutobject dat het scherm niet kan tonen.
+ *
+ * Nul en negatief passeren hier bewust wél: die zijn ingevuld, en de
+ * bereikcontrole hoort bij de opslagroute die de waarheid over het bereik kent.
+ */
+function readNumber(raw: string): { ok: true; value: number } | { ok: false; melding: string } {
+  if (raw.trim() === "") return { ok: false, melding: "Fill in a number — an empty field is not zero." };
+  const value = Number(raw);
+  if (!Number.isFinite(value)) return { ok: false, melding: "This is not a number." };
+  return { ok: true, value };
+}
+
+/**
+ * Parseert het formulier naar de request body. `payload` is null zodra er een
+ * veld ongeldig is; `errors` wijst dan aan welke.
+ *
+ * Let op het verschil dat het hele ontwerp draagt: ongeldig komt hier niet
+ * doorheen, riskant-maar-geldig wel — dat gaat verder naar de bevestiging.
+ */
+function validateForm(form: EditForm): { payload: SchedulePayload | null; errors: FieldErrors } {
+  const errors: FieldErrors = {};
+
+  const windowDays = readNumber(form.windowDays);
+  if (!windowDays.ok) errors.windowDays = windowDays.melding;
+
+  let intervalMin: number | null = null;
+  if (form.mode === "interval") {
+    const parsed = readNumber(form.intervalMin);
+    if (!parsed.ok) errors.intervalMin = parsed.melding;
+    else intervalMin = parsed.value;
+  }
+
+  // Een leeg uitzonderingsveld betekent "geen uitzondering", niet nul: het veld
+  // toont het rondevenster als placeholder en leeglaten is de manier om terug te
+  // vallen. Ingevuld-maar-onleesbaar is wél een fout.
+  const overrideEntries: [string, number][] = [];
+  for (const [endpoint, raw] of Object.entries(form.overrides)) {
+    if (!form.endpoints.includes(endpoint) || raw.trim() === "") continue;
+    const parsed = readNumber(raw);
+    if (!parsed.ok) errors[`override:${endpoint}`] = parsed.melding;
+    else overrideEntries.push([endpoint, parsed.value]);
+  }
+
+  if (Object.keys(errors).length > 0 || !windowDays.ok) return { payload: null, errors };
 
   return {
-    enabled: form.enabled,
-    intervalMin,
-    atTime: form.mode === "atTime" && form.atTime !== "" ? form.atTime : null,
-    endpoints: form.endpoints,
-    windowDays,
-    windowOverrides,
+    payload: {
+      enabled: form.enabled,
+      intervalMin,
+      atTime: form.mode === "atTime" && form.atTime !== "" ? form.atTime : null,
+      endpoints: form.endpoints,
+      windowDays: windowDays.value,
+      windowOverrides: overrideEntries.length > 0 ? Object.fromEntries(overrideEntries) : null,
+    },
+    errors,
   };
+}
+
+/**
+ * De `fieldErrors` uit `parsed.error.flatten()` omzetten naar dezelfde vorm als
+ * hierboven. Zonder dit belandt een serverweigering in een generieke toast en
+ * wijst niets aan wélk veld werd afgekeurd.
+ */
+function serverFieldErrors(flattened: unknown): { fields: FieldErrors; form: string | null } {
+  const fields: FieldErrors = {};
+  if (!flattened || typeof flattened !== "object") return { fields, form: null };
+
+  const raw = (flattened as { fieldErrors?: unknown }).fieldErrors;
+  if (raw && typeof raw === "object") {
+    for (const [veld, meldingen] of Object.entries(raw as Record<string, unknown>)) {
+      if (Array.isArray(meldingen) && typeof meldingen[0] === "string") fields[veld] = meldingen[0];
+    }
+  }
+
+  const formErrors = (flattened as { formErrors?: unknown }).formErrors;
+  const form =
+    Array.isArray(formErrors) && typeof formErrors[0] === "string" ? formErrors[0] : null;
+  return { fields, form };
 }
 
 function warningsFor(warnings: ScheduleAdvies[], veld: AdviesVeld): ScheduleAdvies[] {
   return warnings.filter((w) => w.veld === veld);
+}
+
+/**
+ * Rood, niet amber: een waarschuwing kun je wegklikken en toch opslaan, dit
+ * niet. Die kleurscheiding is het enige waaraan je ziet welke van de twee je
+ * voor je hebt.
+ */
+function FieldError({ message }: { message?: string }) {
+  if (!message) return null;
+  return (
+    <p className="flex items-start gap-1.5 pt-1 text-xs text-red-600 dark:text-red-400">
+      <RiErrorWarningLine className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+      <span>{message}</span>
+    </p>
+  );
 }
 
 function WarningList({ warnings }: { warnings: ScheduleAdvies[] }) {
@@ -243,9 +327,19 @@ function ScheduleEditor({
   const [form, setForm] = useState<EditForm>(() => formFrom(schedule));
   const [saving, setSaving] = useState(false);
   const [confirmWarnings, setConfirmWarnings] = useState<string[] | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+
+  /**
+   * Elke wijziging wist de veldfouten. Een melding die blijft staan terwijl je
+   * het veld al hebt gecorrigeerd leert je hem te negeren.
+   */
+  const patchForm = useCallback((fn: (f: EditForm) => EditForm) => {
+    setFieldErrors({});
+    setForm(fn);
+  }, []);
 
   const liveWarnings = useMemo(() => {
-    const payload = payloadFrom(form);
+    const { payload } = validateForm(form);
     if (!payload) return [];
     return windowAdvies(payload);
   }, [form]);
@@ -264,21 +358,22 @@ function ScheduleEditor({
   );
 
   const toggleEndpoint = (endpoint: string, checked: boolean) => {
-    setForm((f) => ({
+    patchForm((f) => ({
       ...f,
       endpoints: checked ? [...f.endpoints, endpoint] : f.endpoints.filter((e) => e !== endpoint),
     }));
   };
 
   const setOverride = (endpoint: string, value: string) => {
-    setForm((f) => ({ ...f, overrides: { ...f.overrides, [endpoint]: value } }));
+    patchForm((f) => ({ ...f, overrides: { ...f.overrides, [endpoint]: value } }));
   };
 
   const save = useCallback(
     async (skipWarningCheck = false) => {
-      const payload = payloadFrom(form);
+      const { payload, errors } = validateForm(form);
+      setFieldErrors(errors);
       if (!payload) {
-        toast.error("Fix the invalid values before saving");
+        toast.error("Fix the highlighted fields before saving");
         return;
       }
 
@@ -304,11 +399,22 @@ function ScheduleEditor({
         });
         if (!res.ok) {
           const body = await res.json().catch(() => null);
-          const message =
-            typeof body?.error === "string"
-              ? body.error
-              : "Invalid values — check the highlighted fields";
-          toast.error(message);
+          if (typeof body?.error === "string") {
+            toast.error(body.error);
+            return;
+          }
+          // De opslagroute weigert met `parsed.error.flatten()`. Die uitpakken
+          // en bij de velden zetten, zodat "check the highlighted fields" ook
+          // echt iets gemarkeerds oplevert.
+          const { fields, form: formError } = serverFieldErrors(body?.error);
+          setFieldErrors(fields);
+          setConfirmWarnings(null);
+          toast.error(
+            formError ??
+              (Object.keys(fields).length > 0
+                ? "Invalid values — check the highlighted fields"
+                : "Invalid values")
+          );
           return;
         }
         toast.success(`Schedule "${schedule.name}" saved`);
@@ -335,7 +441,7 @@ function ScheduleEditor({
               type="button"
               variant={form.enabled ? "default" : "outline"}
               size="sm"
-              onClick={() => setForm((f) => ({ ...f, enabled: true }))}
+              onClick={() => patchForm((f) => ({ ...f, enabled: true }))}
             >
               Enabled
             </Button>
@@ -343,7 +449,7 @@ function ScheduleEditor({
               type="button"
               variant={!form.enabled ? "default" : "outline"}
               size="sm"
-              onClick={() => setForm((f) => ({ ...f, enabled: false }))}
+              onClick={() => patchForm((f) => ({ ...f, enabled: false }))}
             >
               Disabled
             </Button>
@@ -358,7 +464,7 @@ function ScheduleEditor({
               type="button"
               variant={form.mode === "interval" ? "default" : "outline"}
               size="sm"
-              onClick={() => setForm((f) => ({ ...f, mode: "interval" }))}
+              onClick={() => patchForm((f) => ({ ...f, mode: "interval" }))}
             >
               Interval
             </Button>
@@ -366,7 +472,7 @@ function ScheduleEditor({
               type="button"
               variant={form.mode === "atTime" ? "default" : "outline"}
               size="sm"
-              onClick={() => setForm((f) => ({ ...f, mode: "atTime" }))}
+              onClick={() => patchForm((f) => ({ ...f, mode: "atTime" }))}
             >
               Time of day
             </Button>
@@ -377,7 +483,8 @@ function ScheduleEditor({
                 type="number"
                 min={1}
                 value={form.intervalMin}
-                onChange={(e) => setForm((f) => ({ ...f, intervalMin: e.target.value }))}
+                onChange={(e) => patchForm((f) => ({ ...f, intervalMin: e.target.value }))}
+                aria-invalid={!!fieldErrors.intervalMin}
                 className="w-28"
               />
               <span className="text-xs text-muted-foreground">minutes</span>
@@ -386,10 +493,11 @@ function ScheduleEditor({
             <Input
               type="time"
               value={form.atTime}
-              onChange={(e) => setForm((f) => ({ ...f, atTime: e.target.value }))}
+              onChange={(e) => patchForm((f) => ({ ...f, atTime: e.target.value }))}
               className="w-32"
             />
           )}
+          <FieldError message={fieldErrors.intervalMin ?? fieldErrors.atTime} />
           <WarningList warnings={warningsFor(liveWarnings, "intervalMin")} />
         </div>
 
@@ -406,6 +514,7 @@ function ScheduleEditor({
               </label>
             ))}
           </div>
+          <FieldError message={fieldErrors.endpoints} />
           <WarningList warnings={warningsFor(liveWarnings, "endpoints")} />
         </div>
 
@@ -415,9 +524,11 @@ function ScheduleEditor({
             type="number"
             min={1}
             value={form.windowDays}
-            onChange={(e) => setForm((f) => ({ ...f, windowDays: e.target.value }))}
+            onChange={(e) => patchForm((f) => ({ ...f, windowDays: e.target.value }))}
+            aria-invalid={!!fieldErrors.windowDays}
             className="w-28"
           />
+          <FieldError message={fieldErrors.windowDays} />
           <WarningList warnings={warningsFor(liveWarnings, "windowDays")} />
         </div>
 
@@ -434,12 +545,15 @@ function ScheduleEditor({
                     placeholder={form.windowDays}
                     value={form.overrides[endpoint] ?? ""}
                     onChange={(e) => setOverride(endpoint, e.target.value)}
+                    aria-invalid={!!fieldErrors[`override:${endpoint}`]}
                     className="w-24"
                   />
                   <span className="text-xs text-muted-foreground">days</span>
+                  <FieldError message={fieldErrors[`override:${endpoint}`]} />
                 </div>
               ))}
             </div>
+            <FieldError message={fieldErrors.windowOverrides} />
             <WarningList warnings={warningsFor(liveWarnings, "windowOverrides")} />
           </div>
         )}
