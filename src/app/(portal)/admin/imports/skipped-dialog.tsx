@@ -216,7 +216,14 @@ export function SkippedDialog({ batch, onClose }: { batch: ImportBatch; onClose:
                         }
                       >
                         <SelectTrigger className="w-[220px]">
-                          <SelectValue placeholder="Choose a company" />
+                          {/* Zonder deze functie toont Base UI de rauwe waarde, en
+                              dat is hier een UUID in plaats van een bedrijfsnaam. */}
+                          <SelectValue placeholder="Choose a company">
+                            {(value) =>
+                              companyList.find((company) => company.id === value)?.name ??
+                              "Choose a company"
+                            }
+                          </SelectValue>
                         </SelectTrigger>
                         <SelectContent>
                           {companyList.map((company) => (
