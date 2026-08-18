@@ -68,14 +68,14 @@ export async function POST(request: NextRequest) {
     rowSchema: partijSchema,
     schemaKeys: partijKeys,
     aliases: partijAliases,
-    handler: async (partijen) => {
+    handler: async (partijen, batchId) => {
       if (partijen.length === 0) return { created: 0, updated: 0, skipped: 0 };
-      return upsertLots(partijen);
+      return upsertLots(partijen, batchId);
     },
   });
 }
 
-async function upsertLots(partijen: Partij[]) {
+async function upsertLots(partijen: Partij[], batchId: string | null) {
   // Round IDs (DAX/Power Automate can send 1.0 instead of 1)
   for (const row of partijen) {
     row.part_id = Math.round(row.part_id);
@@ -392,10 +392,12 @@ async function upsertLots(partijen: Partij[]) {
          "invoicedColli" = (u.val->>'invoicedColli')::int,
          "invoicedVolume" = (u.val->>'invoicedVolume')::int,
          "correctionVolume" = (u.val->>'correctionVolume')::int,
+         "lastImportBatchId" = $2,
          "updatedAt" = NOW()
        FROM jsonb_array_elements($1::jsonb) AS u(val)
        WHERE t."fabricPartId" = (u.val->>'fabricPartId')::int`,
-      JSON.stringify(lotUpdateData)
+      JSON.stringify(lotUpdateData),
+      batchId
     );
   }
 
@@ -446,6 +448,7 @@ async function upsertLots(partijen: Partij[]) {
          "purchaseType", "fabricArticleId", colli, "stemLength", "totalStems",
          "avgPrice", "totalAmount", "deliveryDate", status,
          s1, s2, s3, "invoicedColli", "invoicedVolume", "correctionVolume",
+         "lastImportBatchId",
          "createdAt", "updatedAt"
        )
        SELECT
@@ -474,6 +477,7 @@ async function upsertLots(partijen: Partij[]) {
          (v.val->>'invoicedColli')::int,
          (v.val->>'invoicedVolume')::int,
          (v.val->>'correctionVolume')::int,
+         $2,
          NOW(),
          NOW()
        FROM jsonb_array_elements($1::jsonb) AS v(val)
@@ -489,8 +493,10 @@ async function upsertLots(partijen: Partij[]) {
          "invoicedColli" = EXCLUDED."invoicedColli",
          "invoicedVolume" = EXCLUDED."invoicedVolume",
          "correctionVolume" = EXCLUDED."correctionVolume",
+         "lastImportBatchId" = EXCLUDED."lastImportBatchId",
          "updatedAt" = NOW()`,
-      JSON.stringify(lotJsonData)
+      JSON.stringify(lotJsonData),
+      batchId
     );
     // insertResult = number of rows affected (inserts + updates)
     // Adjust counts: if some were actually updates (ON CONFLICT), our lotCreated count is too high
