@@ -109,7 +109,7 @@ export function SkippedDialog({ batch, onClose }: { batch: ImportBatch; onClose:
   const { data, loading, error } = useFetch<SkippedResponse>(
     `/api/admin/import-batches/${batch.id}/skipped`
   );
-  const { data: companies } = useFetch<Company[]>("/api/companies");
+  const { data: companies, error: companiesError } = useFetch<Company[]>("/api/companies");
 
   const [companyId, setCompanyId] = useState<string | null>(null);
   const [activating, setActivating] = useState<number | null>(null);
@@ -136,6 +136,14 @@ export function SkippedDialog({ batch, onClose }: { batch: ImportBatch; onClose:
         });
         const body = await res.json().catch(() => null);
         if (!res.ok) {
+          // 409 betekent dat hij al bestaat — iemand anders was je voor, of het
+          // antwoord op een geslaagde POST ging verloren. De gewenste toestand is
+          // bereikt, dus de rij hoort op "Activated" en niet op een rode melding.
+          if (res.status === 409) {
+            setActivated((prev) => new Set(prev).add(row.relId));
+            toast.info(`${row.code ?? row.relId} was already a supplier`);
+            return;
+          }
           toast.error(
             typeof body?.error === "string" ? body.error : "Failed to activate this supplier"
           );
@@ -168,8 +176,9 @@ export function SkippedDialog({ batch, onClose }: { batch: ImportBatch; onClose:
           </DialogTitle>
           <DialogDescription>
             {formatDate(batch.startedAt)} {formatTime(batch.startedAt)} &middot;{" "}
-            {formatNumber(batch.recordsSkipped)} records skipped because their supplier does not
-            exist in the portal.
+            {formatNumber(batch.recordsSkipped)} records skipped in total. The relations below are
+            the busiest 50 with a missing supplier, so they add up to less: the rest of the skips
+            are duplicates and rows the run had already seen.
           </DialogDescription>
         </DialogHeader>
 
@@ -187,6 +196,16 @@ export function SkippedDialog({ batch, onClose }: { batch: ImportBatch; onClose:
                 <p className="text-xs text-muted-foreground">None in this run.</p>
               ) : (
                 <>
+                  {companyList.length === 0 && (
+                    // Zonder company kan er niets aangemaakt worden. Zeg dat, in
+                    // plaats van een knop te tonen die permanent op slot staat
+                    // met "Choose a company first" terwijl er niets te kiezen valt.
+                    <p className="text-xs text-red-600 dark:text-red-400">
+                      {companiesError
+                        ? "Could not load the companies, so nothing can be activated here."
+                        : "There are no companies yet, so a supplier cannot be created."}
+                    </p>
+                  )}
                   {companyList.length > 1 && (
                     <div className="flex items-center gap-2">
                       <Label className="text-xs text-muted-foreground">Create under</Label>
