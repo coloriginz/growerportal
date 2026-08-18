@@ -6,6 +6,17 @@ import {
   RiAlertLine,
 } from "@remixicon/react";
 
+export interface ImportBatchJob {
+  importBatchId: string;
+  runId: string;
+  source: string;
+  sequence: number;
+  attempts: number;
+  windowFrom: string;
+  windowTo: string;
+  status: "pending" | "dispatched" | "done" | "failed" | "cancelled";
+}
+
 export interface ImportBatch {
   id: string;
   endpoint: string;
@@ -19,6 +30,7 @@ export interface ImportBatch {
   details: Record<string, unknown> | null;
   startedAt: string;
   completedAt: string | null;
+  job: ImportBatchJob | null;
 }
 
 export interface ImportBatchResponse {
@@ -53,6 +65,22 @@ export function formatDuration(ms: number | null): string {
   if (ms < 1000) return `${ms}ms`;
   const seconds = (ms / 1000).toFixed(1);
   return `${seconds}s`;
+}
+
+const windowDateFormat = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short" });
+
+/** e.g. "10 Aug – 18 Aug" — the window a sync job fetched, not tied to any locale used elsewhere. */
+export function formatWindowRange(from: string, to: string): string {
+  return `${windowDateFormat.format(new Date(from))} – ${windowDateFormat.format(new Date(to))}`;
+}
+
+/** rel_id -> skipped lot count, sorted busiest-first. Empty when the batch has none. */
+export function skippedSuppliersOf(batch: Pick<ImportBatch, "details">): [string, number][] {
+  const raw = batch.details?.skippedSuppliers;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return [];
+  return Object.entries(raw as Record<string, unknown>)
+    .filter((entry): entry is [string, number] => typeof entry[1] === "number")
+    .sort((a, b) => b[1] - a[1]);
 }
 
 export function StatusBadge({ status }: { status: ImportBatch["status"] }) {

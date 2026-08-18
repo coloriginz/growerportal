@@ -43,6 +43,8 @@ import {
   ENDPOINTS,
   timeAgo,
   formatDuration,
+  formatWindowRange,
+  skippedSuppliersOf,
   StatusBadge,
   type ImportBatch,
   type ImportBatchResponse,
@@ -145,7 +147,9 @@ export function DataSyncTab() {
   const [endpointFilter, setEndpointFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [page, setPage] = useState(1);
-  const [errorDialogBatch, setErrorDialogBatch] = useState<ImportBatch | null>(null);
+  // Doubles as the "why is data missing" dialog: a batch with an error opens it
+  // in red, a successful batch with skipped suppliers opens it in neutral tone.
+  const [detailBatch, setDetailBatch] = useState<ImportBatch | null>(null);
 
   const url = useMemo(() => {
     const params = new URLSearchParams();
@@ -366,6 +370,8 @@ export function DataSyncTab() {
                 <TableRow>
                   <TableHead>{t("common.date")}</TableHead>
                   <TableHead>{t("imports.endpoint")}</TableHead>
+                  <TableHead>Run</TableHead>
+                  <TableHead>Window</TableHead>
                   <TableHead>{t("common.status")}</TableHead>
                   <TableHead className="text-right">{t("imports.received")}</TableHead>
                   <TableHead className="text-right">Created</TableHead>
@@ -378,18 +384,20 @@ export function DataSyncTab() {
               <TableBody>
                 {loading && !data ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="h-24 text-center text-muted-foreground">
+                    <TableCell colSpan={11} className="h-24 text-center text-muted-foreground">
                       {t("common.loading")}
                     </TableCell>
                   </TableRow>
                 ) : batches.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="h-24 text-center text-muted-foreground">
+                    <TableCell colSpan={11} className="h-24 text-center text-muted-foreground">
                       {t("imports.noData")}
                     </TableCell>
                   </TableRow>
                 ) : (
-                  batches.map((batch) => (
+                  batches.map((batch) => {
+                    const skipped = skippedSuppliersOf(batch);
+                    return (
                     <TableRow key={batch.id}>
                       <TableCell className="whitespace-nowrap">
                         {formatDate(batch.startedAt)}{" "}
@@ -398,6 +406,21 @@ export function DataSyncTab() {
                         </span>
                       </TableCell>
                       <TableCell className="capitalize">{batch.endpoint}</TableCell>
+                      <TableCell className="whitespace-nowrap">
+                        {batch.job && (
+                          <>
+                            <span className="capitalize">{batch.job.source}</span>
+                            {batch.job.attempts > 1 && (
+                              <span className="ml-1 text-xs text-muted-foreground">
+                                (attempt {batch.job.attempts})
+                              </span>
+                            )}
+                          </>
+                        )}
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap">
+                        {batch.job && formatWindowRange(batch.job.windowFrom, batch.job.windowTo)}
+                      </TableCell>
                       <TableCell>
                         <StatusBadge status={batch.status} />
                       </TableCell>
@@ -411,7 +434,17 @@ export function DataSyncTab() {
                         {formatNumber(batch.recordsUpdated)}
                       </TableCell>
                       <TableCell className="text-right">
-                        {formatNumber(batch.recordsSkipped)}
+                        {skipped.length > 0 ? (
+                          <button
+                            onClick={() => setDetailBatch(batch)}
+                            className="text-amber-700 hover:underline cursor-pointer dark:text-amber-400"
+                            title="Show skipped suppliers"
+                          >
+                            {formatNumber(batch.recordsSkipped)}
+                          </button>
+                        ) : (
+                          formatNumber(batch.recordsSkipped)
+                        )}
                       </TableCell>
                       <TableCell className="text-right">
                         {formatDuration(batch.durationMs)}
@@ -419,7 +452,7 @@ export function DataSyncTab() {
                       <TableCell>
                         {batch.errorMessage ? (
                           <button
-                            onClick={() => setErrorDialogBatch(batch)}
+                            onClick={() => setDetailBatch(batch)}
                             className="text-left text-xs text-red-600 dark:text-red-400 hover:underline cursor-pointer"
                           >
                             {batch.errorMessage.length > 50
@@ -431,7 +464,8 @@ export function DataSyncTab() {
                         )}
                       </TableCell>
                     </TableRow>
-                  ))
+                    );
+                  })
                 )}
               </TableBody>
             </Table>
@@ -466,40 +500,78 @@ export function DataSyncTab() {
         </div>
       )}
 
-      {/* Error detail dialog */}
+      {/* Detail dialog: an error batch opens in red, a successful batch with
+          skipped suppliers opens in neutral amber — same dialog, different tone,
+          so a clean import never reads as a failure. */}
       <Dialog
-        open={!!errorDialogBatch}
-        onOpenChange={(open) => { if (!open) setErrorDialogBatch(null); }}
+        open={!!detailBatch}
+        onOpenChange={(open) => { if (!open) setDetailBatch(null); }}
       >
         <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="text-red-600 dark:text-red-400 flex items-center gap-2">
-              <RiErrorWarningLine className="h-5 w-5" />
-              Import Error — {errorDialogBatch?.endpoint}
-            </DialogTitle>
+            {detailBatch?.errorMessage ? (
+              <DialogTitle className="text-red-600 dark:text-red-400 flex items-center gap-2">
+                <RiErrorWarningLine className="h-5 w-5" />
+                Import Error — {detailBatch?.endpoint}
+              </DialogTitle>
+            ) : (
+              <DialogTitle className="flex items-center gap-2">
+                <RiAlertLine className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+                Skipped suppliers — {detailBatch?.endpoint}
+              </DialogTitle>
+            )}
           </DialogHeader>
           <div className="space-y-3 text-sm">
             <div className="text-muted-foreground">
-              {errorDialogBatch && (
+              {detailBatch && (
                 <>
-                  {formatDate(errorDialogBatch.startedAt)}{" "}
-                  {formatTime(errorDialogBatch.startedAt)}
-                  {errorDialogBatch.durationMs !== null && (
-                    <> &middot; {formatDuration(errorDialogBatch.durationMs)}</>
+                  {formatDate(detailBatch.startedAt)}{" "}
+                  {formatTime(detailBatch.startedAt)}
+                  {detailBatch.durationMs !== null && (
+                    <> &middot; {formatDuration(detailBatch.durationMs)}</>
                   )}
                 </>
               )}
             </div>
-            <pre className="whitespace-pre-wrap break-words rounded-md bg-muted p-3 text-xs font-mono">
-              {errorDialogBatch?.errorMessage &&
-                (() => {
+
+            {detailBatch?.errorMessage && (
+              <pre className="whitespace-pre-wrap break-words rounded-md bg-muted p-3 text-xs font-mono">
+                {(() => {
                   try {
-                    return JSON.stringify(JSON.parse(errorDialogBatch.errorMessage), null, 2);
+                    return JSON.stringify(JSON.parse(detailBatch.errorMessage), null, 2);
                   } catch {
-                    return errorDialogBatch.errorMessage;
+                    return detailBatch.errorMessage;
                   }
                 })()}
-            </pre>
+              </pre>
+            )}
+
+            {detailBatch && skippedSuppliersOf(detailBatch).length > 0 && (
+              <div className="space-y-1.5">
+                <p className="text-xs text-muted-foreground">
+                  These suppliers don&apos;t exist in the portal yet, so their lots were
+                  skipped (rel_id, busiest first, top 50):
+                </p>
+                <div className="max-h-72 overflow-y-auto rounded-md border">
+                  <table className="w-full text-xs">
+                    <thead className="bg-muted text-muted-foreground">
+                      <tr>
+                        <th className="px-3 py-1.5 text-left font-medium">rel_id</th>
+                        <th className="px-3 py-1.5 text-right font-medium">Lots skipped</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {skippedSuppliersOf(detailBatch).map(([relId, count]) => (
+                        <tr key={relId} className="border-t">
+                          <td className="px-3 py-1 font-mono">{relId}</td>
+                          <td className="px-3 py-1 text-right">{formatNumber(count)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
           </div>
         </DialogContent>
       </Dialog>
