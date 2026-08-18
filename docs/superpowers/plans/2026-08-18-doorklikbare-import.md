@@ -466,9 +466,20 @@ de batches waar het om gaat. Vervangen door `skippedRelationCount`, dat `classif
 gebruikt en daarmee beide vormen leest. De oude lijst in de detaildialoog is weg; die dialoog toont nu
 alleen nog de fout.
 
-- [ ] **Step 4: Verifieer in de browser** — de routelogica is tegen de testdatabase geverifieerd
-(45 kwekers, 5 interne boekingen, alle vijf `*Productieorders`; een batch met de oude vorm zet alles bij
-de kwekers zonder te breken). Het echt activeren van een leverancier staat nog open.
+- [x] **Step 4: Verifieer in de browser** — gedaan op 18 augustus.
+
+De routelogica klopte tegen de testdatabase (45 kwekers, 5 interne boekingen, alle vijf
+`*Productieorders`; een batch met de oude vorm zet alles bij de kwekers zonder te breken). In de
+browser is `GCPDFAAL` (Piazza Dei Fiori) echt aangezet vanuit het paneel: hij had nul records, en na
+één nachtronde 146 partijen, 8 afrekeningen en 324 orderregels, alle met de herkomst van die ronde.
+Van de 149 overgeslagen partijen kwamen er 146 terug; het verschil is dedup en de rand van het
+venster. **Aanzetten ís de reparatie** — dat is nu aangetoond en geen aanname meer.
+
+Drie dingen kwamen pas in de browser boven water en zijn gerepareerd: een `sm:`-variant in de basis-
+`DialogContent` die van `max-w-4xl` een smalle dialoog maakte (dezelfde fout stond al in de
+foutdialoog ernaast, en staat nog in drie fust-dialogen), een 409 die als fout werd getoond terwijl
+de gewenste eindtoestand juist bereikt is, en een `SelectValue` die het UUID van de company toonde
+in plaats van zijn naam.
 
 Open de skipped-dialoog van een `lots`-batch.
 Expected: `FFSEPFC` en `GCPDFAAL` in de bovenste groep met een Activate-knop, en `RCPROD`, `RCFTPROD`, `SCPRO` in de onderste zonder. Bij een batch van vóór taak 6 staat alles in de bovenste groep — dat is de oude vorm en dat klopt.
