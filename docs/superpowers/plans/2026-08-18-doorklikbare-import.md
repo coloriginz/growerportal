@@ -557,6 +557,20 @@ git add src/app/api/admin/import-batches "src/app/(portal)/admin/imports"
 git commit -m "feat: click through from a run to the records it touched"
 ```
 
+**Wat de review opleverde (18 augustus).** Drie dingen gerepareerd:
+
+1. *De paginering kon rijen laten vallen.* Alle vier de sorteringen eindigden op een niet-unieke
+   sleutel; bij `costs` delen 470 van de 1.058 rijen er een (grootste groep 16), bij `orders` 65.
+   Met `OFFSET` mag Postgres zo'n rij op twee pagina's of op geen enkele zetten — gemeten op de
+   testdatabase leverde een volledige sweep zonder tiebreaker 1.058 rijen op met 1.057 unieke, dus
+   één dubbel en één kwijt. `{ id: "asc" }` sluit nu elke `orderBy` af, ook bij `lots`.
+2. *De uitleg bij een ingehaalde ronde was niet eerlijk.* De route stuurt nu `reported` mee en
+   benoemt het verschil als feit zodra het gevonden aantal lager is dan het gemelde — ook bij een
+   half gevulde lijst, en juist níét als de ronde zelf nul meldt.
+3. *`divergenceNote` kon met stelligheid het verkeerde zeggen.* De correctie-uitleg verschijnt
+   alleen nog als de correcties in het gat passen; de rest van het gat gaat naar de
+   overschrijf-uitleg, en beide staan er samen als ze samen het verschil verklaren.
+
 ---
 
 ## Wat er na dit plan staat

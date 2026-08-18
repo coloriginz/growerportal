@@ -19,6 +19,7 @@ const KIND_BY_ENDPOINT = {
 } as const;
 
 type Kind = (typeof KIND_BY_ENDPOINT)[keyof typeof KIND_BY_ENDPOINT];
+type Mode = z.infer<typeof querySchema>["mode"];
 
 function isKnownEndpoint(endpoint: string): endpoint is keyof typeof KIND_BY_ENDPOINT {
   return endpoint in KIND_BY_ENDPOINT;
@@ -62,6 +63,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     return NextResponse.json({ error: "Import batch not found" }, { status: 404 });
   }
 
+  const reported = { created: batch.recordsCreated, updated: batch.recordsUpdated };
+
   const empty = (reason: string) =>
     NextResponse.json({
       batchId: batch.id,
@@ -69,12 +72,13 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       startedAt: batch.startedAt,
       kind: null,
       reason,
-      note: null,
+      notes: [],
       mode,
       page: 1,
       pageSize: PAGE_SIZE,
       total: 0,
       totalPages: 1,
+      reported,
       counts: { created: 0, updated: 0 },
       records: [],
     });
@@ -107,35 +111,61 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     startedAt: batch.startedAt,
     kind,
     reason: null,
-    note: divergenceNote(batch, counts.created),
+    notes: divergenceNotes(batch, mode, reported[mode], total),
     mode,
     page,
     pageSize: PAGE_SIZE,
     total,
     totalPages: Math.max(Math.ceil(total / PAGE_SIZE), 1),
+    reported,
     counts,
     records,
   });
 }
 
 /**
- * Waarom het getal in de tabel niet hetzelfde telt als deze lijst. Alleen de
- * lots-ronde loopt uiteen: die rekent aangemaakte partijcorrecties mee in
- * `recordsCreated`, en die landen in `LotCorrection` — een tabel zonder
- * herkomstkolom. Zonder deze regel lijkt het verschil een gat in de data.
+ * Waarom het getal in de tabel hoger ligt dan wat deze lijst toont. Twee
+ * oorzaken kunnen los of samen spelen: een lots-ronde telt aangemaakte
+ * partijcorrecties mee in `recordsCreated` en die landen in `LotCorrection` —
+ * een tabel zonder herkomstkolom — en `lastImportBatchId` houdt maar één ronde
+ * vast, dus een latere ronde neemt de herkomst over van alles wat hij opnieuw
+ * aanraakte. De correctie-uitleg mag alleen mee als de correcties werkelijk in
+ * het gat passen; anders zou hij met stelligheid het verkeerde zeggen.
  */
-function divergenceNote(
-  batch: { endpoint: string; recordsCreated: number; details: unknown },
-  created: number
-): string | null {
-  if (batch.endpoint !== "lots" || batch.recordsCreated === created) return null;
-  const details = batch.details as { corrections?: { created?: number } } | null;
-  const corrections = details?.corrections?.created;
-  return (
-    `The run reports ${batch.recordsCreated} created` +
-    (typeof corrections === "number" ? `, of which ${corrections} are lot corrections` : "") +
-    ". Corrections live in a separate table that carries no origin, so only the lots are listed here."
-  );
+function divergenceNotes(
+  batch: { endpoint: string; details: unknown },
+  mode: Mode,
+  reported: number,
+  found: number
+): string[] {
+  const gap = reported - found;
+  if (gap <= 0) return [];
+
+  const notes: string[] = [];
+  const corrections =
+    mode === "created" && batch.endpoint === "lots" ? correctionsCreated(batch.details) : 0;
+  const explained = corrections <= gap ? corrections : 0;
+  if (explained > 0) {
+    notes.push(
+      `The run reports ${reported} created, of which ${explained} are lot corrections. ` +
+        "Corrections live in a separate table that carries no origin, so only the lots are listed here."
+    );
+  }
+
+  const overwritten = gap - explained;
+  if (overwritten > 0) {
+    notes.push(
+      (explained > 0 ? "" : `The run reports ${reported} ${mode}; this list has ${found}. `) +
+        `A later run has touched the other ${overwritten} record${overwritten === 1 ? "" : "s"} ` +
+        "again and now carries their origin."
+    );
+  }
+  return notes;
+}
+
+function correctionsCreated(details: unknown): number {
+  const created = (details as { corrections?: { created?: number } } | null)?.corrections?.created;
+  return typeof created === "number" ? created : 0;
 }
 
 type DateFilter = { gte: Date } | { lt: Date };
@@ -219,12 +249,20 @@ async function fetchRecords(
   const where = { lastImportBatchId: batchId, createdAt };
   const page = { skip, take: PAGE_SIZE };
 
+  // `id` sluit elke sortering af: bij een niet-unieke sleutel mag Postgres rijen
+  // met dezelfde waarde elke keer anders ordenen, en dan springt er met OFFSET
+  // een rij naar twee pagina's of naar geen enkele.
   switch (kind) {
     case "lots": {
       const rows = await prisma.lot.findMany({
         where,
         ...page,
-        orderBy: [{ supplier: { code: "asc" } }, { deliveryDate: "asc" }, { lotNumber: "asc" }],
+        orderBy: [
+          { supplier: { code: "asc" } },
+          { deliveryDate: "asc" },
+          { lotNumber: "asc" },
+          { id: "asc" },
+        ],
         select: {
           id: true,
           lotNumber: true,
@@ -245,7 +283,12 @@ async function fetchRecords(
       const rows = await prisma.transaction.findMany({
         where,
         ...page,
-        orderBy: [{ lot: { supplier: { code: "asc" } } }, { date: "asc" }, { fabricOrdregId: "asc" }],
+        orderBy: [
+          { lot: { supplier: { code: "asc" } } },
+          { date: "asc" },
+          { fabricOrdregId: "asc" },
+          { id: "asc" },
+        ],
         select: {
           id: true,
           fabricOrdregId: true,
@@ -275,7 +318,7 @@ async function fetchRecords(
       const rows = await prisma.grower.findMany({
         where,
         ...page,
-        orderBy: [{ supplier: { code: "asc" } }, { name: "asc" }],
+        orderBy: [{ supplier: { code: "asc" } }, { name: "asc" }, { id: "asc" }],
         select: {
           id: true,
           code: true,
@@ -300,6 +343,7 @@ async function fetchRecords(
           { salesSheet: { supplier: { code: "asc" } } },
           { salesSheet: { invoiceDate: "asc" } },
           { description: "asc" },
+          { id: "asc" },
         ],
         select: {
           id: true,

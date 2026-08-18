@@ -69,13 +69,15 @@ interface RecordsResponseBase {
   batchId: string;
   endpoint: string;
   startedAt: string;
-  /** Waarom het getal in de tabel niet hetzelfde telt als deze lijst. */
-  note: string | null;
+  /** Waarom het getal in de tabel niet hetzelfde telt als deze lijst; leeg als het klopt. */
+  notes: string[];
   mode: RecordMode;
   page: number;
   pageSize: number;
   total: number;
   totalPages: number;
+  /** Wat de batch zelf meldt, tegenover `counts`: wat er nog te vinden is. */
+  reported: { created: number; updated: number };
   counts: { created: number; updated: number };
 }
 
@@ -261,14 +263,14 @@ export function BatchRecordsDialog({
           </TabsList>
         </Tabs>
 
-        {/* De opmerking verklaart het verschil tussen het aantal in de tabel en
-            wat hier staat, en dat gaat alleen over aangemaakte records. */}
-        {data?.note && mode === "created" && (
-          <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
+        {/* De opmerkingen verklaren het verschil tussen het aantal in de tabel en
+            wat hier staat; de route stelt ze op voor het geopende tabblad. */}
+        {data?.notes.map((note) => (
+          <p key={note} className="flex items-start gap-1.5 text-xs text-muted-foreground">
             <RiInformationLine className="mt-px h-3.5 w-3.5 shrink-0" />
-            {data.note}
+            {note}
           </p>
-        )}
+        ))}
 
         {loading && !data ? (
           <p className="py-8 text-center text-sm text-muted-foreground">Loading...</p>
@@ -279,9 +281,12 @@ export function BatchRecordsDialog({
         ) : !data ? null : data.kind === null ? (
           <p className="py-8 text-center text-sm text-muted-foreground">{data.reason}</p>
         ) : data.records.length === 0 ? (
+          // Meldde de ronde hier zelf niets, dan valt er ook niets te verklaren;
+          // anders staat de verklaring al in de opmerkingen hierboven.
           <p className="py-8 text-center text-sm text-muted-foreground">
-            This run {mode === "created" ? "created" : "updated"} no records that still carry its
-            origin — a later run may have overwritten them.
+            {data.reported[mode] === 0
+              ? `This run ${mode} no records.`
+              : "No records to list; the note above explains why."}
           </p>
         ) : (
           <div className="space-y-3">
