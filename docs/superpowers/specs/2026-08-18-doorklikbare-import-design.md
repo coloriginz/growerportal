@@ -29,7 +29,7 @@ Die asymmetrie is het hart van dit ontwerp. Eén mechanisme dat beide dekt besta
 
 | onderwerp | keuze | overweging |
 |---|---|---|
-| **Herkomst van een record** | `lastImportBatchId` op `Lot`, `Transaction`, `Grower` | de goedkoopste manier om "welke ronde raakte dit aan" beantwoordbaar te maken, zonder lijsten in een JSON-kolom |
+| **Herkomst van een record** | `lastImportBatchId` op `Lot`, `Transaction`, `Grower`, `SalesSheetCost` | de goedkoopste manier om "welke ronde raakte dit aan" beantwoordbaar te maken, zonder lijsten in een JSON-kolom |
 | **Aangemaakt versus bijgewerkt** | afgeleid uit `createdAt` tegen de starttijd van de batch | scheelt een tweede kolom en klopt per definitie |
 | **Overgeslagen** | het bestaande `skippedSuppliers` uitbreiden en tonen | de import weet het al; er hoeft niets bij opgeslagen te worden dat er niet is |
 | **Kweker of interne boeking** | afleiden uit `facttypesub` tijdens de import | het onderscheid zit in de data; een handmatig vlaggetje veroudert |
@@ -40,8 +40,8 @@ Die asymmetrie is het hart van dit ontwerp. Eén mechanisme dat beide dekt besta
 
 ## 3. Wat er binnenkwam
 
-Drie modellen krijgen een nullable `lastImportBatchId` met een index: `Lot`, `Transaction` en
-`Grower`. De import-routes zetten hem in hun upsert.
+Vier modellen krijgen een nullable `lastImportBatchId` met een index: `Lot`, `Transaction`, `Grower`
+en `SalesSheetCost`. De import-routes zetten hem in hun upsert.
 
 Dat is de hele opslag. Geen lijsten, geen groei: één string per record, overschreven bij elke ronde
 die hem aanraakt.
@@ -60,9 +60,15 @@ bekijkt: het filtert op de gekozen leverancier en toont productgerichte kolommen
 ronde nakijkt wil juist over leveranciers heen kijken. Dat scherm daarvoor ombouwen maakt het voor
 beide doelgroepen slechter.
 
-**Buiten scope:** `SalesSheetCost` en `Supplier`. Die worden ook geraakt, maar de vraag "welke
-kostenregels kwamen binnen" is nog nooit gesteld, en `Supplier` wordt elke ronde in zijn geheel
-bijgewerkt. Toe te voegen wanneer iemand het mist; het patroon is dan identiek.
+**De kosten-import vraagt extra aandacht.** Die schrijft langs drie paden weg: een rauwe `UPDATE`
+over een jsonb-array voor bestaande regels, een `createMany` voor nieuwe, en een terugval op losse
+creates als die faalt. Alle drie moeten het batch-id meekrijgen. Slaat er één over, dan ontstaan er
+kostenregels die wel bestaan maar geen herkomst dragen — en dat is een halve toestand die later niet
+te verklaren is.
+
+**Buiten scope:** `Supplier`. Die wordt elke ronde in zijn geheel bijgewerkt — 673 van de 673 — dus
+"welke leveranciers raakte deze ronde aan" levert geen antwoord op dat iets toevoegt. Toe te voegen
+wanneer iemand het mist; het patroon is dan identiek.
 
 ---
 
@@ -124,6 +130,7 @@ warehouse waarvan de naam iets anders belooft dan hij bevat, na de accountmanage
 | `src/app/api/import/lots/route.ts` | batch-id in de upsert; `skippedSuppliers` telt ook `productie` |
 | `src/app/api/import/orders/route.ts` | batch-id in de upsert |
 | `src/app/api/import/growers/route.ts` | batch-id in de upsert |
+| `src/app/api/import/costs/route.ts` | batch-id in alle drie de schrijfpaden |
 | `src/app/api/admin/import-batches/[id]/records/route.ts` | nieuw: de records van één ronde, gepagineerd |
 | `src/app/api/admin/import-batches/[id]/skipped/route.ts` | nieuw: overgeslagen relaties, gejoind en gegroepeerd |
 | `src/app/(portal)/admin/imports/batch-records-dialog.tsx` | nieuw: het paneel met de records |
