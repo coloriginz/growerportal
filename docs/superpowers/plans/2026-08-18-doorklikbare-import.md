@@ -48,21 +48,31 @@ Alle vier de routes negeren dat argument nu (`handler: async (costs) => ...`). E
 
 Ruim je testrecords daarna op, en herstel wat je hebt overschreven. Kun je een originele waarde niet terugvinden, meld dat dan; de eerstvolgende reguliere ronde overschrijft het meestal vanzelf.
 
-## De zes schrijfpaden
+## De schrijfpaden
 
-| model | route | pad |
-|---|---|---|
-| `Lot` | lots | rauwe `UPDATE` voor bestaande rijen (regel ~380) |
-| `Lot` | lots | rauwe `INSERT … ON CONFLICT DO UPDATE` (regel ~443) |
-| `Transaction` | orders | rauwe `INSERT` (regel ~285), delete-en-opnieuw |
-| `Grower` | growers | `prisma.grower.update()` in een lus (regel ~82) |
-| `Grower` | **orders** | `prisma.grower.createMany()` (regel ~167) |
-| `SalesSheetCost` | costs | rauwe `UPDATE` over een jsonb-array |
-| `SalesSheetCost` | costs | `createMany` plus terugval op losse `create` |
+Bijgewerkt op 18 augustus met wat er werkelijk in de code staat. De eerste versie van deze tabel klopte
+voor twee van de vier routes niet, en beide keren ontbrak juist een `UPDATE` — het pad waarlangs
+bijgewerkte records anders de herkomst van een oudere ronde blijven dragen.
 
-`Grower` wordt door twee routes geschreven. Dat is geen fout maar het betekent wel dat taak 3 en taak 4 elkaar raken.
+| model | route | pad | bevestigd |
+|---|---|---|---|
+| `Lot` | lots | rauwe `UPDATE` voor bestaande rijen (~380) | taak 2 |
+| `Lot` | lots | rauwe `INSERT … ON CONFLICT DO UPDATE` (~443) | taak 2 |
+| `Grower` | orders | rauwe `UPDATE "Grower"` (~154) | taak 3 |
+| `Grower` | orders | `createMany`, plus een terugval op losse `create` die dezelfde objecten gebruikt (~167) | taak 3 |
+| `Transaction` | orders | rauwe `INSERT`, geen `ON CONFLICT` (~287) | taak 3 |
+| `Grower` | growers | `prisma.grower.update()` in een lus (~82) | taak 4 |
+| `SalesSheetCost` | costs | rauwe `UPDATE` over een jsonb-array | taak 5 |
+| `SalesSheetCost` | costs | `createMany` plus terugval op losse `create` | taak 5 |
 
-**Tel de paden zelf voordat je begint.** Dit overzicht is bij het schrijven van het plan uit de code gehaald en bleek bij taak 2 al onvolledig: de lots-route heeft naast de `INSERT … ON CONFLICT` een aparte `UPDATE` voor rijen die al bestaan, en die dekt juist het gros van de bijgewerkte partijen. Grep in de route die je aanpakt op `INSERT INTO`, `UPDATE "`, `executeRaw`, `createMany`, `\.create(` en `\.update(` voordat je aanneemt dat de tabel hierboven klopt.
+**Buiten scope, en waarom.** De orders-route doet ook `UPDATE "Lot"` en `UPDATE "SalesSheet"` om
+aggregaten te herberekenen. `Lot` krijgt zijn herkomst al van de lots-route, en `SalesSheet` heeft de
+kolom niet — die staat niet bij de vier modellen uit taak 1. Een `DELETE FROM "Transaction"` schrijft
+niets weg en valt er dus ook buiten.
+
+**Tel ze zelf voordat je begint.** Grep in de route die je aanpakt op `INSERT INTO`, `UPDATE "`,
+`executeRaw`, `createMany`, `.create(` en `.update(`, en meld wat je vindt — ook als het klopt met de
+tabel hierboven.
 
 ---
 
