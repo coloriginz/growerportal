@@ -502,7 +502,7 @@ git commit -m "feat: show which suppliers a run dropped, and let them be activat
 - Create: `src/app/(portal)/admin/imports/batch-records-dialog.tsx`
 - Modify: `src/app/(portal)/admin/imports/data-sync-tab.tsx`
 
-- [ ] **Step 1: Schrijf de route**
+- [x] **Step 1: Schrijf de route**
 
 `GET /api/admin/import-batches/[id]/records`, met `requireAuth(["admin"])`, parameters `page` en `mode` (`created` of `updated`).
 
@@ -512,22 +512,45 @@ Filter op `lastImportBatchId = id`, en scheid aangemaakt van bijgewerkt door `cr
 
 Geef per record genoeg om het te herkennen. Voor een partij: partijnummer, leverancierscode en -naam, artikel en leverdatum. Vijftig per pagina, met het totaal erbij.
 
-- [ ] **Step 2: Schrijf het paneel**
+- [x] **Step 2: Schrijf het paneel**
 
 Een dialoog met twee tabs, **Created** en **Updated**, met het aantal erachter. Een tabel met de kolommen die bij dat endpoint horen, en paginering onderaan. Per regel een link naar de bestaande detailpagina waar die er is.
 
-- [ ] **Step 3: Maak de aantallen aanklikbaar**
+- [x] **Step 3: Maak de aantallen aanklikbaar**
 
 In `data-sync-tab.tsx` worden de kolommen **Created** en **Updated** aanklikbaar zodra ze boven nul staan én de batch een job heeft — bij een handmatige import of een oude DAX-run is er geen herkomst vastgelegd en valt er niets te tonen.
 
-- [ ] **Step 4: Verifieer in de browser**
+**Ook `suppliers` is niet aanklikbaar**, om dezelfde reden: dat model draagt geen herkomst, dus de 673
+bijgewerkte leveranciers zouden op een leeg paneel uitkomen. De reden staat wel in het antwoord van de
+route, voor het geval iemand er alsnog op belandt.
+
+- [ ] **Step 4: Verifieer in de browser** — de routelogica is tegen de testdatabase geverifieerd
+(zie hieronder); de klik zelf staat nog open.
+
+Per endpoint van de laatste ronde, vergeleken met wat de batch rapporteert:
+
+| endpoint | batch cre/upd | records cre/upd | klopt |
+|---|---|---|---|
+| growers | 0 / 2 | 0 / 2 | ja |
+| lots | 217 / 417 | 146 / 417 | ja — het verschil is `corrections.created` 71 |
+| orders | 1.208 / 0 | 1.208 / 0 | ja |
+| costs | 0 / 1.058 | 0 / 1.058 | ja |
+
+Het lots-verschil staat als regel in de dialoog, net zoals het skipped-paneel zijn eigen verschil
+uitlegt. Een batch van vóór taak 1 levert nul records op en heeft geen job, dus is niet aanklikbaar —
+van de 3.808 batches in de historie hebben er tien een job.
+
+**Een ronde die is overschreven levert nul op.** `lastImportBatchId` is één plek: de ronde van 18:20
+raakte 884 orderregels aan, maar de ronde van 18:48 raakte ze opnieuw aan en nam de herkomst over.
+Klikken op de oudere ronde toont dan een lege lijst met de melding dat een latere ronde eroverheen is
+gegaan. Dat volgt uit het ontwerp en is geen fout, maar het is wel het eerste dat vreemd oogt.
 
 Klik het aantal bijgewerkte partijen van de laatste `lots`-ronde aan.
 Expected: een lijst partijnummers met hun leverancier, het totaal klopt met het getal in de tabel, en paginering werkt. Controleer bij een paar regels dat die partij ook werkelijk die ronde als `lastImportBatchId` draagt.
 
 Klik daarna hetzelfde aan bij een oude batch van vóór taak 1. Expected: de aantallen zijn daar niet aanklikbaar.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/app/api/admin/import-batches "src/app/(portal)/admin/imports"

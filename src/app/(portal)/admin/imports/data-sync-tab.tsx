@@ -50,6 +50,7 @@ import {
   type ImportBatchResponse,
 } from "./shared";
 import { SkippedDialog } from "./skipped-dialog";
+import { BatchRecordsDialog, type RecordMode } from "./batch-records-dialog";
 import type { SchedulesResponse } from "./schedules-tab";
 
 // ─── Running round types (GET /api/sync/jobs) ─────────────
@@ -156,6 +157,11 @@ export function DataSyncTab() {
   // De overgeslagen kant is een eigen paneel: daar staan relaties met een naam
   // en een knop, niet een foutmelding.
   const [skippedBatch, setSkippedBatch] = useState<ImportBatch | null>(null);
+  // Welke ronde en welke kant ervan doorgeklikt is. Alleen rondes met een job
+  // dragen herkomst; zie `hasOrigin` hieronder.
+  const [recordsBatch, setRecordsBatch] = useState<{ batch: ImportBatch; mode: RecordMode } | null>(
+    null
+  );
 
   const url = useMemo(() => {
     const params = new URLSearchParams();
@@ -427,6 +433,10 @@ export function DataSyncTab() {
                 ) : (
                   batches.map((batch) => {
                     const skippedRelations = skippedRelationCount(batch);
+                    // Een handmatige import of een oude DAX-ronde heeft geen job
+                    // en dus geen herkomst op de records: dan valt er niets te
+                    // openen en blijft het getal gewoon een getal.
+                    const hasOrigin = batch.job !== null && batch.endpoint !== "suppliers";
                     return (
                     <TableRow key={batch.id}>
                       <TableCell className="whitespace-nowrap">
@@ -458,10 +468,30 @@ export function DataSyncTab() {
                         {formatNumber(batch.recordsReceived)}
                       </TableCell>
                       <TableCell className="text-right">
-                        {formatNumber(batch.recordsCreated)}
+                        {hasOrigin && batch.recordsCreated > 0 ? (
+                          <button
+                            onClick={() => setRecordsBatch({ batch, mode: "created" })}
+                            className="cursor-pointer hover:underline"
+                            title="Show the records this run created"
+                          >
+                            {formatNumber(batch.recordsCreated)}
+                          </button>
+                        ) : (
+                          formatNumber(batch.recordsCreated)
+                        )}
                       </TableCell>
                       <TableCell className="text-right">
-                        {formatNumber(batch.recordsUpdated)}
+                        {hasOrigin && batch.recordsUpdated > 0 ? (
+                          <button
+                            onClick={() => setRecordsBatch({ batch, mode: "updated" })}
+                            className="cursor-pointer hover:underline"
+                            title="Show the records this run updated"
+                          >
+                            {formatNumber(batch.recordsUpdated)}
+                          </button>
+                        ) : (
+                          formatNumber(batch.recordsUpdated)
+                        )}
                       </TableCell>
                       <TableCell className="text-right">
                         {skippedRelations > 0 ? (
@@ -580,6 +610,15 @@ export function DataSyncTab() {
           key={skippedBatch.id}
           batch={skippedBatch}
           onClose={() => setSkippedBatch(null)}
+        />
+      )}
+
+      {recordsBatch && (
+        <BatchRecordsDialog
+          key={`${recordsBatch.batch.id}-${recordsBatch.mode}`}
+          batch={recordsBatch.batch}
+          initialMode={recordsBatch.mode}
+          onClose={() => setRecordsBatch(null)}
         />
       )}
     </div>
