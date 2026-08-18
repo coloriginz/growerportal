@@ -53,6 +53,13 @@ function isCorrection(facttypeSub: string | null | undefined): boolean {
   return lower === "correctie" || lower === "productiecorrectie";
 }
 
+/** A row counts as an internal production booking when its Facttype Sub starts
+ * with "productie" — this covers both "productie" and "productiecorrectie". */
+function isProductie(facttypeSub: string | null | undefined): boolean {
+  if (!facttypeSub) return false;
+  return facttypeSub.toLowerCase().trim().startsWith("productie");
+}
+
 function deriveArticleGroup(productName: string): string {
   if (!productName) return "Unknown";
   return productName.trim().split(/\s+/)[0] || "Unknown";
@@ -165,9 +172,13 @@ async function upsertLots(partijen: Partij[], batchId: string | null) {
    * zijn COLXROOD en COLXBAK 317 salessheets kwijtgeraakt: de import meldde
    * netjes "success" en niemand kon zien wát er niet was aangekomen.
    */
-  const skippedByRelId = new Map<number, number>();
-  const noteSkipped = (relId: number, aantal: number) => {
-    skippedByRelId.set(relId, (skippedByRelId.get(relId) ?? 0) + aantal);
+  const skippedByRelId = new Map<number, { partijen: number; productie: number }>();
+  const noteSkipped = (relId: number, aantal: number, productie: number) => {
+    const existing = skippedByRelId.get(relId) ?? { partijen: 0, productie: 0 };
+    skippedByRelId.set(relId, {
+      partijen: existing.partijen + aantal,
+      productie: existing.productie + productie,
+    });
   };
 
   const ssUpdateData: { fabricParthdrId: number; deliveryDate: string }[] = [];
@@ -179,7 +190,8 @@ async function upsertLots(partijen: Partij[], batchId: string | null) {
     const supplierId = supplierMap.get(firstRow.rel_id_leverancier);
     if (!supplierId) {
       skipped += rows.length;
-      noteSkipped(firstRow.rel_id_leverancier, rows.length);
+      const productieCount = rows.filter((r) => isProductie(r["Facttype Sub"])).length;
+      noteSkipped(firstRow.rel_id_leverancier, rows.length, productieCount);
       continue;
     }
 
@@ -547,7 +559,7 @@ async function upsertLots(partijen: Partij[], batchId: string | null) {
       const supplierId = supplierMap.get(row.rel_id_leverancier);
       if (!supplierId) {
         correctionsSkipped++;
-        noteSkipped(row.rel_id_leverancier, 1);
+        noteSkipped(row.rel_id_leverancier, 1, isProductie(row["Facttype Sub"]) ? 1 : 0);
         continue;
       }
 
@@ -629,7 +641,9 @@ async function upsertLots(partijen: Partij[], batchId: string | null) {
       // drukste vijftig, want bij een backfill over jaren kunnen dit er honderden
       // zijn en de melding staat in een databasekolom.
       skippedSuppliers: Object.fromEntries(
-        [...skippedByRelId.entries()].sort((a, b) => b[1] - a[1]).slice(0, 50)
+        [...skippedByRelId.entries()]
+          .sort((a, b) => b[1].partijen - a[1].partijen)
+          .slice(0, 50)
       ),
     },
     extra: {
