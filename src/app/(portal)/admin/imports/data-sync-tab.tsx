@@ -66,6 +66,10 @@ interface SyncJobRow {
 interface SyncRun {
   runId: string;
   source: string;
+  /** "failed" = een job knapte en de runner annuleerde de rest van de ronde. */
+  state: "running" | "failed";
+  startedAt: string;
+  failedAt: string | null;
   jobs: SyncJobRow[];
 }
 
@@ -235,18 +239,42 @@ export function DataSyncTab() {
         </div>
       )}
 
-      {/* Running round: only visible while the queue has open work */}
+      {/* Rounds: open work in the queue, plus rounds that were aborted by a
+          failure in the last two hours. A round that simply succeeded is gone —
+          it is complete in the history table below. */}
       {runs.length > 0 && (
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Running round</CardTitle>
+            <CardTitle className="text-sm font-medium">Sync rounds</CardTitle>
             <AdvanceQueueButton onAdvanced={refetchAll} />
           </CardHeader>
           <CardContent className="space-y-4">
             {runs.map((run) => (
-              <div key={run.runId} className="space-y-1.5">
-                <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground capitalize">
-                  {run.source}
+              <div
+                key={run.runId}
+                className={
+                  run.state === "failed"
+                    ? "space-y-1.5 rounded-md border border-red-200 bg-red-50 p-3 dark:border-red-900 dark:bg-red-950/30"
+                    : "space-y-1.5"
+                }
+              >
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground capitalize">
+                    {run.source}
+                  </span>
+                  {run.state === "failed" && (
+                    <>
+                      <Badge className="bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400">
+                        <RiErrorWarningLine className="mr-1 h-3 w-3" />
+                        Round aborted
+                      </Badge>
+                      {run.failedAt && (
+                        <span className="text-xs text-red-700 dark:text-red-400">
+                          {timeAgo(run.failedAt)}
+                        </span>
+                      )}
+                    </>
+                  )}
                 </div>
                 <div className="space-y-1">
                   {run.jobs.map((job) => (
