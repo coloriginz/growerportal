@@ -40,10 +40,19 @@ Alle vier de routes negeren dat argument nu (`handler: async (costs) => ...`). E
 
 `batchId` kan `null` zijn — het aanmaken van de batch mag een import niet blokkeren, dus dat pad bestaat. De kolom is daarom nullable en `null` schrijven is geldig.
 
+## Hoe je dit verifieert, en hoe niet
+
+**Niet met Run now.** Power Automate post naar de *gedeployde* testomgeving: de portal stuurt nooit een callback-URL mee, hij zegt alleen `env: "test"` en de flow kiest daar zelf zijn base-URL bij. Dat is een bewuste veiligheidskeuze uit het sync-ontwerp, maar het betekent dat een ronde die je vanaf je lokale dev-server start de code test die op Vercel staat — niet die van jou. In taak 2 leverde dat een nul op die eruitzag als een bug maar het niet was.
+
+**Wel met een directe POST naar de lokale route.** Bouw een payload met één bestaand record en één nieuw, post die naar `http://localhost:3000/api/import/<endpoint>` met `Authorization: Bearer $IMPORT_API_KEY`, en tel daarna hoeveel records het teruggegeven batch-id dragen. Zelfde route-code, zelfde database, echte data — en het raakt beide schrijfpaden.
+
+Ruim je testrecords daarna op, en herstel wat je hebt overschreven. Kun je een originele waarde niet terugvinden, meld dat dan; de eerstvolgende reguliere ronde overschrijft het meestal vanzelf.
+
 ## De zes schrijfpaden
 
 | model | route | pad |
 |---|---|---|
+| `Lot` | lots | rauwe `UPDATE` voor bestaande rijen (regel ~380) |
 | `Lot` | lots | rauwe `INSERT … ON CONFLICT DO UPDATE` (regel ~443) |
 | `Transaction` | orders | rauwe `INSERT` (regel ~285), delete-en-opnieuw |
 | `Grower` | growers | `prisma.grower.update()` in een lus (regel ~82) |
@@ -51,7 +60,9 @@ Alle vier de routes negeren dat argument nu (`handler: async (costs) => ...`). E
 | `SalesSheetCost` | costs | rauwe `UPDATE` over een jsonb-array |
 | `SalesSheetCost` | costs | `createMany` plus terugval op losse `create` |
 
-`Grower` wordt door twee routes geschreven. Dat is geen fout maar het betekent wel dat taak 4 en taak 5 elkaar raken.
+`Grower` wordt door twee routes geschreven. Dat is geen fout maar het betekent wel dat taak 3 en taak 4 elkaar raken.
+
+**Tel de paden zelf voordat je begint.** Dit overzicht is bij het schrijven van het plan uit de code gehaald en bleek bij taak 2 al onvolledig: de lots-route heeft naast de `INSERT … ON CONFLICT` een aparte `UPDATE` voor rijen die al bestaan, en die dekt juist het gros van de bijgewerkte partijen. Grep in de route die je aanpakt op `INSERT INTO`, `UPDATE "`, `executeRaw`, `createMany`, `\.create(` en `\.update(` voordat je aanneemt dat de tabel hierboven klopt.
 
 ---
 
