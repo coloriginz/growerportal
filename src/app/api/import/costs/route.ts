@@ -41,14 +41,14 @@ export async function POST(request: NextRequest) {
     rowSchema: costSchema,
     schemaKeys: costKeys,
     aliases: costAliases,
-    handler: async (costs) => {
+    handler: async (costs, batchId) => {
       if (costs.length === 0) return { created: 0, updated: 0, skipped: 0 };
-      return upsertCosts(costs);
+      return upsertCosts(costs, batchId);
     },
   });
 }
 
-async function upsertCosts(costs: Cost[]) {
+async function upsertCosts(costs: Cost[], batchId: string | null) {
   // Round IDs (DAX/Power Automate can send 1.0 instead of 1)
   for (const row of costs) {
     row["Shkost ID"] = Math.round(row["Shkost ID"]);
@@ -132,6 +132,7 @@ async function upsertCosts(costs: Cost[]) {
             ? Math.round(row["Totaal Omzet"] * 100) / 100
             : null,
         totalQuantity: row["Totaal Aantal"] || null,
+        lastImportBatchId: batchId,
       });
       created++;
     }
@@ -150,10 +151,12 @@ async function upsertCosts(costs: Cost[]) {
            "costTypeName" = u.val->>'costTypeName',
            "totalTurnover" = (u.val->>'totalTurnover')::numeric,
            "totalQuantity" = (u.val->>'totalQuantity')::int,
+           "lastImportBatchId" = $2,
            "updatedAt" = NOW()
          FROM jsonb_array_elements($1::jsonb) AS u(val)
          WHERE t."fabricShkostId" = (u.val->>'fabricShkostId')::int`,
-      JSON.stringify(costUpdateData)
+      JSON.stringify(costUpdateData),
+      batchId
     );
   }
 
