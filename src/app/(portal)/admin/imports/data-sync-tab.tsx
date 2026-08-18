@@ -471,7 +471,7 @@ export function DataSyncTab() {
                         {hasOrigin && batch.recordsCreated > 0 ? (
                           <button
                             onClick={() => setRecordsBatch({ batch, mode: "created" })}
-                            className="cursor-pointer hover:underline"
+                            className="cursor-pointer underline decoration-dotted decoration-muted-foreground underline-offset-4 hover:decoration-solid"
                             title="Show the records this run created"
                           >
                             {formatNumber(batch.recordsCreated)}
@@ -484,7 +484,7 @@ export function DataSyncTab() {
                         {hasOrigin && batch.recordsUpdated > 0 ? (
                           <button
                             onClick={() => setRecordsBatch({ batch, mode: "updated" })}
-                            className="cursor-pointer hover:underline"
+                            className="cursor-pointer underline decoration-dotted decoration-muted-foreground underline-offset-4 hover:decoration-solid"
                             title="Show the records this run updated"
                           >
                             {formatNumber(batch.recordsUpdated)}

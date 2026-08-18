@@ -261,7 +261,9 @@ export function BatchRecordsDialog({
           </TabsList>
         </Tabs>
 
-        {data?.note && (
+        {/* De opmerking verklaart het verschil tussen het aantal in de tabel en
+            wat hier staat, en dat gaat alleen over aangemaakte records. */}
+        {data?.note && mode === "created" && (
           <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
             <RiInformationLine className="mt-px h-3.5 w-3.5 shrink-0" />
             {data.note}
