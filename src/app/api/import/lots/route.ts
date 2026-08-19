@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { runImport } from "@/lib/import-batch";
+import { isConsignment, purchaseTypeKey } from "@/lib/sync/purchase-type";
 
 // Vercel kapt een functie zonder dit af op de standaardlimiet; de lots- en
 // orders-import over een breed venster halen die niet.
@@ -83,8 +84,34 @@ export async function POST(request: NextRequest) {
 }
 
 async function upsertLots(partijen: Partij[], batchId: string | null) {
-  // Round IDs (DAX/Power Automate can send 1.0 instead of 1)
+  // Alleen consignatie hoort in deze portal; Fabric levert ook koop-partijen.
+  //
+  // Dit filter staat bewust vóór de leverancierscontrole verderop. Die controle
+  // houdt per rel_id bij wat er wegvalt (`details.skippedSuppliers`) en het
+  // importscherm biedt die relaties aan met een knop om er een leverancier van
+  // te maken. Filteren we ná die controle, dan blijven koop-relaties in dat
+  // lijstje staan en nodigt het scherm uit om precies de verkeerde leveranciers
+  // aan te zetten — wat gisteren gebeurde: één aangezette relatie bleek 100% CIF
+  // en leverde 186 partijen en 415 orderregels op die hier niet horen.
+  //
+  // Correcties lopen door hetzelfde filter: ze komen uit dezelfde fct_partijen
+  // en dragen dus dezelfde kolom. Een correctie op een koop-partij hoort net zo
+  // goed weg te vallen, en zonder dit filter zou hij zijn koop-relatie alsnog in
+  // skippedSuppliers zetten.
+  const consignatie: Partij[] = [];
+  const skippedPurchaseTypes = new Map<string, number>();
   for (const row of partijen) {
+    if (isConsignment(row["Inkooptype Code"])) {
+      consignatie.push(row);
+      continue;
+    }
+    const key = purchaseTypeKey(row["Inkooptype Code"]);
+    skippedPurchaseTypes.set(key, (skippedPurchaseTypes.get(key) ?? 0) + 1);
+  }
+  const skippedNotConsignment = partijen.length - consignatie.length;
+
+  // Round IDs (DAX/Power Automate can send 1.0 instead of 1)
+  for (const row of consignatie) {
     row.part_id = Math.round(row.part_id);
     row.parthdr_id = Math.round(row.parthdr_id);
     row.rel_id_leverancier = Math.round(row.rel_id_leverancier);
@@ -93,11 +120,11 @@ async function upsertLots(partijen: Partij[], batchId: string | null) {
   }
 
   // Split rows by Facttype Sub: base rows vs correction rows
-  const baseRows = partijen.filter((r) => !isCorrection(r["Facttype Sub"]));
-  const correctionRows = partijen.filter((r) => isCorrection(r["Facttype Sub"]));
+  const baseRows = consignatie.filter((r) => !isCorrection(r["Facttype Sub"]));
+  const correctionRows = consignatie.filter((r) => isCorrection(r["Facttype Sub"]));
 
   // Group by parthdr_id
-  const byParthdr = new Map<number, typeof partijen>();
+  const byParthdr = new Map<number, typeof consignatie>();
   for (const row of baseRows) {
     if (!byParthdr.has(row.parthdr_id)) byParthdr.set(row.parthdr_id, []);
     byParthdr.get(row.parthdr_id)!.push(row);
@@ -635,11 +662,21 @@ async function upsertLots(partijen: Partij[], batchId: string | null) {
   return {
     created: lotCreated + correctionsCreated,
     updated: lotUpdated,
-    skipped: skipped + correctionsSkipped,
+    // recordsSkipped is "weggegooid", en dat zijn nu twee dingen: rijen zonder
+    // leverancier en rijen van het verkeerde inkooptype. Beide tellen mee, maar
+    // ze blijven in details uit elkaar te houden — skippedSuppliers per rel_id,
+    // skippedPurchaseTypes per code.
+    skipped: skipped + correctionsSkipped + skippedNotConsignment,
     details: {
       salesSheets: { created: ssCreated, updated: ssUpdated },
       lots: { created: lotCreated, updated: lotUpdated },
       corrections: { created: correctionsCreated, deleted: correctionsDeleted, skipped: correctionsSkipped },
+      // Hoeveel partijen er per inkooptype zijn weggegooid. Dit is tegelijk de
+      // controle op CONSIGNMENT_PURCHASE_TYPES: staat hier een code die we niet
+      // kennen, dan gooien we mogelijk iets weg dat wél consignatie is.
+      skippedPurchaseTypes: Object.fromEntries(
+        [...skippedPurchaseTypes.entries()].sort((a, b) => b[1] - a[1])
+      ),
       // Per rel_id hoeveel er is weggegooid omdat de leverancier ontbrak. De
       // drukste vijftig, want bij een backfill over jaren kunnen dit er honderden
       // zijn en de melding staat in een databasekolom.
@@ -654,6 +691,7 @@ async function upsertLots(partijen: Partij[], batchId: string | null) {
       lots: { created: lotCreated, updated: lotUpdated },
       corrections: { created: correctionsCreated, deleted: correctionsDeleted, skipped: correctionsSkipped },
       skipped,
+      skippedNotConsignment,
     },
   };
 }

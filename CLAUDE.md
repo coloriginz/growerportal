@@ -297,6 +297,7 @@ Fabric DAX query -> Power Automate -> POST /api/import/* (JSON array)
 ```
 
 ### Key Behaviors
+- **The portal only carries consignment.** Fabric delivers partijen with an `inkooptype_code`: `CONS` (consignment), `FOB` and `CIF` (purchase). The lots import drops everything that is not consignment, and it does so *before* the missing-supplier check — otherwise purchase relations end up in `details.skippedSuppliers` and the import screen invites you to create exactly the wrong suppliers. The set of accepted codes lives in `CONSIGNMENT_PURCHASE_TYPES` (`src/lib/sync/purchase-type.ts`); `details.skippedPurchaseTypes` counts what was dropped per code, which is the check on that set. Transactions follow by themselves: the orders import skips an orderregel whose lot is not in the portal
 - All imports use **upsert** (INSERT ON CONFLICT UPDATE) via Prisma or raw SQL
 - Fabric IDs (`fabricId`, `fabricPartId`, `fabricParthdrId`, `fabricOrdregId`, `fabricShkostId`) are used as match keys
 - Costs import recalculates SalesSheet totals (totalTurnover from lots, totalCosts from cost lines, netResult = turnover - costs) via raw SQL CTE
@@ -554,6 +555,7 @@ All fust actions logged to FustAuditLog (19 event types). Denormalized `orderId`
 - Salessheet shows: total turnover, itemized costs (commission, handling, logistics), net result
 - The supplier receives the net result minus costs
 - **Key metric:** net yield per stem (netto opbrengst/steel)
+- Coloriginz also buys outright (FOB/CIF). Those lots are settled at purchase, the turnover is not the supplier's, and they never enter the portal — see the consignment filter in the import pipeline
 
 ### Data Hierarchy (Fabric -> Portal)
 ```

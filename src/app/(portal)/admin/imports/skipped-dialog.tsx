@@ -178,7 +178,8 @@ export function SkippedDialog({ batch, onClose }: { batch: ImportBatch; onClose:
             {formatDate(batch.startedAt)} {formatTime(batch.startedAt)} &middot;{" "}
             {formatNumber(batch.recordsSkipped)} records skipped in total. The relations below are
             the busiest 50 with a missing supplier, so they add up to less: the rest of the skips
-            are duplicates and rows the run had already seen.
+            are purchase lots (FOB/CIF, which this portal does not carry), duplicates, and rows the
+            run had already seen.
           </DialogDescription>
         </DialogHeader>
 
