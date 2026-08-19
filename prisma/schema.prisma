@@ -346,9 +346,15 @@ model LotCorrection {
   createdAt          DateTime @default(now())
   updatedAt          DateTime @default(now()) @updatedAt
 
+  /// Welke ImportBatch dit record voor het laatst heeft aangeraakt. Losse string
+  /// zonder relatie, net als de staging-tabellen: batches worden nooit verwijderd
+  /// en een onDelete-regel zou hier dus niets doen.
+  lastImportBatchId String?
+
   @@index([lotId])
   @@index([fabricPartId])
   @@index([correctionReasonId])
+  @@index([lastImportBatchId])
 }
 
 // ─── TRANSACTIONS ────────────────────────────────────────

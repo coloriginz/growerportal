@@ -56,7 +56,6 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       startedAt: true,
       recordsCreated: true,
       recordsUpdated: true,
-      details: true,
     },
   });
   if (!batch) {
@@ -98,12 +97,13 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   const createdAt = mode === "created" ? createdFilter : updatedFilter;
   const skip = (page - 1) * PAGE_SIZE;
 
-  const [counts, records] = await Promise.all([
-    countRecords(kind, id, createdFilter, updatedFilter),
-    fetchRecords(kind, id, createdAt, skip),
-  ]);
+  // De telling gaat vooraf aan het ophalen omdat een lots-ronde twee tabellen
+  // achter elkaar plakt: hoeveel partijen er in deze modus zijn bepaalt waar de
+  // correcties op de pagina beginnen.
+  const counts = await countRecords(kind, id, createdFilter, updatedFilter);
+  const records = await fetchRecords(kind, id, createdAt, skip, counts.lots[mode]);
 
-  const total = mode === "created" ? counts.created : counts.updated;
+  const total = counts[mode];
 
   return NextResponse.json({
     batchId: batch.id,
@@ -111,71 +111,51 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     startedAt: batch.startedAt,
     kind,
     reason: null,
-    notes: divergenceNotes(batch, mode, reported[mode], total),
+    notes: divergenceNotes(mode, reported[mode], total),
     mode,
     page,
     pageSize: PAGE_SIZE,
     total,
     totalPages: Math.max(Math.ceil(total / PAGE_SIZE), 1),
     reported,
-    counts,
+    counts: { created: counts.created, updated: counts.updated },
     records,
   });
 }
 
 /**
- * Waarom het getal in de tabel hoger ligt dan wat deze lijst toont. Twee
- * oorzaken kunnen los of samen spelen: een lots-ronde telt aangemaakte
- * partijcorrecties mee in `recordsCreated` en die landen in `LotCorrection` —
- * een tabel zonder herkomstkolom — en `lastImportBatchId` houdt maar één ronde
- * vast, dus een latere ronde neemt de herkomst over van alles wat hij opnieuw
- * aanraakte. De correctie-uitleg mag alleen mee als de correcties werkelijk in
- * het gat passen; anders zou hij met stelligheid het verkeerde zeggen.
+ * Waarom het getal in de tabel hoger ligt dan wat deze lijst toont.
+ * `lastImportBatchId` houdt maar één ronde vast, dus een latere ronde neemt de
+ * herkomst over van alles wat hij opnieuw aanraakte; wat die ronde eerder
+ * aanraakte is dan niet meer aan hem toe te schrijven.
  */
-function divergenceNotes(
-  batch: { endpoint: string; details: unknown },
-  mode: Mode,
-  reported: number,
-  found: number
-): string[] {
+function divergenceNotes(mode: Mode, reported: number, found: number): string[] {
   const gap = reported - found;
   if (gap <= 0) return [];
 
-  const notes: string[] = [];
-  const corrections =
-    mode === "created" && batch.endpoint === "lots" ? correctionsCreated(batch.details) : 0;
-  const explained = corrections <= gap ? corrections : 0;
-  if (explained > 0) {
-    notes.push(
-      `The run reports ${reported} created, of which ${explained} are lot corrections. ` +
-        "Corrections live in a separate table that carries no origin, so only the lots are listed here."
-    );
-  }
-
-  const overwritten = gap - explained;
-  if (overwritten > 0) {
-    notes.push(
-      (explained > 0 ? "" : `The run reports ${reported} ${mode}; this list has ${found}. `) +
-        `A later run has touched the other ${overwritten} record${overwritten === 1 ? "" : "s"} ` +
-        "again and now carries their origin."
-    );
-  }
-  return notes;
-}
-
-function correctionsCreated(details: unknown): number {
-  const created = (details as { corrections?: { created?: number } } | null)?.corrections?.created;
-  return typeof created === "number" ? created : 0;
+  return [
+    `The run reports ${reported} ${mode}; this list has ${found}. ` +
+      `A later run has touched the other ${gap} record${gap === 1 ? "" : "s"} ` +
+      "again and now carries their origin.",
+  ];
 }
 
 type DateFilter = { gte: Date } | { lt: Date };
+
+interface Counts {
+  created: number;
+  updated: number;
+  /** Alleen de partijen: bij een lots-ronde staan de correcties erachter in de
+   *  lijst, en dit getal zegt waar die reeks begint. */
+  lots: { created: number; updated: number };
+}
 
 async function countRecords(
   kind: Kind,
   batchId: string,
   createdFilter: DateFilter,
   updatedFilter: DateFilter
-): Promise<{ created: number; updated: number }> {
+): Promise<Counts> {
   const count = (createdAt: DateFilter) => {
     const where = { lastImportBatchId: batchId, createdAt };
     switch (kind) {
@@ -189,11 +169,26 @@ async function countRecords(
         return prisma.salesSheetCost.count({ where });
     }
   };
-  const [created, updated] = await Promise.all([count(createdFilter), count(updatedFilter)]);
-  return { created, updated };
+  const countCorrections = (createdAt: DateFilter) =>
+    kind === "lots"
+      ? prisma.lotCorrection.count({ where: { lastImportBatchId: batchId, createdAt } })
+      : Promise.resolve(0);
+
+  const [created, updated, corrCreated, corrUpdated] = await Promise.all([
+    count(createdFilter),
+    count(updatedFilter),
+    countCorrections(createdFilter),
+    countCorrections(updatedFilter),
+  ]);
+  return {
+    created: created + corrCreated,
+    updated: updated + corrUpdated,
+    lots: { created, updated },
+  };
 }
 
 interface LotRecord {
+  type: "lot";
   id: string;
   lotNumber: string;
   supplierCode: string;
@@ -201,6 +196,23 @@ interface LotRecord {
   productName: string;
   articleGroup: string;
   totalStems: number;
+  deliveryDate: Date;
+}
+
+/** Een correctie heeft geen eigen pagina; hij verwijst naar de partij waar hij
+ *  bij hoort, en leent daar ook zijn artikel en leverdatum van. */
+interface CorrectionRecord {
+  type: "correction";
+  id: string;
+  lotId: string;
+  lotNumber: string;
+  supplierCode: string;
+  supplierName: string;
+  productName: string;
+  facttypeSub: string;
+  reason: string | null;
+  reasonCode: string | null;
+  correctionVolume: number | null;
   deliveryDate: Date;
 }
 
@@ -244,8 +256,11 @@ async function fetchRecords(
   kind: Kind,
   batchId: string,
   createdAt: DateFilter,
-  skip: number
-): Promise<LotRecord[] | TransactionRecord[] | GrowerRecord[] | CostRecord[]> {
+  skip: number,
+  lotTotal: number
+): Promise<
+  (LotRecord | CorrectionRecord)[] | TransactionRecord[] | GrowerRecord[] | CostRecord[]
+> {
   const where = { lastImportBatchId: batchId, createdAt };
   const page = { skip, take: PAGE_SIZE };
 
@@ -253,32 +268,8 @@ async function fetchRecords(
   // met dezelfde waarde elke keer anders ordenen, en dan springt er met OFFSET
   // een rij naar twee pagina's of naar geen enkele.
   switch (kind) {
-    case "lots": {
-      const rows = await prisma.lot.findMany({
-        where,
-        ...page,
-        orderBy: [
-          { supplier: { code: "asc" } },
-          { deliveryDate: "asc" },
-          { lotNumber: "asc" },
-          { id: "asc" },
-        ],
-        select: {
-          id: true,
-          lotNumber: true,
-          productName: true,
-          articleGroup: true,
-          totalStems: true,
-          deliveryDate: true,
-          supplier: { select: { code: true, name: true } },
-        },
-      });
-      return rows.map(({ supplier, ...lot }) => ({
-        ...lot,
-        supplierCode: supplier.code,
-        supplierName: supplier.name,
-      }));
-    }
+    case "lots":
+      return fetchLotRecords(batchId, createdAt, skip, lotTotal);
     case "orders": {
       const rows = await prisma.transaction.findMany({
         where,
@@ -373,4 +364,107 @@ async function fetchRecords(
       }));
     }
   }
+}
+
+/**
+ * Een lots-ronde verwerkt twee soorten rijen: partijen en correcties. Ze tellen
+ * allebei mee in `recordsCreated`, dus staan ze ook allebei in deze lijst — de
+ * partijen eerst, de correcties erachter. Die vaste volgorde maakt de
+ * paginering over twee tabellen deterministisch: tot `lotTotal` komt de rij uit
+ * `Lot`, daarna uit `LotCorrection`.
+ *
+ * Correcties komen in de praktijk alleen op het tabblad Created voor: de import
+ * verwijdert ze en voegt ze opnieuw in, dus een correctie die deze ronde als
+ * herkomst draagt is er ook door aangemaakt. Het filter op `createdAt` staat er
+ * toch, zodat de scheiding dezelfde regel volgt als bij de andere modellen.
+ */
+async function fetchLotRecords(
+  batchId: string,
+  createdAt: DateFilter,
+  skip: number,
+  lotTotal: number
+): Promise<(LotRecord | CorrectionRecord)[]> {
+  const where = { lastImportBatchId: batchId, createdAt };
+  const lotTake = Math.max(0, Math.min(PAGE_SIZE, lotTotal - skip));
+  const correctionTake = PAGE_SIZE - lotTake;
+
+  const [lots, corrections] = await Promise.all([
+    lotTake === 0
+      ? []
+      : prisma.lot.findMany({
+          where,
+          skip: Math.min(skip, lotTotal),
+          take: lotTake,
+          orderBy: [
+            { supplier: { code: "asc" } },
+            { deliveryDate: "asc" },
+            { lotNumber: "asc" },
+            { id: "asc" },
+          ],
+          select: {
+            id: true,
+            lotNumber: true,
+            productName: true,
+            articleGroup: true,
+            totalStems: true,
+            deliveryDate: true,
+            supplier: { select: { code: true, name: true } },
+          },
+        }),
+    correctionTake === 0
+      ? []
+      : prisma.lotCorrection.findMany({
+          where,
+          skip: Math.max(0, skip - lotTotal),
+          take: correctionTake,
+          orderBy: [
+            { lot: { supplier: { code: "asc" } } },
+            { lot: { deliveryDate: "asc" } },
+            { lot: { lotNumber: "asc" } },
+            { id: "asc" },
+          ],
+          select: {
+            id: true,
+            facttypeSub: true,
+            correctionVolume: true,
+            correctionReason: { select: { code: true, nameEn: true, nameNl: true } },
+            lot: {
+              select: {
+                id: true,
+                lotNumber: true,
+                productName: true,
+                deliveryDate: true,
+                supplier: { select: { code: true, name: true } },
+              },
+            },
+          },
+        }),
+  ]);
+
+  return [
+    ...lots.map(({ supplier, ...lot }): LotRecord => ({
+      type: "lot",
+      ...lot,
+      supplierCode: supplier.code,
+      supplierName: supplier.name,
+    })),
+    ...corrections.map(
+      (correction): CorrectionRecord => ({
+        type: "correction",
+        id: correction.id,
+        lotId: correction.lot.id,
+        lotNumber: correction.lot.lotNumber,
+        supplierCode: correction.lot.supplier.code,
+        supplierName: correction.lot.supplier.name,
+        productName: correction.lot.productName,
+        facttypeSub: correction.facttypeSub,
+        reason: correction.correctionReason
+          ? correction.correctionReason.nameEn || correction.correctionReason.nameNl
+          : null,
+        reasonCode: correction.correctionReason?.code ?? null,
+        correctionVolume: correction.correctionVolume,
+        deliveryDate: correction.lot.deliveryDate,
+      })
+    ),
+  ];
 }

@@ -226,7 +226,7 @@ Role switching, supplier switching, and transporter switching are only available
 - **StagingKbtShcost** — Raw salessheet cost data from Fabric.
 - **SyncJob** — One endpoint over one window, optionally scoped to a supplier. Carries `runId`/`sequence` (chain order, unique together), `status`, `attempts`, `importBatchId`.
 - **SyncSchedule** — Two rows, `intraday` and `nightly`. Interval or time of day, endpoints, window, and per-endpoint window overrides.
-- **Record provenance** — `Lot`, `Transaction`, `Grower` and `SalesSheetCost` carry `lastImportBatchId`, so the import screen can click through to what a run touched. It holds only the *last* run: a later run takes the origin over, and the screen says so rather than showing an unexplained empty list. `Supplier` and `LotCorrection` carry no origin.
+- **Record provenance** — `Lot`, `Transaction`, `Grower`, `SalesSheetCost` and `LotCorrection` carry `lastImportBatchId`, so the import screen can click through to what a run touched. It holds only the *last* run: a later run takes the origin over, and the screen says so rather than showing an unexplained empty list. `Supplier` carries no origin. A lots run counts lots and lot corrections together in `recordsCreated`, and the records dialog lists both — lots first, corrections behind them.
 
 ### Other Entities
 - **Company** — Multi-tenant company entity (Coloriginz, OZ Import, MyPeony). Determines branding.

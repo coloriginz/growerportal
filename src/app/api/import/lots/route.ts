@@ -591,6 +591,7 @@ async function upsertLots(partijen: Partij[], batchId: string | null) {
         `INSERT INTO "LotCorrection" (
            id, "lotId", "fabricPartId", "facttypeSub",
            "correctionReasonId", "correctionVolume", "correctionColli",
+           "lastImportBatchId",
            "createdAt", "updatedAt"
          )
          SELECT
@@ -601,10 +602,12 @@ async function upsertLots(partijen: Partij[], batchId: string | null) {
            (v.val->>'correctionReasonId')::int,
            (v.val->>'correctionVolume')::int,
            NULL,
+           $2,
            NOW(),
            NOW()
          FROM jsonb_array_elements($1::jsonb) AS v(val)`,
-        JSON.stringify(corrInsertData)
+        JSON.stringify(corrInsertData),
+        batchId
       );
       correctionsCreated = corrInsertData.length;
     }

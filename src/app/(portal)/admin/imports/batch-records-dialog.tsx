@@ -19,6 +19,7 @@ import type { ImportBatch } from "./shared";
 export type RecordMode = "created" | "updated";
 
 interface LotRecord {
+  type: "lot";
   id: string;
   lotNumber: string;
   supplierCode: string;
@@ -26,6 +27,21 @@ interface LotRecord {
   productName: string;
   articleGroup: string;
   totalStems: number;
+  deliveryDate: string;
+}
+
+interface CorrectionRecord {
+  type: "correction";
+  id: string;
+  lotId: string;
+  lotNumber: string;
+  supplierCode: string;
+  supplierName: string;
+  productName: string;
+  facttypeSub: string;
+  reason: string | null;
+  reasonCode: string | null;
+  correctionVolume: number | null;
   deliveryDate: string;
 }
 
@@ -84,7 +100,7 @@ interface RecordsResponseBase {
 /** `kind` zegt welk model de rijen zijn; null betekent dat dit endpoint er geen draagt. */
 type RecordsResponse = RecordsResponseBase &
   (
-    | { kind: "lots"; reason: null; records: LotRecord[] }
+    | { kind: "lots"; reason: null; records: (LotRecord | CorrectionRecord)[] }
     | { kind: "orders"; reason: null; records: TransactionRecord[] }
     | { kind: "growers"; reason: null; records: GrowerRecord[] }
     | { kind: "costs"; reason: null; records: CostRecord[] }
@@ -122,6 +138,30 @@ const LOT_COLUMNS: Column<LotRecord>[] = [
   { label: "Article", cell: (r) => r.productName },
   { label: "Group", cell: (r) => r.articleGroup },
   { label: "Stems", align: "right", cell: (r) => formatNumber(r.totalStems) },
+  { label: "Delivery", align: "right", cell: (r) => formatDate(r.deliveryDate) },
+];
+
+// Een correctie heeft geen eigen pagina; hij verwijst naar de partij waar hij
+// bij hoort. De reden komt uit de redencodetabel; ontbreekt die, dan valt hij
+// terug op het facttype dat Fabric meestuurt.
+const CORRECTION_COLUMNS: Column<CorrectionRecord>[] = [
+  { label: "Lot", cell: (r) => <DetailLink href={`/lots/${r.lotId}`}>{r.lotNumber}</DetailLink> },
+  { label: "Supplier", cell: (r) => <SupplierCell code={r.supplierCode} name={r.supplierName} /> },
+  { label: "Article", cell: (r) => r.productName },
+  {
+    label: "Reason",
+    cell: (r) => (
+      <>
+        {r.reason ?? r.facttypeSub}
+        {r.reasonCode && <span className="ml-2 text-muted-foreground">({r.reasonCode})</span>}
+      </>
+    ),
+  },
+  {
+    label: "Volume",
+    align: "right",
+    cell: (r) => (r.correctionVolume === null ? dash : formatNumber(r.correctionVolume)),
+  },
   { label: "Delivery", align: "right", cell: (r) => formatDate(r.deliveryDate) },
 ];
 
@@ -209,6 +249,35 @@ function RecordTable<T extends { id: string }>({
 }
 
 /**
+ * Een lots-ronde raakt partijen én partijcorrecties aan, en telt ze allebei mee
+ * in zijn aantallen. De route zet de partijen vooraan en de correcties erachter;
+ * hier komen ze in twee tabellen te staan, want ze beschrijven iets anders. Een
+ * kop verschijnt alleen als beide op deze pagina staan.
+ */
+function LotTables({ records }: { records: (LotRecord | CorrectionRecord)[] }) {
+  const lots = records.filter((r): r is LotRecord => r.type === "lot");
+  const corrections = records.filter((r): r is CorrectionRecord => r.type === "correction");
+  const both = lots.length > 0 && corrections.length > 0;
+
+  return (
+    <div className="space-y-3">
+      {lots.length > 0 && (
+        <div className="space-y-1.5">
+          {both && <p className="text-xs font-medium">Lots</p>}
+          <RecordTable rows={lots} columns={LOT_COLUMNS} />
+        </div>
+      )}
+      {corrections.length > 0 && (
+        <div className="space-y-1.5">
+          <p className="text-xs font-medium">Lot corrections</p>
+          <RecordTable rows={corrections} columns={CORRECTION_COLUMNS} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
  * Welke records een ronde heeft aangeraakt. De twee tabs tonen dezelfde query
  * met een andere kant van de starttijd van de batch; de aantallen erachter komen
  * uit hetzelfde antwoord, zodat ze niet uit de pas kunnen lopen met de lijst.
@@ -290,7 +359,7 @@ export function BatchRecordsDialog({
           </p>
         ) : (
           <div className="space-y-3">
-            {data.kind === "lots" && <RecordTable rows={data.records} columns={LOT_COLUMNS} />}
+            {data.kind === "lots" && <LotTables records={data.records} />}
             {data.kind === "orders" && (
               <RecordTable rows={data.records} columns={TRANSACTION_COLUMNS} />
             )}
