@@ -101,7 +101,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   // achter elkaar plakt: hoeveel partijen er in deze modus zijn bepaalt waar de
   // correcties op de pagina beginnen.
   const counts = await countRecords(kind, id, createdFilter, updatedFilter);
-  const records = await fetchRecords(kind, id, createdAt, skip, counts.lots[mode]);
+  const records = await fetchRecords(kind, id, createdAt, skip, counts.primary[mode]);
 
   const total = counts[mode];
 
@@ -145,9 +145,10 @@ type DateFilter = { gte: Date } | { lt: Date };
 interface Counts {
   created: number;
   updated: number;
-  /** Alleen de partijen: bij een lots-ronde staan de correcties erachter in de
-   *  lijst, en dit getal zegt waar die reeks begint. */
-  lots: { created: number; updated: number };
+  /** Zonder de correcties. Bij een lots-ronde staan die achter de partijen in de
+   *  lijst, en dit getal zegt dus waar die reeks begint; bij de andere endpoints
+   *  is het gelijk aan de totalen. */
+  primary: { created: number; updated: number };
 }
 
 async function countRecords(
@@ -183,7 +184,7 @@ async function countRecords(
   return {
     created: created + corrCreated,
     updated: updated + corrUpdated,
-    lots: { created, updated },
+    primary: { created, updated },
   };
 }
 
@@ -257,7 +258,7 @@ async function fetchRecords(
   batchId: string,
   createdAt: DateFilter,
   skip: number,
-  lotTotal: number
+  primaryTotal: number
 ): Promise<
   (LotRecord | CorrectionRecord)[] | TransactionRecord[] | GrowerRecord[] | CostRecord[]
 > {
@@ -269,7 +270,7 @@ async function fetchRecords(
   // een rij naar twee pagina's of naar geen enkele.
   switch (kind) {
     case "lots":
-      return fetchLotRecords(batchId, createdAt, skip, lotTotal);
+      return fetchLotRecords(batchId, createdAt, skip, primaryTotal);
     case "orders": {
       const rows = await prisma.transaction.findMany({
         where,

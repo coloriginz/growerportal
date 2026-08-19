@@ -591,8 +591,49 @@ git commit -m "feat: click through from a run to the records it touched"
 - Vanuit het importscherm klik je door naar wat er is aangemaakt en bijgewerkt
 - Een overgeslagen aantal wijst naar de leveranciers die ontbreken, gescheiden van interne boekingen, met de knop om ze aan te maken — en het rollende venster haalt hun partijen daarna vanzelf op
 
-**Wat er ook niet in zit: `LotCorrection`.** Een nachtronde maakt er zo'n 68 aan en die dragen geen
-herkomst; ze staan niet bij de vier modellen uit taak 1. Wie doorklikt op de aangemaakte partijen van
-een ronde ziet de correcties dus niet. Zelfde patroon, vijfde model — los toe te voegen.
+**~~Wat er ook niet in zit: `LotCorrection`.~~** Alsnog gedaan op 19 augustus — zie de notitie
+onderaan.
 
 **Wat er niet in zit:** de overgeslagen orderregels. Die ronde gooit er per nacht 6.269 weg waarvan er maar 99 verklaard zijn; de rest heeft geen partij in de portal en wordt nergens geteld. Hetzelfde patroon als bij lots, maar een eigen wijziging — los te trekken zodra dit staat.
+
+---
+
+## Nagekomen: `LotCorrection` (19 augustus)
+
+Het losse eindje hierboven is alsnog gedaan. `LotCorrection` draagt nu dezelfde `lastImportBatchId` als
+de vier andere modellen, de lots-import zet hem op elke correctie die hij invoegt, en de records-route
+telt en toont de correcties achter de partijen. Er was **één** schrijfpad dat rijen aanmaakt: de rauwe
+`INSERT INTO "LotCorrection"` in fase 7. Er is geen `UPDATE`-pad, want de import verwijdert de
+correcties van een `part_id` en voegt ze opnieuw in; een correctie die een ronde als herkomst draagt is
+dus altijd door die ronde aangemaakt en verschijnt alleen op het tabblad Created.
+
+**De uitleg over het verschil is weg**, niet herschreven: hij bestond alleen omdat het model de kolom
+miste. De overschrijf-uitleg staat er nog wel, want die gaat over iets anders.
+
+Geverifieerd met een echte nachtronde plus de intraday-ronde die er direct achteraan kwam:
+
+| ronde | batch meldt cre/upd | gevonden | klopt |
+|---|---|---|---|
+| nightly lots 12:02 | 106 / 527 | 48 partijen + 58 correcties = 106, en 527 + 0 = 527 | ja |
+| intraday lots 12:03 | 3 / 243 | 0 partijen + 3 correcties = 3, en 243 + 0 = 243 | ja |
+
+De ronde van 18 augustus 22:48 — 217 = 146 partijen + 71 correcties, het geval waar de weggehaalde
+uitleg voor geschreven was — toont nu nul aangemaakte records met de overschrijf-melding: twee latere
+ronden hebben zijn partijen opnieuw aangeraakt en zijn correcties verwijderd en opnieuw ingevoegd. Dat
+is dezelfde melding als voorheen en hij hoort daar.
+
+De paginering over twee tabellen is los nagelopen: partijen eerst, correcties erachter, elke sortering
+afgesloten met `id`. Een volledige sweep over 387 rijen (332 partijen + 55 correcties) leverde 387
+unieke op, met de overgang middenin pagina 7 (32 partijen + 18 correcties).
+
+**De testdatabase kreeg de kolom niet via `prisma db push`**: poort 5432 is dicht op dit netwerk, dus
+elke Prisma-verbinding vanaf de commandline eindigt op P1001. De kolom is met de HTTP-driver gezet, met
+precies wat Prisma zelf zou genereren:
+
+```sql
+ALTER TABLE "LotCorrection" ADD COLUMN "lastImportBatchId" TEXT;
+CREATE INDEX "LotCorrection_lastImportBatchId_idx" ON "LotCorrection"("lastImportBatchId");
+```
+
+**Productie heeft die twee regels nog nodig.** De 16.823 correcties die er al stonden dragen geen
+herkomst; die van vóór deze wijziging blijven leeg tot een ronde ze opnieuw invoegt.
