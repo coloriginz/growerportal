@@ -1,4 +1,5 @@
 import type { QueryWindow } from "../types";
+import { consignmentSql } from "../purchase-type";
 import { isoDate, supplierClause } from "./helpers";
 
 /**
@@ -40,6 +41,7 @@ WHERE _datum_key_vertrek >= '${isoDate(from)}'
   AND parthdr_id IS NOT NULL
   AND rel_id_kweker IS NOT NULL
   AND rel_id_leverancier IS NOT NULL
+  ${consignmentSql("inkooptype_code")}
   ${supplierClause("rel_id_leverancier", supplierFabricId)}
 `.trim();
 }

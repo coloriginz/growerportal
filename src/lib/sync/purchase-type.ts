@@ -7,13 +7,34 @@
  * Eén verzameling op één plek, want dit is een businessregel en geen losse
  * stringvergelijking: alles wat er niet in staat wordt weggegooid.
  *
- * Welke codes Fabric precies kent is niet te controleren — de vraag-flow van
- * Power Automate geeft 502 op elke warehouse-query, ook op `SELECT TOP 1`. Het
- * schema noemt CONS, FOB en CIF. Daarom telt de lots-import wat hij weggooit
- * per code (`details.skippedPurchaseTypes`): duikt er een vierde code op, dan
- * staat die in het importscherm in plaats van dat er stilzwijgend data verdwijnt.
+ * Fabric kent er vier, gemeten op 20 augustus over de hele fct_partijen:
+ * CIF (573.808), CONS (296.763), FOB (97.406) en '-' (63.386). Dat streepje is
+ * geen ontbrekende waarde maar de interne productie: het zijn precies de zes
+ * `* Productieorders`-relaties. Consignatie is dus een minderheid — over de
+ * laatste zeven dagen 1.719 van de 4.697 partijen.
+ *
+ * De lots-import telt alsnog wat hij per code weggooit
+ * (`details.skippedPurchaseTypes`), want deze meting is een momentopname:
+ * duikt er een vijfde code op, dan staat die in het importscherm in plaats van
+ * dat er stilzwijgend data verdwijnt.
  */
 export const CONSIGNMENT_PURCHASE_TYPES: ReadonlySet<string> = new Set(["CONS"]);
+
+/**
+ * Dezelfde regel als SQL, zodat de bron en de import niet uit elkaar kunnen
+ * lopen. Nodig bij orders: die endpoint liep tegen de payload-grens van Power
+ * Automate aan (15.229 rijen kwam nooit terug, 11.128 net wel), en filteren aan
+ * de bronkant haalt daar over acht dagen 19.117 rijen terug naar 7.497.
+ *
+ * Bij lots gebeurt het filteren juist bewust in de import en niet hier: die
+ * payload is klein genoeg, en door alles op te halen telt elke ronde wat er aan
+ * inkooptypes langskomt. Dat is het vangnet voor een code die we nog niet
+ * kennen — bij orders zou zo'n code stilzwijgend wegvallen.
+ */
+export function consignmentSql(column: string): string {
+  const codes = [...CONSIGNMENT_PURCHASE_TYPES].map((c) => `'${c}'`).join(", ");
+  return `AND ${column} IN (${codes})`;
+}
 
 /** Waaronder een lege of ontbrekende code geteld wordt. */
 export const EMPTY_PURCHASE_TYPE_KEY = "(leeg)";
