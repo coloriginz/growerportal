@@ -141,11 +141,15 @@ async function upsertOrders(orders: Order[], batchId: string | null) {
         growerUpdateData.push({ fabricId: fabricKwekerId, name: frName });
       }
     } else {
+      // Bewust géén lastImportBatchId: elke import stempelt alleen het model
+      // waar hij verantwoordelijk voor is. Deze kweker is een bijproduct — hij
+      // wordt aangemaakt om de orderregel niet te hoeven weggooien. Stempelen we
+      // hem wel, dan pikt deze ronde de herkomst in van de growers-ronde die tien
+      // seconden eerder liep, en meldt die er drie terwijl er nog één zijn id draagt.
       growerCreateData.push({
         fabricId: fabricKwekerId,
         supplierId,
         name: nameMap.get(fabricKwekerId) || null,
-        lastImportBatchId: batchId,
       });
       growersCreated++;
     }
@@ -156,12 +160,10 @@ async function upsertOrders(orders: Order[], batchId: string | null) {
       `UPDATE "Grower" AS t
        SET
          name = u.val->>'name',
-         "lastImportBatchId" = $2,
          "updatedAt" = NOW()
        FROM jsonb_array_elements($1::jsonb) AS u(val)
        WHERE t."fabricId" = (u.val->>'fabricId')::int`,
-      JSON.stringify(growerUpdateData),
-      batchId
+      JSON.stringify(growerUpdateData)
     );
   }
 
