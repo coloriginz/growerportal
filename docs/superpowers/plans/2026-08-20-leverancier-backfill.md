@@ -68,7 +68,7 @@
   export function backfillJobs(chunks: readonly BackfillChunk[]): BackfillJobSpec[];
   ```
 
-- [ ] **Step 1: Schrijf de controles (dit faalt nog)**
+- [x] **Step 1: Schrijf de controles (dit faalt nog)**
 
 Create `scripts/checks/backfill.ts`, in de vorm van `scripts/checks/purchase-type.ts`:
 
@@ -132,12 +132,12 @@ console.log(failures === 0 ? "\nalle controles geslaagd" : `\n${failures} contro
 process.exit(failures === 0 ? 0 : 1);
 ```
 
-- [ ] **Step 2: Draai het en zie het falen**
+- [x] **Step 2: Draai het en zie het falen**
 
 Run: `npx tsx scripts/checks/backfill.ts`
 Expected: FAIL, `quarterChunks` bestaat nog niet.
 
-- [ ] **Step 3: Schrijf de functies**
+- [x] **Step 3: Schrijf de functies**
 
 Create `src/lib/sync/backfill.ts`:
 
@@ -241,7 +241,7 @@ export function backfillJobs(chunks: readonly BackfillChunk[]): BackfillJobSpec[
 }
 ```
 
-- [ ] **Step 4: Draai het en zie het slagen, en neem het op in `npm run check`**
+- [x] **Step 4: Draai het en zie het slagen, en neem het op in `npm run check`**
 
 Run: `npx tsx scripts/checks/backfill.ts`
 Expected: PASS op alle regels.
@@ -251,7 +251,7 @@ Voeg in `package.json` ` && tsx scripts/checks/backfill.ts` toe aan het `check`-
 Run: `npm run check`
 Expected: geen enkele FAIL.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/lib/sync/backfill.ts scripts/checks/backfill.ts package.json
@@ -391,7 +391,7 @@ git commit -m "feat: store the backfill start date outside the test-only setting
 **Interfaces:**
 - Produces: `SyncJob.priority Int @default(0)` — 0 is een geplande ronde, 1 een backfill.
 
-- [ ] **Step 1: Voeg de kolom toe aan het schema**
+- [x] **Step 1: Voeg de kolom toe aan het schema**
 
 In `prisma/schema.prisma`, model `SyncJob`, onder `source`:
 
@@ -407,7 +407,7 @@ En vervang `@@index([status, createdAt])` door:
   @@index([status, priority, createdAt])
 ```
 
-- [ ] **Step 2: Zet de kolom op de testdatabase**
+- [x] **Step 2: Zet de kolom op de testdatabase**
 
 `prisma db push` kan niet (poort 5432 dicht). Voer met de Neon HTTP-driver exact uit wat Prisma zou genereren:
 
@@ -420,7 +420,7 @@ CREATE INDEX "SyncJob_status_priority_createdAt_idx" ON "SyncJob"("status", "pri
 Controleer daarna via `information_schema.columns` en `pg_indexes` dat kolom en index er staan.
 **Noteer deze SQL in je rapportage:** productie heeft hem later apart nodig.
 
-- [ ] **Step 3: Laat de claim erop sorteren**
+- [x] **Step 3: Laat de claim erop sorteren**
 
 In `src/lib/sync/runner.ts`, in `claimNextJob()`, wordt
 
@@ -449,7 +449,7 @@ met daaronder:
  * af en de rest van de backfill wacht tot de ronde klaar is.
 ```
 
-- [ ] **Step 4: Verifieer de voorrang tegen echte rijen**
+- [x] **Step 4: Verifieer de voorrang tegen echte rijen**
 
 Schrijf `scripts/tmp-priority.js`: leeg de wachtrij, zet met de HTTP-driver twee jobs klaar — één met `priority = 1` en een oudere `createdAt`, één met `priority = 0` en een nieuwere — en voer daarna dezelfde `SELECT` uit die in `claimNextJob` staat (zonder de `UPDATE`, dus alleen het subselect). Controleer dat de gewone job terugkomt, niet de backfill.
 
@@ -457,7 +457,7 @@ Draai dezelfde proef nogmaals met alleen de backfill-job in de wachtrij en contr
 
 Ruim de proefrijen én het script op.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add prisma/schema.prisma src/lib/sync/runner.ts
