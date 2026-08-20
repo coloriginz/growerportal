@@ -339,7 +339,11 @@ Salessheet PDFs are imported via `POST /api/shipments/import-email`, also authen
 2. PDF content parsing (`salessheet-pdf-parser.ts`) — extracts reference from PDF text
 3. Match against `SalesSheet.invoiceNumber`
 
-Matched PDFs are uploaded to Vercel Blob and linked via `SalesSheet.pdfDocumentId -> Document`.
+Matched PDFs are uploaded to Vercel Blob and linked via `SalesSheet.pdfDocumentId -> Document`. A link is only made when the delivery date printed on the PDF matches the candidate exactly — the reference alone is not enough, since sales sheet numbers recycle per year.
+
+The filename parser knows three shapes, tried in order: the rich Power Automate form (`COLCICE - 04_23_2026 00_15_00 - 212-28 - 401546.PDF`), the digits-only form (`135-23-380914.pdf`), and the loose form (`C002 Blom-371364.pdf`) where anything after the final hyphen is our invoice number if it is four digits or more. Covered by `scripts/checks/salessheet-filename.ts`.
+
+The local archive in `private_input/salessheets` is pushed through this same route by `scripts/link-salessheet-pdfs.ts` (dry-run by default). See `docs/salessheet-pdfs-koppelen.md`.
 
 ---
 
