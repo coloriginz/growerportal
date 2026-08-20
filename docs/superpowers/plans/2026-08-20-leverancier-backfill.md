@@ -518,7 +518,7 @@ git commit -m "feat: let a scheduled round outrank a backfill in the queue"
   }>>;
   ```
 
-- [ ] **Step 1: Schrijf de runner-functies**
+- [x] **Step 1: Schrijf de runner-functies**
 
 Voeg toe aan `src/lib/sync/runner.ts`:
 
@@ -624,7 +624,7 @@ export async function openBackfills() {
 }
 ```
 
-- [ ] **Step 2: Schrijf de route**
+- [x] **Step 2: Schrijf de route**
 
 Create `src/app/api/sync/backfill/route.ts`:
 
@@ -688,7 +688,7 @@ export async function POST(request: NextRequest) {
 }
 ```
 
-- [ ] **Step 3: Verifieer met een echte, kleine leverancier**
+- [x] **Step 3: Verifieer met een echte, kleine leverancier**
 
 `COLXIMA` heeft 106 partijen sinds 2024 — klein genoeg om af te ronden, groot genoeg om meerdere kwartalen te raken.
 
@@ -696,12 +696,35 @@ Zet met de HTTP-driver `sync.backfillStartDate` op `2026-01-01`, roep de route a
 
 Verwijder de proefjobs weer; de ronde draaien gebeurt in taak 8.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/lib/sync/runner.ts src/app/api/sync/backfill/route.ts
 git commit -m "feat: queue a per-supplier backfill in quarterly chunks"
 ```
+
+**Zo is het gebouwd, waar het afwijkt van de code hierboven:**
+
+- `enqueueBackfill` **gooit niet meer**. Hij geeft
+  `{ ok: true; runId; jobs } | { ok: false; reason: "already_running" | "nothing_to_backfill"; message }`
+  terug. De twee weigeringen zijn verwachte antwoorden; als ze `Error` zijn, moet elke aanroeper een
+  `catch` schrijven die een uitgevallen database niet van "er loopt er al een" kan onderscheiden — dan
+  wordt een Neon-storing een 409. De route heeft daardoor geen `try` meer en een echte fout wordt weer
+  een 500.
+- `openBackfills()` haalt eerst de runIds op die nog een job hebben die niet `done` is, en pas daarna de
+  jobs van die runs. De filter zat in het plan ná het ophalen, waardoor elke ooit gedraaide backfill
+  voor altijd over de lijn kwam.
+- `current` toont het kwartaal in plaats van de begindatum van het venster: `"lots 2026 Q2"`. Dat label
+  wordt afgeleid uit `windowFrom` met de nieuwe export `quarterLabel()` uit `backfill.ts` — geen kolom
+  erbij, dezelfde functie die `quarterChunks` zijn labels geeft. Volgnummer 0 is de stamdatajob en
+  overspant alle kwartalen; die toont alleen `"growers"`.
+- Geen `!` op `supplierFabricId`: een backfill-run zonder Fabric-id valt uit het antwoord, want de kaart
+  heeft de leverancier erbij nodig. Idem voor `Supplier.fabricId` in de route.
+- Geen transactie om de `createMany`, en dat klopt: `enqueueRun` heeft er één omdat hij twee dingen
+  schrijft (jobs én `lastRunAt`), hier is het één statement. De dubbelcontrole blijft advies en geen
+  slot — twee gelijktijdige klikken kunnen er allebei langs, en het ergste gevolg is dubbel werk.
+- De doc-comment boven `cancelRestOfRun()` is bijgewerkt: één runId over alle kwartalen, dus een
+  gestrande brok annuleert de rest van de backfill, waarvoor `resumeBackfill` bestaat.
 
 ---
 
@@ -820,7 +843,12 @@ En na `prisma.supplier.create(...)`, vóór de `NextResponse.json`:
       backfillError = "No backfill start date is set.";
     } else {
       try {
-        backfill = await enqueueBackfill(relation.fabricId, start);
+        // enqueueBackfill weigert met een reden in plaats van te gooien; de
+        // catch eromheen is voor het onverwachte, zodat een omgevallen database
+        // de activatie niet alsnog op een 500 zet nadat de leverancier bestaat.
+        const result = await enqueueBackfill(relation.fabricId, start);
+        if (result.ok) backfill = { runId: result.runId, jobs: result.jobs };
+        else backfillError = result.message;
       } catch (e) {
         backfillError = e instanceof Error ? e.message : "Could not start the backfill";
       }

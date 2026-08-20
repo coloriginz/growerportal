@@ -19,6 +19,17 @@ function addQuarter(date: Date): Date {
 }
 
 /**
+ * Het kwartaal waar een datum in valt, als "2025 Q3".
+ *
+ * Apart en geëxporteerd omdat de voortgangskaart hetzelfde label wil voor een
+ * job die al in de wachtrij staat. Dat label is af te leiden uit `windowFrom` —
+ * een kolom op `SyncJob` zou dezelfde waarheid een tweede keer opslaan.
+ */
+export function quarterLabel(date: Date): string {
+  return `${date.getUTCFullYear()} Q${Math.floor(date.getUTCMonth() / 3) + 1}`;
+}
+
+/**
  * De brokken van een backfill: kalenderkwartalen vanaf het kwartaal waarin de
  * basisdatum valt tot en met het kwartaal van nu.
  *
@@ -38,9 +49,7 @@ export function quarterChunks(startDate: Date, now: Date): BackfillChunk[] {
   // `<=` op twee Dates vergelijkt de onderliggende tijdstempels; `addQuarter`
   // schuift altijd drie maanden op, dus de lus loopt gegarandeerd af.
   for (let from = quarterStart(startDate); from <= laatste; from = addQuarter(from)) {
-    const to = addQuarter(from);
-    const kwartaal = Math.floor(from.getUTCMonth() / 3) + 1;
-    chunks.push({ from, to, label: `${from.getUTCFullYear()} Q${kwartaal}` });
+    chunks.push({ from, to: addQuarter(from), label: quarterLabel(from) });
   }
 
   return chunks;
