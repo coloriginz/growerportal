@@ -972,7 +972,26 @@ Boven de twee schema-kaarten een blok **Backfill** met een `<input type="date">`
 
 Daaronder de `BackfillCard`.
 
-- [ ] **Step 3: Verifieer end-to-end op test** — *nog te doen: de browserverificatie volgt in de hoofdsessie, ná deploy.*
+- [x] **Step 3: Verifieer end-to-end op test** — gedaan in de nacht van 20 augustus.
+
+`COLXIMA` (Imani Flowers) aangezet vanuit het overgeslagen-paneel met **Activate and backfill**, basisdatum
+1 januari 2024: 11 kwartalen, 34 jobs, alle 34 `done` en nul mislukt. De brokken liepen op volgorde van
+2024 Q1 tot 2026 Q3, telkens `lots`, `orders`, `costs`, met de kwekers vooraan.
+
+**De voorrang is bewezen zonder dat er iets geforceerd hoefde te worden.** Er stonden toevallig een
+nachtronde en een intraday-ronde klaar, en die drongen allebei voor. De cijfers: de backfill is
+aangemaakt om 06:02:05 en werd voor het eerst verstuurd om 06:03:55; de intraday-ronde werd 25 seconden
+*later* aangemaakt (06:02:30) en ging 17 seconden *eerder* de deur uit (06:03:38). Pas na alle zeven
+gewone jobs kwam de eerste backfill-job aan de beurt.
+
+**De aantallen kloppen tot op de rij.** Fabric heeft voor deze kweker 106 consignatie-rijen sinds 2024,
+allemaal in 2026 Q3 (hij levert pas sinds 10 juli). De lege kwartalen daarvóór zijn dus terecht leeg.
+Die 106 rijen zijn 61 nieuwe partijen + 10 bijgewerkte + 35 correcties; de portal heeft 71 partijen en
+35 correcties. **Let op bij het nakijken:** een rijtelling in `fct_partijen` is geen partijentelling —
+correcties zitten erin. Dat is dezelfde valkuil als bij de doorklikbare import (217 versus 146).
+
+`SELECT COUNT(*) FROM "Lot" WHERE "purchaseType" <> 'CONS'` bleef nul.
+
 
 Wacht tot je commit gedeployd is; Power Automate post terug naar de deployed omgeving.
 
