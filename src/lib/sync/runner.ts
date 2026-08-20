@@ -82,10 +82,16 @@ type ClaimedJob = {
 };
 
 /**
- * Claimt de volgende job in één atomaire stap. De twee NOT EXISTS-clausules
- * dragen de beide regels van het systeem:
+ * Claimt de volgende job in één atomaire stap. De twee NOT EXISTS-clausules en
+ * de sortering dragen samen de drie regels van het systeem:
  *   1. er staat er hoogstens één tegelijk uit
  *   2. binnen een ronde is de vorige klaar voordat de volgende gaat
+ *   3. een backfill komt pas aan de beurt als er geen geplande ronde wacht
+ *
+ * Die derde regel is enkel deze ORDER BY. Een extra NOT EXISTS is overbodig:
+ * staat er een gewone job te wachten, dan pakt de sortering die per definitie
+ * eerst. Een lopende backfill-job wordt niet afgebroken — hij maakt zijn brok
+ * af en de rest van de backfill wacht tot de ronde klaar is.
  *
  * Twee ticks die elkaar overlappen kunnen in het uiterste geval allebei een job
  * claimen uit verschillende rondes — de volgorde binnen een ronde blijft dan
@@ -105,7 +111,7 @@ async function claimNextJob(): Promise<ClaimedJob | null> {
           SELECT 1 FROM "SyncJob" p
           WHERE p."runId" = j."runId" AND p.sequence < j.sequence AND p.status <> 'done'
         )
-      ORDER BY j."createdAt", j.sequence
+      ORDER BY j.priority, j."createdAt", j.sequence
       LIMIT 1
       FOR UPDATE SKIP LOCKED
     )

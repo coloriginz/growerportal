@@ -979,6 +979,9 @@ model SyncJob {
   windowTo         DateTime
   supplierFabricId Int?      // rel_id_leverancier; alleen gevuld bij een backfill voor één leverancier
   source           String    // "schedule", "nightly", "backfill"
+  /// 0 = geplande ronde, 1 = backfill. De claim sorteert hierop, zodat werk aan
+  /// het verleden nooit voorgaat op de dagelijkse sync.
+  priority         Int       @default(0)
   status           String    @default("pending") // "pending", "dispatched", "done", "failed", "cancelled"
   attempts         Int       @default(0)
   importBatchId    String?
@@ -987,7 +990,7 @@ model SyncJob {
   dispatchedAt     DateTime?
   completedAt      DateTime?
 
-  @@index([status, createdAt])
+  @@index([status, priority, createdAt])
   @@unique([runId, sequence])
   @@index([importBatchId])
 }
