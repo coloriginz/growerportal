@@ -274,7 +274,7 @@ git commit -m "feat: split a backfill into calendar quarters in chain order"
   export async function writeBackfillStart(date: Date): Promise<void>;
   ```
 
-- [ ] **Step 1: Schrijf de leeslaag**
+- [x] **Step 1: Schrijf de leeslaag**
 
 Create `src/lib/sync/settings.ts`:
 
@@ -310,7 +310,7 @@ export async function writeBackfillStart(date: Date): Promise<void> {
 }
 ```
 
-- [ ] **Step 2: Schrijf de route**
+- [x] **Step 2: Schrijf de route**
 
 Create `src/app/api/sync/settings/route.ts`:
 
@@ -366,14 +366,14 @@ export async function PUT(request: NextRequest) {
 }
 ```
 
-- [ ] **Step 3: Verifieer tegen de testdatabase**
+- [x] **Step 3: Verifieer tegen de testdatabase**
 
 Schrijf `scripts/tmp-settings.js` dat met de Neon HTTP-driver de rij zet en terugleest, en controleer dat `readBackfillStart` een datum teruggeeft en `null` bij een onzinwaarde. Ruim het script op.
 
 Run: `npx tsc --noEmit` en `npx next lint --file src/app/api/sync/settings/route.ts`
 Expected: allebei schoon.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/lib/sync/settings.ts src/app/api/sync/settings
@@ -683,7 +683,7 @@ git commit -m "feat: queue a per-supplier backfill in quarterly chunks"
 **Interfaces:**
 - Produces: `export async function resumeBackfill(runId: string): Promise<number>` — het aantal jobs dat weer op `pending` staat.
 
-- [ ] **Step 1: Schrijf de functie**
+- [x] **Step 1: Schrijf de functie**
 
 Voeg toe aan `src/lib/sync/runner.ts`:
 
@@ -710,7 +710,7 @@ export async function resumeBackfill(runId: string): Promise<number> {
 }
 ```
 
-- [ ] **Step 2: Schrijf de route**
+- [x] **Step 2: Schrijf de route**
 
 Create `src/app/api/sync/backfill/[runId]/resume/route.ts`:
 
@@ -740,11 +740,11 @@ export async function POST(
 }
 ```
 
-- [ ] **Step 3: Verifieer tegen echte rijen**
+- [x] **Step 3: Verifieer tegen echte rijen**
 
 Zet met de HTTP-driver een backfill klaar, markeer job 4 als `failed` en de rest als `cancelled`, roep de route aan, en controleer dat alle vier weer op `pending` staan met `attempts = 0`. Controleer dat een tweede aanroep 409 geeft. Ruim de rijen op.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/lib/sync/runner.ts "src/app/api/sync/backfill/[runId]"

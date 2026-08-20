@@ -71,6 +71,42 @@ export async function enqueueRunNow(name: string, now: Date = new Date()): Promi
   return enqueueRun(schedule, now);
 }
 
+/**
+ * Zet een gestrande backfill weer aan vanaf de brok waar hij bleef steken.
+ * Retourneert het aantal jobs dat weer op `pending` staat.
+ *
+ * Een gefaalde job annuleert de rest van zijn run — streng, en terecht, want
+ * een gat middenin een backfill ziet niemand terug. Maar zonder hervatten begin
+ * je na een storing in kwartaal negen weer bij kwartaal één. De vensters staan
+ * al gematerialiseerd op de geannuleerde jobs, dus hervatten is niet meer dan
+ * ze terugzetten en de gefaalde job zijn pogingen teruggeven.
+ *
+ * Het statusfilter is de hele veiligheid. `done` valt erbuiten, anders haalt
+ * elke hervatting het hele verleden opnieuw op; `dispatched` en `pending` ook,
+ * dus een backfill die nog loopt wordt hier niet uit zijn ritme gehaald. En een
+ * teruggezette job kan pas aan de beurt komen als zijn voorganger `done` is —
+ * dat bewaakt claimNextJob al.
+ *
+ * Geen transactie eromheen: één updateMany is één statement, en dat is in
+ * Postgres al atomair.
+ */
+export async function resumeBackfill(runId: string): Promise<number> {
+  const hersteld = await prisma.syncJob.updateMany({
+    // Alleen backfills: een geannuleerde geplande ronde terugzetten zou een
+    // venster van weken geleden opnieuw ophalen, en dat lost het schema zelf op.
+    where: { runId, source: "backfill", status: { in: ["failed", "cancelled"] } },
+    data: {
+      status: "pending",
+      attempts: 0,
+      lastError: null,
+      dispatchedAt: null,
+      completedAt: null,
+    },
+  });
+
+  return hersteld.count;
+}
+
 type ClaimedJob = {
   id: string;
   endpoint: string;
