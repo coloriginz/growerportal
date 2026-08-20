@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -35,6 +35,7 @@ import {
   type KetenAdvies,
 } from "@/lib/sync/schedule";
 import { timeAgo } from "./shared";
+import { BackfillCard } from "./backfill-card";
 
 // ─── Schedules Tab ────────────────────────────────────────
 
@@ -601,10 +602,124 @@ function ScheduleEditor({
   );
 }
 
+// ─── Backfill start date ────────────────────────────────────────
+
+export interface SyncSettingsResponse {
+  backfillStartDate: string | null;
+  /** Wat die datum per leverancier oplevert, uitgerekend door de server. */
+  quarters: number;
+  jobs: number;
+}
+
+/**
+ * De basisdatum voor backfills: één datum voor alle leveranciers, dus hij hoort
+ * bij de schema's en niet bij een leverancier.
+ *
+ * Het aantal kwartalen komt van de server mee en wordt hier niet nagerekend —
+ * de definitie van "een kwartaal" staat op één plek. De prijs is dat het getal
+ * bij de opgeslagen datum hoort en niet bij wat er in het veld staat; zolang die
+ * twee verschillen zegt de regel eronder dat, in plaats van een getal te tonen
+ * dat bij de vorige datum hoort.
+ */
+function BackfillStartField({
+  settings,
+  onSaved,
+}: {
+  settings: SyncSettingsResponse | null;
+  onSaved: () => void;
+}) {
+  // null is "niet aangeraakt", niet "leeg": zo wint een verversing van de server
+  // zolang de gebruiker niets heeft ingetypt, en zijn invoer daarna.
+  const [draft, setDraft] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const saved = settings?.backfillStartDate ?? "";
+  const value = draft ?? saved;
+  const dirty = value !== saved;
+
+  const save = useCallback(async () => {
+    if (value === "") {
+      toast.error("Pick a date first");
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const res = await fetch("/api/sync/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ backfillStartDate: value }),
+      });
+      const body = await res.json().catch(() => null);
+      if (!res.ok) {
+        toast.error(typeof body?.error === "string" ? body.error : "Invalid date");
+        return;
+      }
+      toast.success(`Backfills now start at ${value}`);
+      // Terug naar de servertoestand: het antwoord van de PUT is wat een
+      // volgende GET ook geeft, inclusief het bijgewerkte aantal kwartalen.
+      setDraft(null);
+      onSaved();
+    } catch {
+      toast.error("Failed to save the backfill start date");
+    } finally {
+      setSaving(false);
+    }
+  }, [value, onSaved]);
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm font-medium">Backfill</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-2 text-sm">
+        <Label htmlFor="backfill-start">Start date</Label>
+        <div className="flex items-center gap-2">
+          <Input
+            id="backfill-start"
+            type="date"
+            value={value}
+            onChange={(e) => setDraft(e.target.value)}
+            className="w-44"
+          />
+          <Button type="button" size="sm" onClick={save} disabled={saving || !dirty}>
+            Save
+          </Button>
+        </div>
+        {settings && (
+          <p className="text-xs text-muted-foreground">
+            {dirty
+              ? "Not saved yet — the quarter count below follows the saved date."
+              : saved === ""
+                ? "No start date set. A backfill needs one before it can start."
+                : `${settings.quarters} quarter${settings.quarters === 1 ? "" : "s"} per supplier, ${settings.jobs} job${settings.jobs === 1 ? "" : "s"}.`}
+          </p>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 export function SchedulesTab() {
   const { t } = useLanguage();
   const { data, loading, error, refetch } = useFetch<SchedulesResponse>("/api/sync/schedules");
+  const { data: settings, refetch: refetchSettings } =
+    useFetch<SyncSettingsResponse>("/api/sync/settings");
   const [editingName, setEditingName] = useState<string | null>(null);
+
+  // De voortgangskaart houdt zijn eigen fetch, maar het tabblad heeft één
+  // Refresh-knop en geen drie. De kaart geeft zijn refetch hier af zodat die knop
+  // hem meeneemt; pollen doet dit scherm nergens en dat blijft zo.
+  const refreshBackfills = useRef<() => void>(() => {});
+  const registerBackfillRefresh = useCallback((refresh: () => void) => {
+    refreshBackfills.current = refresh;
+  }, []);
+
+  const refreshAll = useCallback(() => {
+    refetch();
+    refetchSettings();
+    refreshBackfills.current();
+  }, [refetch, refetchSettings]);
 
   const handleRetry = useCallback(() => {
     refetch();
@@ -625,7 +740,7 @@ export function SchedulesTab() {
     <div className="space-y-6">
       {/* Refresh */}
       <div className="flex justify-end">
-        <Button variant="outline" size="sm" onClick={refetch} disabled={loading}>
+        <Button variant="outline" size="sm" onClick={refreshAll} disabled={loading}>
           <RiRefreshLine className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />
           {t("common.refresh")}
         </Button>
@@ -643,6 +758,11 @@ export function SchedulesTab() {
           </span>
         </div>
       )}
+
+      {/* De basisdatum en wat er nu loopt, boven de schema's: dit is werk dat
+          uren duurt en dat je wilt zien voordat je aan een schema zit. */}
+      <BackfillStartField settings={settings} onSaved={refetchSettings} />
+      <BackfillCard registerRefresh={registerBackfillRefresh} />
 
       {loading && !data ? (
         <p className="py-16 text-center text-sm text-muted-foreground">{t("common.loading")}</p>

@@ -924,19 +924,19 @@ git commit -m "feat: let an existing supplier be backfilled from its own page"
 - Create: `src/app/(portal)/admin/imports/backfill-card.tsx`
 - Modify: `src/app/(portal)/admin/imports/schedules-tab.tsx`
 
-- [ ] **Step 1: Schrijf de kaart**
+- [x] **Step 1: Schrijf de kaart**
 
 `backfill-card.tsx` haalt `GET /api/sync/backfill` op met `useFetch` en toont per lopende backfill: de code en naam van de leverancier, `done / total` jobs, welk endpoint en welk kwartaal nu aan de beurt is, en of hij wacht. Is `failed > 0`, dan een knop **Resume** die naar `POST /api/sync/backfill/[runId]/resume` post en daarna `refetch()` aanroept.
 
 Zijn er geen lopende backfills, dan rendert de kaart niets.
 
-- [ ] **Step 2: Zet het datumveld op het Schedules-tabblad**
+- [x] **Step 2: Zet het datumveld op het Schedules-tabblad**
 
 Boven de twee schema-kaarten een blok **Backfill** met een `<input type="date">` gevuld uit `GET /api/sync/settings`, een opslaan-knop die naar `PUT` post, en onder het veld de zin hoeveel kwartalen dat per leverancier wordt — het getal komt uit `quarters` in de respons, zodat de definitie van een kwartaal op één plek staat.
 
 Daaronder de `BackfillCard`.
 
-- [ ] **Step 3: Verifieer end-to-end op test**
+- [ ] **Step 3: Verifieer end-to-end op test** — *nog te doen: de browserverificatie volgt in de hoofdsessie, ná deploy.*
 
 Wacht tot je commit gedeployd is; Power Automate post terug naar de deployed omgeving.
 
@@ -959,12 +959,28 @@ Vergelijk het aantal binnengekomen partijen met wat Fabric zegt:
 node scripts/fabric-query.js "SELECT COUNT(*) AS n FROM marts.fct_partijen p JOIN marts.dim_leverancier l ON l.rel_id_leverancier = p.rel_id_leverancier WHERE l.leverancier_code = 'COLXIMA' AND p.inkooptype_code = 'CONS' AND p.leverdatum >= '2026-01-01'"
 ```
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add "src/app/(portal)/admin/imports"
 git commit -m "feat: set the backfill start date and watch a backfill run"
 ```
+
+**Zo is het gebouwd, waar het afwijkt van de tekst hierboven:**
+
+- **"Of hij wacht" bestond nog niet en is erbij gekomen in `openBackfills()`**, als
+  `waitingOnRound: boolean`. Af te leiden viel het niet: de voorrang zit in de `ORDER BY` van
+  `claimNextJob`, niet in de rijen van de backfill zelf. Eén extra query — bestaat er een `SyncJob`
+  met `priority = 0` en status `pending` of `dispatched` — beantwoordt het voor alle backfills
+  tegelijk, en de vlag staat alleen aan als de eigen brok óók nog `pending` is. Staat die op
+  `dispatched`, dan is de backfill zelf aan de beurt en wacht hij nergens op.
+- **Geen polling.** De kaart houdt zijn eigen `useFetch`, maar geeft zijn `refetch` af aan het
+  tabblad via `registerRefresh`, zodat de ene bestaande Refresh-knop schema's, basisdatum én kaart
+  meeneemt. Een tweede verversknop in de kaart zou het scherm twee betekenissen van "ververs" geven.
+- **Het kwartaalgetal hoort bij de opgeslagen datum, niet bij het veld.** Het komt uit `quarters` in
+  de respons en wordt hier niet nagerekend; zolang het veld afwijkt van wat opgeslagen staat zegt de
+  regel eronder dat, in plaats van een getal te tonen dat bij de vorige datum hoort. Na opslaan valt
+  het veld terug op de servertoestand, die de PUT al meestuurt.
 
 ---
 

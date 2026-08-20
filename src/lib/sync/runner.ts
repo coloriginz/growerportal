@@ -171,17 +171,19 @@ export type OpenBackfill = {
   failed: number;
   /** Waar hij nu is, als "lots 2025 Q3"; null als er niets meer wacht. */
   current: string | null;
+  /** Zijn eerstvolgende brok staat klaar, maar een geplande ronde gaat voor. */
+  waitingOnRound: boolean;
 };
 
 /**
  * De backfills die nog niet klaar zijn, met hun voortgang, voor de kaart in het
  * scherm. Een afgeronde backfill verdwijnt; zijn historie staat in de batchlijst.
  *
- * Twee query's in plaats van één: eerst de runIds die nog een job hebben die
- * niet `done` is, dan alleen de jobs van die runs. Alles ophalen en in geheugen
- * filteren werkt vandaag — vierendertig rijen per backfill — maar dan groeit
- * wat er over de lijn komt met elke backfill die ooit gedraaid heeft, terwijl
- * het antwoord juist krimpt.
+ * De jobs in twee stappen in plaats van één: eerst de runIds die nog een job
+ * hebben die niet `done` is, dan alleen de jobs van die runs. Alles ophalen en
+ * in geheugen filteren werkt vandaag — vierendertig rijen per backfill — maar
+ * dan groeit wat er over de lijn komt met elke backfill die ooit gedraaid
+ * heeft, terwijl het antwoord juist krimpt.
  */
 export async function openBackfills(): Promise<OpenBackfill[]> {
   const openRuns = await prisma.syncJob.findMany({
@@ -211,6 +213,16 @@ export async function openBackfills(): Promise<OpenBackfill[]> {
     else perRun.set(job.runId, [job]);
   }
 
+  // Dat een backfill op een geplande ronde wacht is niet aan zijn eigen rijen te
+  // zien: het zit in de sortering van claimNextJob. Staat er ergens een job met
+  // priority 0 open, dan pakt de claim die eerst — pending omdat de sortering
+  // hem voorrang geeft, dispatched omdat er er maar één tegelijk uit staat. Eén
+  // vraag beantwoordt dat voor alle backfills tegelijk.
+  const geplandeRonde = await prisma.syncJob.findFirst({
+    where: { priority: 0, status: { in: ["pending", "dispatched"] } },
+    select: { id: true },
+  });
+
   const backfills: OpenBackfill[] = [];
   for (const [runId, rijen] of perRun) {
     // `supplierFabricId` is nullable in het schema omdat een geplande ronde hem
@@ -238,6 +250,10 @@ export async function openBackfills(): Promise<OpenBackfill[]> {
           ? lopend.endpoint
           : `${lopend.endpoint} ${quarterLabel(lopend.windowFrom)}`
         : null,
+      // Alleen als zijn eigen brok nog wacht. Staat die op `dispatched`, dan is
+      // hij zelf aan de beurt en wacht hij nergens op — ook niet op de ronde die
+      // daarna komt.
+      waitingOnRound: geplandeRonde !== null && lopend?.status === "pending",
     });
   }
 
