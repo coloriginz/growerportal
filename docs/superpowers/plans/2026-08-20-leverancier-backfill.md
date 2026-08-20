@@ -917,7 +917,7 @@ git commit -m "feat: offer a backfill when activating a skipped supplier"
 **Files:**
 - Modify: `src/app/(portal)/suppliers/[id]/supplier-detail.tsx`
 
-- [ ] **Step 1: Voeg de knop toe**
+- [x] **Step 1: Voeg de knop toe**
 
 Op de leverancierspagina een knop **Backfill history**, zichtbaar voor `admin`. Hij opent dezelfde bevestiging als in taak 6 — code, naam, basisdatum, kwartalen, jobs, en de zin over wanneer het draait — en post daarna naar `POST /api/sync/backfill` met de `fabricId` van deze leverancier.
 
@@ -925,17 +925,32 @@ Een leverancier zonder `fabricId` krijgt de knop niet: zonder Fabric-relatie val
 
 Een 409 ("er loopt al een backfill") komt als foutmelding terug en wordt getoond zoals hij is.
 
-- [ ] **Step 2: Verifieer**
+- [x] **Step 2: Verifieer**
 
 Run: `npx tsc --noEmit` en `npx next lint --file "src/app/(portal)/suppliers/[id]/supplier-detail.tsx"`
 Expected: schoon.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add "src/app/(portal)/suppliers/[id]/supplier-detail.tsx"
 git commit -m "feat: let an existing supplier be backfilled from its own page"
 ```
+
+**Zo is het gebouwd, waar het afwijkt van de tekst hierboven:**
+
+- **Twee bestanden erbij, want de pagina had de gegevens niet.** `GET /api/suppliers/[id]` gaf
+  `fabricId` niet terug — zonder dat veld is "verberg de knop bij een leverancier zonder Fabric-
+  relatie" niet te beslissen — en de knop is admin-only terwijl de pagina ook voor commercie en
+  finance opengaat. De rol komt nu als `isAdmin`-prop uit `page.tsx`, precies zoals de zusterpagina
+  `suppliers/page.tsx` het al deed; de client haalt hem niet zelf op. De route achter de knop,
+  `POST /api/sync/backfill`, staat al op `requireAuth(["admin"])`, dus het verbergen is presentatie
+  en niet de afscherming.
+- **In de testdatabase heeft geen van de 56 leveranciers een lege `fabricId`.** De knop zal dus in de
+  praktijk nooit verborgen zijn; de voorwaarde is er voor handmatig aangemaakte leveranciers.
+- De bevestiging sluit ook na een weigering. Geen van de twee redenen — er loopt er al een, of er is
+  geen basisdatum — gaat weg door nog eens op dezelfde knop te drukken, dus openhouden zou alleen een
+  tweede identieke 409 opleveren.
 
 ---
 

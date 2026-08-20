@@ -15,5 +15,5 @@ export default async function SupplierDetailPage({ params }: Props) {
 
   const { id } = await params;
 
-  return <SupplierDetail supplierId={id} />;
+  return <SupplierDetail supplierId={id} isAdmin={session.user.role === "admin"} />;
 }
