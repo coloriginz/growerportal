@@ -270,6 +270,8 @@ git commit -m "feat: split a backfill into calendar quarters in chain order"
 - Produces:
   ```ts
   export const BACKFILL_START_KEY = "sync.backfillStartDate";
+  export function parseIsoDay(value: string): Date | null;
+  export function toIsoDay(date: Date): string;
   export async function readBackfillStart(): Promise<Date | null>;
   export async function writeBackfillStart(date: Date): Promise<void>;
   ```
@@ -291,17 +293,37 @@ import { prisma } from "@/lib/db";
  */
 export const BACKFILL_START_KEY = "sync.backfillStartDate";
 
+/**
+ * Een kalenderdag in ISO-vorm als UTC-middernacht, of null als de tekst geen
+ * bestaande dag is.
+ *
+ * De terugvergelijking met de invoer is de kern: `new Date("2024-02-30T…")`
+ * levert geen ongeldige datum op maar 1 maart. Alleen een NaN-controle laat
+ * zo'n dag stilletjes opschuiven.
+ */
+export function parseIsoDay(value: string): Date | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed.toISOString().slice(0, 10) === value ? parsed : null;
+}
+
+/** De ISO-dag van een UTC-middernacht, de vorm waarin de instelling opgeslagen staat. */
+export function toIsoDay(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
 /** Null als de instelling ontbreekt of onleesbaar is; nooit een gegokte datum. */
 export async function readBackfillStart(): Promise<Date | null> {
   const row = await prisma.setting.findUnique({ where: { key: BACKFILL_START_KEY } });
   if (!row) return null;
 
-  const parsed = new Date(`${row.value}T00:00:00.000Z`);
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
+  return parseIsoDay(row.value);
 }
 
 export async function writeBackfillStart(date: Date): Promise<void> {
-  const value = date.toISOString().slice(0, 10);
+  const value = toIsoDay(date);
   await prisma.setting.upsert({
     where: { key: BACKFILL_START_KEY },
     create: { key: BACKFILL_START_KEY, value },
@@ -318,7 +340,7 @@ Create `src/app/api/sync/settings/route.ts`:
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { requireAuth } from "@/lib/api-helpers";
-import { readBackfillStart, writeBackfillStart } from "@/lib/sync/settings";
+import { parseIsoDay, readBackfillStart, toIsoDay, writeBackfillStart } from "@/lib/sync/settings";
 import { quarterChunks } from "@/lib/sync/backfill";
 
 export async function GET() {
@@ -347,11 +369,19 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  const date = new Date(`${parsed.data.backfillStartDate}T00:00:00.000Z`);
-  if (Number.isNaN(date.getTime())) {
+  // De regex laat 2024-02-30 en 2024-13-45 door; pas het parsen scheidt een
+  // bestaande dag van een die er alleen uitziet als één.
+  const date = parseIsoDay(parsed.data.backfillStartDate);
+  if (!date) {
     return NextResponse.json({ error: "Not a valid date" }, { status: 400 });
   }
-  if (date.getTime() > Date.now()) {
+
+  // De datum wordt als UTC-middernacht bewaard, maar het scherm stuurt de
+  // kalenderdag van de gebruiker. Tussen 22:00 UTC en middernacht is die dag
+  // hier al morgen, en `date.getTime() > Date.now()` zou "vandaag" dan als
+  // toekomst weigeren. De grens ligt daarom een dag verderop.
+  const grens = toIsoDay(new Date(Date.now() + 24 * 60 * 60 * 1000));
+  if (toIsoDay(date) > grens) {
     return NextResponse.json(
       { error: "A start date in the future would backfill nothing" },
       { status: 400 }
@@ -360,7 +390,8 @@ export async function PUT(request: NextRequest) {
 
   await writeBackfillStart(date);
   return NextResponse.json({
-    backfillStartDate: parsed.data.backfillStartDate,
+    // De opgeslagen vorm terug, niet de invoer: dat is wat een volgende GET geeft.
+    backfillStartDate: toIsoDay(date),
     quarters: quarterChunks(date, new Date()).length,
   });
 }
