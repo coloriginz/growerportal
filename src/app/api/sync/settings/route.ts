@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { requireAuth } from "@/lib/api-helpers";
 import { parseIsoDay, readBackfillStart, toIsoDay, writeBackfillStart } from "@/lib/sync/settings";
-import { quarterChunks } from "@/lib/sync/backfill";
+import { planBackfill } from "@/lib/sync/runner";
 
 /**
  * De basisdatum voor backfills, naast de schedules omdat hij op het scherm ook
@@ -16,11 +16,14 @@ export async function GET() {
   if (error) return error;
 
   const start = await readBackfillStart();
+  const plan = start ? planBackfill(start) : null;
   return NextResponse.json({
     backfillStartDate: start ? toIsoDay(start) : null,
-    // Het scherm waarschuwt met dit getal; laat de server rekenen zodat de
-    // definitie van "een kwartaal" op één plek staat.
-    quarters: start ? quarterChunks(start, new Date()).length : 0,
+    // Het scherm waarschuwt met deze getallen; laat de server rekenen zodat de
+    // definitie van "een kwartaal" en van "hoeveel jobs dat zijn" op één plek
+    // staat. De bevestiging bij het aanzetten toont ze allebei.
+    quarters: plan?.chunks ?? 0,
+    jobs: plan?.jobs ?? 0,
   });
 }
 
@@ -58,9 +61,11 @@ export async function PUT(request: NextRequest) {
   }
 
   await writeBackfillStart(date);
+  const plan = planBackfill(date);
   return NextResponse.json({
     // De opgeslagen vorm terug, niet de invoer: dat is wat een volgende GET geeft.
     backfillStartDate: toIsoDay(date),
-    quarters: quarterChunks(date, new Date()).length,
+    quarters: plan.chunks,
+    jobs: plan.jobs,
   });
 }
