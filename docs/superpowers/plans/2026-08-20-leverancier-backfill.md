@@ -816,7 +816,7 @@ git commit -m "feat: resume a backfill from the quarter it stalled on"
 **Interfaces:**
 - Consumes: `POST /api/sync/backfill`, `GET /api/sync/settings`
 
-- [ ] **Step 1: Laat de activatie-route een backfill meenemen**
+- [x] **Step 1: Laat de activatie-route een backfill meenemen**
 
 In `src/app/api/admin/fabric-relations/route.ts` wordt `activateSchema`:
 
@@ -867,7 +867,7 @@ en de respons wordt:
 
 Voeg de imports toe: `readBackfillStart` uit `@/lib/sync/settings` en `enqueueBackfill` uit `@/lib/sync/runner`.
 
-- [ ] **Step 2: Zet de bevestiging in het paneel**
+- [x] **Step 2: Zet de bevestiging in het paneel**
 
 In `skipped-dialog.tsx` haalt de component `GET /api/sync/settings` op met `useFetch`. De Activate-knop opent nu eerst een bevestiging in plaats van meteen te posten.
 
@@ -875,19 +875,40 @@ De bevestiging toont, in het Engels: de code en naam van de leverancier, de basi
 
 De bestaande `activate`-functie krijgt een tweede argument `metBackfill: boolean` dat als `backfill` in de body meegaat. Na succes toont de toast wat er is gebeurd — mét backfill: het aantal jobs erbij, en dat zijn partijen bij de volgende rondes binnenkomen. Komt er een `backfillError` terug, dan een aparte waarschuwing: de leverancier ís aangemaakt, de backfill niet.
 
-- [ ] **Step 3: Verifieer**
+- [x] **Step 3: Verifieer**
 
 Run: `npx tsc --noEmit`, `npx next lint` op beide bestanden.
 Expected: schoon.
 
 Verifieer in de browser gebeurt in taak 8; controleer hier alleen dat de route met `backfill: true` jobs oplevert, met een tijdelijk script tegen de deployed testomgeving.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/app/api/admin/fabric-relations "src/app/(portal)/admin/imports/skipped-dialog.tsx"
 git commit -m "feat: offer a backfill when activating a skipped supplier"
 ```
+
+**Zo is het gebouwd, waar het afwijkt van de tekst hierboven:**
+
+- De bevestiging staat als **`src/components/sync/backfill-confirm-dialog.tsx`** buiten `admin/imports`, want
+  taak 7 gebruikt hem ook en twee kopieën lopen uit elkaar zodra er één getal bij komt. Hij haalt de
+  basisdatum **zelf** op met `useFetch("/api/sync/settings")`; geen enkele aanroeper hoeft er iets van te
+  weten. Zijn props:
+  ```ts
+  supplier: { code: string | null; name: string | null };
+  confirmLabel: string;            // de knop die de backfill meeneemt
+  onConfirm: () => void;
+  secondary?: { label: string; onClick: () => void };  // de uitweg zonder backfill
+  onCancel: () => void;
+  busy?: boolean;
+  ```
+  Zonder basisdatum — of als de fetch faalt — verdwijnt de knop met `confirmLabel` en blijft er staan
+  wat er ontbreekt. In het overgeslagen-paneel blijft `secondary` ("Activate only") dan vanzelf over;
+  **taak 7 geeft geen `secondary` mee** en houdt dan alleen Cancel over, wat daar klopt.
+- `GET/PUT /api/sync/settings` geven er een veld **`jobs`** bij, berekend met `planBackfill`. De
+  bevestiging toont kwartalen én jobs, en `1 + 3 × quarters` in de client narekenen zou de vorm van de
+  joblijst op een tweede plek vastleggen. Bestaande lezers van `quarters` merken er niets van.
 
 ---
 
