@@ -62,6 +62,16 @@ allebei.
 - **De basisdatum voor backfills** (`Setting`-sleutel `sync.backfillStartDate`). Op test `2024-01-01`.
   Zonder deze instelling weigert een backfill met een leesbare melding; hij gokt niet.
 
+## 4b. Salessheet-pdf's koppelen
+
+Na de sync en na de backfills — anders bestaan de afrekeningen nog niet om aan te koppelen. Op test
+leverde dit 1.369 koppelingen op; zie [salessheet-pdfs-gekoppeld-2026-08-21.md](salessheet-pdfs-gekoppeld-2026-08-21.md)
+voor wat er precies gebeurde en [salessheet-pdfs-koppelen.md](salessheet-pdfs-koppelen.md) voor het commando.
+
+Draai eerst zonder `--apply`: dat is de standaard en toont wat hij zou doen.
+
+---
+
 ## 5. Volgorde
 
 1. SQL uit §1 tegen de productiedatabase
@@ -70,6 +80,8 @@ allebei.
 4. Merge naar `main` en laten deployen
 5. Eén ronde met de hand aftikken en de aantallen nalopen vóór je het schema aanzet
 6. Schedules aanzetten, basisdatum zetten
+7. Backfills draaien voor de leveranciers die je wilt
+8. Salessheet-pdf's koppelen (§4b)
 
 ## 6. Waar je op moet letten bij die eerste ronde
 
