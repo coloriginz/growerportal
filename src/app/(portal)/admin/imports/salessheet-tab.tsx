@@ -11,6 +11,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
+import { Pagination } from "@/components/ui/pagination";
 import {
   Select,
   SelectContent,
@@ -206,27 +207,12 @@ export function SalesSheetImportsTab() {
           <p className="text-sm text-muted-foreground">
             Showing {pageStart}-{pageEnd} of {formatNumber(total)}
           </p>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={currentPage <= 1 || loading}
-            >
-              Previous
-            </Button>
-            <span className="text-sm text-muted-foreground">
-              Page {currentPage} of {totalPages}
-            </span>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              disabled={currentPage >= totalPages || loading}
-            >
-              Next
-            </Button>
-          </div>
+          <Pagination
+            page={currentPage}
+            totalPages={totalPages}
+            onPageChange={setPage}
+            disabled={loading}
+          />
         </div>
       )}
     </div>

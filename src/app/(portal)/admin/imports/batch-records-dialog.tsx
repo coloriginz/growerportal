@@ -9,7 +9,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
+import { Pagination } from "@/components/ui/pagination";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RiDatabase2Line, RiInformationLine } from "@remixicon/react";
 import { useFetch } from "@/hooks/use-fetch";
@@ -372,29 +372,12 @@ export function BatchRecordsDialog({
               <p className="text-xs text-muted-foreground">
                 Showing {pageStart}-{pageEnd} of {formatNumber(total)}
               </p>
-              {totalPages > 1 && (
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setPage((p) => Math.max(1, p - 1))}
-                    disabled={page <= 1 || loading}
-                  >
-                    Previous
-                  </Button>
-                  <span className="text-xs text-muted-foreground">
-                    Page {page} of {totalPages}
-                  </span>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                    disabled={page >= totalPages || loading}
-                  >
-                    Next
-                  </Button>
-                </div>
-              )}
+              <Pagination
+                page={page}
+                totalPages={totalPages}
+                onPageChange={setPage}
+                disabled={loading}
+              />
             </div>
           </div>
         )}
