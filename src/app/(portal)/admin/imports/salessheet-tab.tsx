@@ -11,7 +11,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { Pagination } from "@/components/ui/pagination";
+import { Pagination } from "@/components/pagination";
+import { pageLabels } from "@/components/pagination-labels";
 import {
   Select,
   SelectContent,
@@ -211,6 +212,7 @@ export function SalesSheetImportsTab() {
             page={currentPage}
             totalPages={totalPages}
             onPageChange={setPage}
+            labels={pageLabels}
             disabled={loading}
           />
         </div>

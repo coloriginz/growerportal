@@ -5,7 +5,8 @@ import { useLanguage } from "@/components/providers/language-provider";
 import { useFetch } from "@/hooks/use-fetch";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Pagination } from "@/components/ui/pagination";
+import { Pagination } from "@/components/pagination";
+import { pageLabels } from "@/components/pagination-labels";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -233,6 +234,7 @@ export function FustAuditLog() {
                 page={page}
                 totalPages={data.pagination.totalPages}
                 onPageChange={setPage}
+                labels={pageLabels}
               />
             </div>
           )}

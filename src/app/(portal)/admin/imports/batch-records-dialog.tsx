@@ -9,7 +9,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Pagination } from "@/components/ui/pagination";
+import { Pagination } from "@/components/pagination";
+import { pageLabels } from "@/components/pagination-labels";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RiDatabase2Line, RiInformationLine } from "@remixicon/react";
 import { useFetch } from "@/hooks/use-fetch";
@@ -376,6 +377,7 @@ export function BatchRecordsDialog({
                 page={page}
                 totalPages={totalPages}
                 onPageChange={setPage}
+                labels={pageLabels}
                 disabled={loading}
               />
             </div>
