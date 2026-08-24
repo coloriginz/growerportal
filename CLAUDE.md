@@ -266,7 +266,7 @@ Supplier -> has many -> FustOrders -> has one -> FustDelivery
 
 ### Important Constraints
 - `Lot.lotNumber + Lot.supplierId` is unique
-- `Transaction.fabricOrdregId + Transaction.lotId` is unique (same ordreg can span lots)
+- `Transaction.fabricOrdregId + Transaction.lotId` is **not** unique, and must not be made unique. One orderregel is delivered in parts: `marts.fct_orders` returns a row per part — 200 + 1800 stems under one `ordreg_id`, same sales type, same price, same grower. 2.132 pairs on test carry more than one row and they are all genuine. A unique index there would silently drop half of every split line
 - `SalesSheet.invoiceNumber` is unique
 - `Supplier.code` is unique
 - `Supplier.fabricId` is unique (nullable)
@@ -304,6 +304,7 @@ Fabric DAX query -> Power Automate -> POST /api/import/* (JSON array)
 - Column names are matched case- and separator-insensitively by `normalizeImportKeys()` in `import-auth.ts`, so every route accepts DAX output (`[Naam]`), raw SQL warehouse columns (`kost_naam`) and the XML-escaped form the SQL Server connector produces for names with spaces (`Shkost_x0020_ID`). Fields whose name differs beyond spelling get an explicit alias per route
 - Dutch decimal format in Fabric ("42,39") — parsed with `parseFloat(str.replace(",", "."))`
 - Each import creates an ImportBatch record for monitoring
+- **`recordsCreated` means new, not written.** Orders and lot corrections have no stable key, so both are imported by deleting every row inside the window and reinserting it. Counting each insert as "created" made a run over a narrow window look like it found thousands of records the previous run had missed — it had not; it rewrote them. Both routes now report `created = written - deleted` and `updated = deleted`, with `written` kept in `details`. The records dialog cannot make that split per row (every rewritten row carries a fresh `createdAt`), so for an orders run it shows one list under both tabs and says so
 
 ### Portal-driven sync (replaces the Power Automate schedule)
 

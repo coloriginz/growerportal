@@ -240,7 +240,7 @@ async function upsertOrders(orders: Order[], batchId: string | null) {
   // Only delete transactions whose ordregId appears in the batch, preserving
   // older transactions outside Power Automate's rolling query window.
   let txDeleted = 0;
-  let txCreated = 0;
+  let txWritten = 0;
 
   if (affectedLotIds.size > 0) {
     // Collect all transaction data for bulk operations
@@ -313,7 +313,7 @@ async function upsertOrders(orders: Order[], batchId: string | null) {
           batchId
         );
       }
-      txCreated = allTxData.length;
+      txWritten = allTxData.length;
     }
   }
 
@@ -390,21 +390,38 @@ async function upsertOrders(orders: Order[], batchId: string | null) {
     }
   }
 
+  // Deze import schrijft opnieuw weg wat hij verwijderde, dus het aantal
+  // ingevoegde rijen is niet het aantal nieuwe orderregels — dat was het wel in
+  // de kolom "created" van het importscherm, en dan lijkt een ronde over een
+  // smal venster duizenden regels te vinden die de vorige ronde gemist zou
+  // hebben. Wat er stond en teruggezet is, is een wijziging; wat er niet stond,
+  // is nieuw. Meer dan geschreven verwijderd betekent dat een orderregel is
+  // opgesplitst of samengevoegd: dan is er niets nieuws, alleen minder rijen.
+  const txUpdated = Math.min(txWritten, txDeleted);
+  const txCreated = txWritten - txUpdated;
+
   return {
     created: txCreated,
-    updated: 0,
+    updated: txUpdated,
     skipped: txSkipped + skippedNoOrdregId,
     details: {
       growers: { created: growersCreated, existing: growersExisting },
       recalculated: { lots: lotsRecalculated, salesSheets: ssRecalculated },
       skippedNoOrdregId,
+      txWritten,
       txDeleted,
     },
     extra: {
       valid: validOrders.length,
       skippedNoOrdregId,
       growers: { created: growersCreated, existing: growersExisting },
-      transactions: { created: txCreated, deleted: txDeleted, skipped: txSkipped },
+      transactions: {
+        created: txCreated,
+        updated: txUpdated,
+        written: txWritten,
+        deleted: txDeleted,
+        skipped: txSkipped,
+      },
       recalculated: { lots: lotsRecalculated, salesSheets: ssRecalculated },
     },
   };

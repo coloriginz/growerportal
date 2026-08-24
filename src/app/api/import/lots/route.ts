@@ -659,9 +659,16 @@ async function upsertLots(partijen: Partij[], batchId: string | null) {
     }
   }
 
+  // Correcties kennen geen sleutel, dus ze worden per part_id weggegooid en
+  // opnieuw weggeschreven. Ze allemaal als "created" tellen laat een ronde die
+  // niets nieuws vond twintig nieuwe correcties melden — dezelfde vertekening
+  // als bij de orderregels. Wat er stond en teruggezet is, is een wijziging.
+  const correctionsUpdated = Math.min(correctionsCreated, correctionsDeleted);
+  const correctionsNew = correctionsCreated - correctionsUpdated;
+
   return {
-    created: lotCreated + correctionsCreated,
-    updated: lotUpdated,
+    created: lotCreated + correctionsNew,
+    updated: lotUpdated + correctionsUpdated,
     // recordsSkipped is "weggegooid", en dat zijn nu twee dingen: rijen zonder
     // leverancier en rijen van het verkeerde inkooptype. Beide tellen mee, maar
     // ze blijven in details uit elkaar te houden — skippedSuppliers per rel_id,
@@ -670,7 +677,13 @@ async function upsertLots(partijen: Partij[], batchId: string | null) {
     details: {
       salesSheets: { created: ssCreated, updated: ssUpdated },
       lots: { created: lotCreated, updated: lotUpdated },
-      corrections: { created: correctionsCreated, deleted: correctionsDeleted, skipped: correctionsSkipped },
+      corrections: {
+        created: correctionsNew,
+        updated: correctionsUpdated,
+        written: correctionsCreated,
+        deleted: correctionsDeleted,
+        skipped: correctionsSkipped,
+      },
       // Hoeveel partijen er per inkooptype zijn weggegooid. Dit is tegelijk de
       // controle op CONSIGNMENT_PURCHASE_TYPES: staat hier een code die we niet
       // kennen, dan gooien we mogelijk iets weg dat wél consignatie is.
@@ -689,7 +702,13 @@ async function upsertLots(partijen: Partij[], batchId: string | null) {
     extra: {
       salesSheets: { created: ssCreated, updated: ssUpdated },
       lots: { created: lotCreated, updated: lotUpdated },
-      corrections: { created: correctionsCreated, deleted: correctionsDeleted, skipped: correctionsSkipped },
+      corrections: {
+        created: correctionsNew,
+        updated: correctionsUpdated,
+        written: correctionsCreated,
+        deleted: correctionsDeleted,
+        skipped: correctionsSkipped,
+      },
       skipped,
       skippedNotConsignment,
     },
