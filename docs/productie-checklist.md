@@ -93,3 +93,25 @@ Draai eerst zonder `--apply`: dat is de standaard en toont wat hij zou doen.
   alleen aan wat je bewust wilt: aanzetten haalt zijn historie op, en dat is uren werk.
 - **Niet-consignatie.** `SELECT COUNT(*) FROM "Lot" WHERE "purchaseType" <> 'CONS'` hoort nul te zijn
   en te blijven. Staat er iets, dan is het filter niet meegekomen.
+
+## 7. Later, geen blokkade: sleutel per omgeving
+
+Test en productie delen sinds 24 augustus 2026 dezelfde `IMPORT_API_KEY`, omdat de haal-flow één
+vaste `Authorization`-header meestuurt en productie daardoor met 401 antwoordde. Dat werkt, maar het
+betekent dat een lek aan de testkant ook schrijftoegang tot de productie-imports geeft.
+
+De flow weet al in welke omgeving hij post — daar hangt de `BaseUrl`-compose van af. Een tweede
+compose ernaast maakt de sleutels weer los van elkaar:
+
+```
+ImportKey = if(equals(triggerBody()?['env'], 'production'), '<productiesleutel>', '<testsleutel>')
+Authorization: Bearer @{outputs('ImportKey')}
+```
+
+Twee dingen die daarbij horen:
+
+- **Secure inputs aan** op de HTTP-actie, en secure outputs op die compose. Nu staat de sleutel
+  leesbaar in de inputs van elke run in de flowgeschiedenis.
+- **De huidige sleutel vervangen** bij die gelegenheid; hij is in een screenshot terechtgekomen.
+  Roteren kan zonder onderbreking: nieuwe als `IMPORT_API_KEY`, huidige als
+  `IMPORT_API_KEY_PREVIOUS`, flow omzetten, `PREVIOUS` weghalen.
