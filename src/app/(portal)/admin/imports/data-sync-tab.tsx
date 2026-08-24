@@ -35,6 +35,7 @@ import {
   RiCheckLine,
   RiLoader4Line,
   RiSkipForwardLine,
+  RiRestartLine,
 } from "@remixicon/react";
 import { toast } from "sonner";
 import { useFetch } from "@/hooks/use-fetch";
@@ -110,6 +111,49 @@ function JobStatusBadge({ status }: { status: SyncJobRow["status"] }) {
     case "cancelled":
       return <Badge variant="outline">Cancelled</Badge>;
   }
+}
+
+function ResetJobButton({ jobId, onReset }: { jobId: string; onReset: () => void }) {
+  const [resetting, setResetting] = useState(false);
+
+  const reset = useCallback(async () => {
+    setResetting(true);
+    try {
+      const res = await fetch(`/api/sync/jobs/${jobId}/reset`, { method: "POST" });
+      const body = await res.json().catch(() => null);
+      if (!res.ok) {
+        toast.error(body?.error ?? "Failed to reset the job");
+        return;
+      }
+      toast.success(
+        body?.dispatched
+          ? "Back in the queue and dispatched again"
+          : "Back in the queue; nothing dispatched in this environment"
+      );
+      onReset();
+    } catch {
+      toast.error("Failed to reset the job");
+    } finally {
+      setResetting(false);
+    }
+  }, [jobId, onReset]);
+
+  return (
+    <Button
+      variant="ghost"
+      size="icon"
+      className="h-6 w-6"
+      onClick={reset}
+      disabled={resetting}
+      // De uitleg hoort hier en niet in een bevestigingsdialoog: de actie is
+      // onschadelijk (alle endpoints upserten) maar wel zinloos zolang de flow
+      // nog echt bezig is, en dat is precies wat je moet weten vóór je klikt.
+      title="Put this job back in the queue and send it again. Use it when the flow will not answer any more — otherwise the same query simply runs twice."
+      aria-label="Reset this job"
+    >
+      <RiRestartLine className={`h-3.5 w-3.5 ${resetting ? "animate-spin" : ""}`} />
+    </Button>
+  );
 }
 
 function AdvanceQueueButton({ onAdvanced }: { onAdvanced: () => void }) {
@@ -301,6 +345,9 @@ export function DataSyncTab() {
                             <span className="text-xs text-muted-foreground">
                               {timeAgo(job.dispatchedAt)}
                             </span>
+                          )}
+                          {job.status === "dispatched" && (
+                            <ResetJobButton jobId={job.id} onReset={refetchAll} />
                           )}
                           {job.attempts > 1 && (
                             <span className="text-xs text-muted-foreground">

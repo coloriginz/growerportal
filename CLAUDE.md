@@ -438,6 +438,7 @@ The local archive in `private_input/salessheets` is pushed through this same rou
 | `/api/import/orders` | POST | Bulk upsert transactions from Fabric |
 | `/api/import/costs` | POST | Bulk upsert salessheet costs + recalculate totals |
 | `/api/sync/tick` | GET, POST | Cron entrypoint: reap stale jobs, queue due rounds, dispatch the next job (`CRON_SECRET` bearer) |
+| `/api/sync/jobs/[id]/reset` | POST | Put a job that hangs on `dispatched` back in the queue and send it again, without waiting out the 15-minute stale window (admin session) |
 | `/api/shipments/import-email` | POST | Import salessheet PDFs |
 
 ### API Conventions
