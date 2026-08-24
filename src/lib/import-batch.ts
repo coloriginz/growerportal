@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { requireImportAuth, normalizeImportKeys, summariseImportError } from "@/lib/import-auth";
+import { completeJobForBatch, failJobForBatch } from "@/lib/sync/runner";
 
 type Handler<Row> = (
   rows: Row[],
@@ -142,10 +143,10 @@ export async function runImport<Row>(
 async function markJobDone(batchId: string | null) {
   if (!batchId) return;
   try {
-    await prisma.syncJob.updateMany({
-      where: { importBatchId: batchId, status: "dispatched" },
-      data: { status: "done", completedAt: new Date() },
-    });
+    // Vinkt de job af en stuurt meteen de volgende de deur uit. Dat laatste is
+    // het verschil tussen een ketting die zichzelf afmaakt en een wachtrij die
+    // per tick één stap zet — en op test, zonder cron, helemaal stilstaat.
+    await completeJobForBatch(batchId);
   } catch {
     // De import is geslaagd; de jobstatus mag dat niet ongedaan maken.
   }
@@ -154,10 +155,7 @@ async function markJobDone(batchId: string | null) {
 async function markJobFailed(batchId: string | null, message: string) {
   if (!batchId) return;
   try {
-    await prisma.syncJob.updateMany({
-      where: { importBatchId: batchId, status: "dispatched" },
-      data: { status: "failed", lastError: message.slice(0, 1000), completedAt: new Date() },
-    });
+    await failJobForBatch(batchId, message);
   } catch {
     // idem
   }

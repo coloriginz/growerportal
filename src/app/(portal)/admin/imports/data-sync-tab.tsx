@@ -65,6 +65,7 @@ interface SyncJobRow {
   status: "pending" | "dispatched" | "done" | "failed" | "cancelled";
   attempts: number;
   lastError: string | null;
+  dispatchedAt: string | null;
 }
 
 interface SyncRun {
@@ -126,7 +127,7 @@ function AdvanceQueueButton({ onAdvanced }: { onAdvanced: () => void }) {
       if (body?.dryRun) {
         toast.info(body.reason ?? "Not dispatching in this environment");
       } else if (body?.dispatched) {
-        toast.success("Dispatched the next job");
+        toast.success("Dispatched the next job; the rest of the queue follows on its own");
       } else if (body?.failed) {
         toast.error("The dispatched job failed");
       } else {
@@ -293,6 +294,14 @@ export function DataSyncTab() {
                       <div className="flex flex-col items-end gap-1">
                         <div className="flex items-center gap-2">
                           <JobStatusBadge status={job.status} />
+                          {/* Hoe lang hij al onderweg is. Zonder dit ziet een
+                              job die net weg is er hetzelfde uit als een flow
+                              die nooit meer terugkomt. */}
+                          {job.status === "dispatched" && job.dispatchedAt && (
+                            <span className="text-xs text-muted-foreground">
+                              {timeAgo(job.dispatchedAt)}
+                            </span>
+                          )}
                           {job.attempts > 1 && (
                             <span className="text-xs text-muted-foreground">
                               attempt {job.attempts}

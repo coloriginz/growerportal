@@ -314,8 +314,19 @@ Vercel Cron (every 5 min) -> POST /api/sync/tick
    reads SyncSchedule, queues SyncJobs in chain order, dispatches one at a time
    -> POST <PA_WEBHOOK_FETCH_URL> { env, endpoint, batchId, query }   -> 202
       PA runs the SQL, posts rows to <base for env>/api/import/<endpoint>
-   -> the import route reuses batchId and marks the SyncJob done
+   -> the import route reuses batchId, marks the SyncJob done, and dispatches
+      the next job itself -> the chain runs to the end without waiting for a tick
 ```
+
+**The chain is self-propelling.** `completeJobForBatch()` in `src/lib/sync/runner.ts` is
+what the import route calls when a job lands; it flips the job to `done` and immediately
+dispatches the next one. Without it a tick moves the queue exactly one step, so a nightly
+round of five endpoints takes 25 minutes on production and stands still on test, where
+Vercel Cron never fires. A tick (or the "Advance queue" button) still *starts* a round —
+it is the only thing that queues one — but it no longer has to walk it. A failed import
+cancels the rest of its own run and lets the queue continue with what is left; without
+that the successors sit on `pending` forever, since a job is only claimable once its
+predecessor is `done`.
 
 - **Chain order `suppliers -> growers -> lots -> orders -> costs` is enforced by the queue**, not by convention. The lots import silently drops partijen whose supplier does not exist; that is how COLXROOD and COLXBAK lost 317 salessheets.
 - **Two schedules**, rows in `SyncSchedule`: `intraday` (lots+orders, 2-day window, every 6h) and `nightly` (all five, 7 days, `windowOverrides: {costs: 28}`). Costs need a wider window because settlement runs weeks behind delivery — after one week only 45% of cost lines exist, after three weeks all of them.

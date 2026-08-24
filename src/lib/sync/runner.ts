@@ -5,6 +5,7 @@ import { backfillJobs, quarterChunks, quarterLabel } from "./backfill";
 import { inChainOrder, isSyncEndpoint, type SyncEndpoint } from "./types";
 import { buildQuery } from "./queries";
 import { fetchInto, describeError, DispatchError } from "./dispatch";
+import { resolveSyncEnv } from "@/lib/env";
 
 /** Een job die langer dan dit onderweg is, is dood. */
 const STALE_MINUTES = 15;
@@ -565,4 +566,82 @@ export async function tick(now: Date = new Date()) {
   }
 
   return { reaped, orphanBatches, enqueued, dispatched, failed };
+}
+
+/**
+ * Een job is klaar: afvinken en meteen de volgende versturen.
+ *
+ * Dit is wat de ketting zelfrijdend maakt. Zonder deze aanroep zet alleen de
+ * cron een job weg — één per tick, dus een nachtronde van vijf endpoints duurt
+ * een half uur, en op test, waar Vercel Cron niet vuurt, staat de wachtrij stil
+ * tot iemand op "Advance queue" drukt. Nu duwt elke afgeronde import zijn eigen
+ * opvolger naar buiten.
+ *
+ * De verzending wordt afgewacht en niet losgelaten met `void`: Vercel kapt een
+ * functie af zodra hij zijn antwoord heeft gegeven, dus werk ná de response
+ * gebeurt niet. Het kost de import-route de tijd van één webhook-aanroep, die
+ * met 202 terugkomt zodra de flow gestart is.
+ *
+ * Retourneert of er nog iets verstuurd is, puur voor de logs.
+ */
+export async function completeJobForBatch(batchId: string): Promise<void> {
+  const { count } = await prisma.syncJob.updateMany({
+    where: { importBatchId: batchId, status: "dispatched" },
+    data: { status: "done", completedAt: new Date() },
+  });
+
+  // Geen job bij deze batch: een handmatige import of een oude DAX-flow. Die
+  // hoort geen ketting in gang te zetten.
+  if (count === 0) return;
+
+  await continueChain();
+}
+
+/**
+ * Een job is gestrand op de terugweg — de import zelf gaf een fout. Zelfde
+ * afhandeling als wanneer het versturen misgaat: de job faalt, de rest van zijn
+ * ronde vervalt (orders zonder hun partijen worden stil weggegooid), en de
+ * wachtrij loopt door met wat er nog staat.
+ *
+ * Zonder het annuleren blijven de opvolgers eeuwig op `pending` staan: ze zijn
+ * niet claimbaar zolang hun voorganger niet `done` is, en niets ruimt ze op.
+ */
+export async function failJobForBatch(batchId: string, message: string): Promise<void> {
+  const job = await prisma.syncJob.findFirst({
+    where: { importBatchId: batchId, status: "dispatched" },
+    select: { id: true },
+  });
+  if (!job) return;
+
+  await prisma.syncJob.update({
+    where: { id: job.id },
+    data: { status: "failed", lastError: message.slice(0, 1000), completedAt: new Date() },
+  });
+  await cancelRestOfRun(job.id);
+  await continueChain();
+}
+
+/**
+ * De volgende job versturen, als er een klaarstaat en er een doelomgeving is.
+ *
+ * Fouten blijven hier: de import die dit aanroept is geslaagd, en dat antwoord
+ * mag niet alsnog omvallen omdat de volgende flow onbereikbaar was. Wat er
+ * blijft staan pakt de eerstvolgende tick op.
+ */
+async function continueChain(): Promise<void> {
+  // Zonder doelomgeving stuurt dispatch.ts niets; dan zou de claim de job wel
+  // op 'dispatched' zetten en hem daarna laten falen. Lokaal is dat de normale
+  // situatie, geen storing.
+  if (!resolveSyncEnv()) return;
+
+  try {
+    const { dispatched, failed } = await dispatchNext();
+    if (failed) {
+      console.warn(`[sync] job ${failed} gefaald tijdens het doorzetten van de ketting`);
+    } else if (dispatched) {
+      console.info(`[sync] job ${dispatched} verstuurd, ketting loopt door`);
+    }
+  } catch (error) {
+    console.error(`[sync] doorzetten van de ketting mislukt: ${describeError(error)}`);
+  }
 }
