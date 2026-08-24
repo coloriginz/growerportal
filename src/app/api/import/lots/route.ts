@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { runImport } from "@/lib/import-batch";
+import { isConsignment, purchaseTypeKey } from "@/lib/sync/purchase-type";
 
 // Vercel kapt een functie zonder dit af op de standaardlimiet; de lots- en
 // orders-import over een breed venster halen die niet.
@@ -53,6 +54,13 @@ function isCorrection(facttypeSub: string | null | undefined): boolean {
   return lower === "correctie" || lower === "productiecorrectie";
 }
 
+/** A row counts as an internal production booking when its Facttype Sub starts
+ * with "productie" — this covers both "productie" and "productiecorrectie". */
+function isProductie(facttypeSub: string | null | undefined): boolean {
+  if (!facttypeSub) return false;
+  return facttypeSub.toLowerCase().trim().startsWith("productie");
+}
+
 function deriveArticleGroup(productName: string): string {
   if (!productName) return "Unknown";
   return productName.trim().split(/\s+/)[0] || "Unknown";
@@ -68,16 +76,42 @@ export async function POST(request: NextRequest) {
     rowSchema: partijSchema,
     schemaKeys: partijKeys,
     aliases: partijAliases,
-    handler: async (partijen) => {
+    handler: async (partijen, batchId) => {
       if (partijen.length === 0) return { created: 0, updated: 0, skipped: 0 };
-      return upsertLots(partijen);
+      return upsertLots(partijen, batchId);
     },
   });
 }
 
-async function upsertLots(partijen: Partij[]) {
-  // Round IDs (DAX/Power Automate can send 1.0 instead of 1)
+async function upsertLots(partijen: Partij[], batchId: string | null) {
+  // Alleen consignatie hoort in deze portal; Fabric levert ook koop-partijen.
+  //
+  // Dit filter staat bewust vóór de leverancierscontrole verderop. Die controle
+  // houdt per rel_id bij wat er wegvalt (`details.skippedSuppliers`) en het
+  // importscherm biedt die relaties aan met een knop om er een leverancier van
+  // te maken. Filteren we ná die controle, dan blijven koop-relaties in dat
+  // lijstje staan en nodigt het scherm uit om precies de verkeerde leveranciers
+  // aan te zetten — wat gisteren gebeurde: één aangezette relatie bleek 100% CIF
+  // en leverde 186 partijen en 415 orderregels op die hier niet horen.
+  //
+  // Correcties lopen door hetzelfde filter: ze komen uit dezelfde fct_partijen
+  // en dragen dus dezelfde kolom. Een correctie op een koop-partij hoort net zo
+  // goed weg te vallen, en zonder dit filter zou hij zijn koop-relatie alsnog in
+  // skippedSuppliers zetten.
+  const consignatie: Partij[] = [];
+  const skippedPurchaseTypes = new Map<string, number>();
   for (const row of partijen) {
+    if (isConsignment(row["Inkooptype Code"])) {
+      consignatie.push(row);
+      continue;
+    }
+    const key = purchaseTypeKey(row["Inkooptype Code"]);
+    skippedPurchaseTypes.set(key, (skippedPurchaseTypes.get(key) ?? 0) + 1);
+  }
+  const skippedNotConsignment = partijen.length - consignatie.length;
+
+  // Round IDs (DAX/Power Automate can send 1.0 instead of 1)
+  for (const row of consignatie) {
     row.part_id = Math.round(row.part_id);
     row.parthdr_id = Math.round(row.parthdr_id);
     row.rel_id_leverancier = Math.round(row.rel_id_leverancier);
@@ -86,11 +120,11 @@ async function upsertLots(partijen: Partij[]) {
   }
 
   // Split rows by Facttype Sub: base rows vs correction rows
-  const baseRows = partijen.filter((r) => !isCorrection(r["Facttype Sub"]));
-  const correctionRows = partijen.filter((r) => isCorrection(r["Facttype Sub"]));
+  const baseRows = consignatie.filter((r) => !isCorrection(r["Facttype Sub"]));
+  const correctionRows = consignatie.filter((r) => isCorrection(r["Facttype Sub"]));
 
   // Group by parthdr_id
-  const byParthdr = new Map<number, typeof partijen>();
+  const byParthdr = new Map<number, typeof consignatie>();
   for (const row of baseRows) {
     if (!byParthdr.has(row.parthdr_id)) byParthdr.set(row.parthdr_id, []);
     byParthdr.get(row.parthdr_id)!.push(row);
@@ -165,9 +199,13 @@ async function upsertLots(partijen: Partij[]) {
    * zijn COLXROOD en COLXBAK 317 salessheets kwijtgeraakt: de import meldde
    * netjes "success" en niemand kon zien wát er niet was aangekomen.
    */
-  const skippedByRelId = new Map<number, number>();
-  const noteSkipped = (relId: number, aantal: number) => {
-    skippedByRelId.set(relId, (skippedByRelId.get(relId) ?? 0) + aantal);
+  const skippedByRelId = new Map<number, { partijen: number; productie: number }>();
+  const noteSkipped = (relId: number, aantal: number, productie: number) => {
+    const existing = skippedByRelId.get(relId) ?? { partijen: 0, productie: 0 };
+    skippedByRelId.set(relId, {
+      partijen: existing.partijen + aantal,
+      productie: existing.productie + productie,
+    });
   };
 
   const ssUpdateData: { fabricParthdrId: number; deliveryDate: string }[] = [];
@@ -179,7 +217,8 @@ async function upsertLots(partijen: Partij[]) {
     const supplierId = supplierMap.get(firstRow.rel_id_leverancier);
     if (!supplierId) {
       skipped += rows.length;
-      noteSkipped(firstRow.rel_id_leverancier, rows.length);
+      const productieCount = rows.filter((r) => isProductie(r["Facttype Sub"])).length;
+      noteSkipped(firstRow.rel_id_leverancier, rows.length, productieCount);
       continue;
     }
 
@@ -392,10 +431,12 @@ async function upsertLots(partijen: Partij[]) {
          "invoicedColli" = (u.val->>'invoicedColli')::int,
          "invoicedVolume" = (u.val->>'invoicedVolume')::int,
          "correctionVolume" = (u.val->>'correctionVolume')::int,
+         "lastImportBatchId" = $2,
          "updatedAt" = NOW()
        FROM jsonb_array_elements($1::jsonb) AS u(val)
        WHERE t."fabricPartId" = (u.val->>'fabricPartId')::int`,
-      JSON.stringify(lotUpdateData)
+      JSON.stringify(lotUpdateData),
+      batchId
     );
   }
 
@@ -446,6 +487,7 @@ async function upsertLots(partijen: Partij[]) {
          "purchaseType", "fabricArticleId", colli, "stemLength", "totalStems",
          "avgPrice", "totalAmount", "deliveryDate", status,
          s1, s2, s3, "invoicedColli", "invoicedVolume", "correctionVolume",
+         "lastImportBatchId",
          "createdAt", "updatedAt"
        )
        SELECT
@@ -474,6 +516,7 @@ async function upsertLots(partijen: Partij[]) {
          (v.val->>'invoicedColli')::int,
          (v.val->>'invoicedVolume')::int,
          (v.val->>'correctionVolume')::int,
+         $2,
          NOW(),
          NOW()
        FROM jsonb_array_elements($1::jsonb) AS v(val)
@@ -489,8 +532,10 @@ async function upsertLots(partijen: Partij[]) {
          "invoicedColli" = EXCLUDED."invoicedColli",
          "invoicedVolume" = EXCLUDED."invoicedVolume",
          "correctionVolume" = EXCLUDED."correctionVolume",
+         "lastImportBatchId" = EXCLUDED."lastImportBatchId",
          "updatedAt" = NOW()`,
-      JSON.stringify(lotJsonData)
+      JSON.stringify(lotJsonData),
+      batchId
     );
     // insertResult = number of rows affected (inserts + updates)
     // Adjust counts: if some were actually updates (ON CONFLICT), our lotCreated count is too high
@@ -541,7 +586,7 @@ async function upsertLots(partijen: Partij[]) {
       const supplierId = supplierMap.get(row.rel_id_leverancier);
       if (!supplierId) {
         correctionsSkipped++;
-        noteSkipped(row.rel_id_leverancier, 1);
+        noteSkipped(row.rel_id_leverancier, 1, isProductie(row["Facttype Sub"]) ? 1 : 0);
         continue;
       }
 
@@ -573,6 +618,7 @@ async function upsertLots(partijen: Partij[]) {
         `INSERT INTO "LotCorrection" (
            id, "lotId", "fabricPartId", "facttypeSub",
            "correctionReasonId", "correctionVolume", "correctionColli",
+           "lastImportBatchId",
            "createdAt", "updatedAt"
          )
          SELECT
@@ -583,10 +629,12 @@ async function upsertLots(partijen: Partij[]) {
            (v.val->>'correctionReasonId')::int,
            (v.val->>'correctionVolume')::int,
            NULL,
+           $2,
            NOW(),
            NOW()
          FROM jsonb_array_elements($1::jsonb) AS v(val)`,
-        JSON.stringify(corrInsertData)
+        JSON.stringify(corrInsertData),
+        batchId
       );
       correctionsCreated = corrInsertData.length;
     }
@@ -614,16 +662,28 @@ async function upsertLots(partijen: Partij[]) {
   return {
     created: lotCreated + correctionsCreated,
     updated: lotUpdated,
-    skipped: skipped + correctionsSkipped,
+    // recordsSkipped is "weggegooid", en dat zijn nu twee dingen: rijen zonder
+    // leverancier en rijen van het verkeerde inkooptype. Beide tellen mee, maar
+    // ze blijven in details uit elkaar te houden — skippedSuppliers per rel_id,
+    // skippedPurchaseTypes per code.
+    skipped: skipped + correctionsSkipped + skippedNotConsignment,
     details: {
       salesSheets: { created: ssCreated, updated: ssUpdated },
       lots: { created: lotCreated, updated: lotUpdated },
       corrections: { created: correctionsCreated, deleted: correctionsDeleted, skipped: correctionsSkipped },
+      // Hoeveel partijen er per inkooptype zijn weggegooid. Dit is tegelijk de
+      // controle op CONSIGNMENT_PURCHASE_TYPES: staat hier een code die we niet
+      // kennen, dan gooien we mogelijk iets weg dat wél consignatie is.
+      skippedPurchaseTypes: Object.fromEntries(
+        [...skippedPurchaseTypes.entries()].sort((a, b) => b[1] - a[1])
+      ),
       // Per rel_id hoeveel er is weggegooid omdat de leverancier ontbrak. De
       // drukste vijftig, want bij een backfill over jaren kunnen dit er honderden
       // zijn en de melding staat in een databasekolom.
       skippedSuppliers: Object.fromEntries(
-        [...skippedByRelId.entries()].sort((a, b) => b[1] - a[1]).slice(0, 50)
+        [...skippedByRelId.entries()]
+          .sort((a, b) => b[1].partijen - a[1].partijen)
+          .slice(0, 50)
       ),
     },
     extra: {
@@ -631,6 +691,7 @@ async function upsertLots(partijen: Partij[]) {
       lots: { created: lotCreated, updated: lotUpdated },
       corrections: { created: correctionsCreated, deleted: correctionsDeleted, skipped: correctionsSkipped },
       skipped,
+      skippedNotConsignment,
     },
   };
 }

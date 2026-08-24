@@ -27,6 +27,21 @@ export async function GET(request: NextRequest) {
     take: limit,
   });
 
+  // De jobkant erbij: welk venster is opgehaald, bij welke ronde hoorde het, en
+  // de hoeveelste poging was het. Eén extra query in plaats van een tweede
+  // verzoek vanuit het scherm, zodat de twee helften van een regel niet uit de
+  // pas kunnen lopen.
+  const jobs = batches.length
+    ? await prisma.syncJob.findMany({
+        where: { importBatchId: { in: batches.map((b) => b.id) } },
+        select: {
+          importBatchId: true, runId: true, source: true, sequence: true,
+          attempts: true, windowFrom: true, windowTo: true, status: true,
+        },
+      })
+    : [];
+  const jobMap = new Map(jobs.map((j) => [j.importBatchId!, j]));
+
   // Summary KPIs: last successful import per endpoint
   const lastSuccessful = await prisma.importBatch.findMany({
     where: { status: "success" },
@@ -54,7 +69,7 @@ export async function GET(request: NextRequest) {
   const totalPages = Math.max(Math.ceil(totalBatches / limit), 1);
 
   return NextResponse.json({
-    batches,
+    batches: batches.map((b) => ({ ...b, job: jobMap.get(b.id) ?? null })),
     page,
     totalPages,
     summary: {

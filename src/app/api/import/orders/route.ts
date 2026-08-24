@@ -43,14 +43,14 @@ export async function POST(request: NextRequest) {
     rowSchema: orderSchema,
     schemaKeys: orderKeys,
     aliases: orderAliases,
-    handler: async (orders) => {
+    handler: async (orders, batchId) => {
       if (orders.length === 0) return { created: 0, updated: 0, skipped: 0 };
-      return upsertOrders(orders);
+      return upsertOrders(orders, batchId);
     },
   });
 }
 
-async function upsertOrders(orders: Order[]) {
+async function upsertOrders(orders: Order[], batchId: string | null) {
   // Build supplier lookup
   const supplierFabricIds = [...new Set(orders.map((o) => o.rel_id_leverancier))];
   const suppliers = await prisma.supplier.findMany({
@@ -141,6 +141,11 @@ async function upsertOrders(orders: Order[]) {
         growerUpdateData.push({ fabricId: fabricKwekerId, name: frName });
       }
     } else {
+      // Bewust géén lastImportBatchId: elke import stempelt alleen het model
+      // waar hij verantwoordelijk voor is. Deze kweker is een bijproduct — hij
+      // wordt aangemaakt om de orderregel niet te hoeven weggooien. Stempelen we
+      // hem wel, dan pikt deze ronde de herkomst in van de growers-ronde die tien
+      // seconden eerder liep, en meldt die er drie terwijl er nog één zijn id draagt.
       growerCreateData.push({
         fabricId: fabricKwekerId,
         supplierId,
@@ -285,7 +290,7 @@ async function upsertOrders(orders: Order[]) {
           `INSERT INTO "Transaction" (
              id, "lotId", "fabricOrdregId", "fabricGrowerId",
              date, "salesType", stems, "pricePerStem", amount,
-             "bronFeitExtra", "correctionReasonId",
+             "bronFeitExtra", "correctionReasonId", "lastImportBatchId",
              "createdAt", "updatedAt"
            )
            SELECT
@@ -300,10 +305,12 @@ async function upsertOrders(orders: Order[]) {
              COALESCE((v.val->>'amount')::numeric, 0),
              COALESCE(v.val->>'bronFeitExtra', 'origineel'),
              (v.val->>'correctionReasonId')::int,
+             $2,
              NOW(),
              NOW()
            FROM jsonb_array_elements($1::jsonb) AS v(val)`,
-          JSON.stringify(chunk)
+          JSON.stringify(chunk),
+          batchId
         );
       }
       txCreated = allTxData.length;

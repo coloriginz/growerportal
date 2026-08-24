@@ -58,6 +58,9 @@ export async function GET(
     id: supplier.id,
     code: supplier.code,
     name: supplier.name,
+    // Zonder Fabric-relatie valt er niets op te halen; het scherm verbergt de
+    // backfill-knop dan in plaats van er een te tonen die altijd faalt.
+    fabricId: supplier.fabricId,
     company: supplier.company,
     street: supplier.street,
     city: supplier.city,

@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { requireAuth } from "@/lib/api-helpers";
+import { readBackfillStart } from "@/lib/sync/settings";
+import { enqueueBackfill } from "@/lib/sync/runner";
 
 export async function GET() {
   const { error } = await requireAuth(["admin"]);
@@ -125,6 +127,8 @@ export async function GET() {
 const activateSchema = z.object({
   fabricId: z.number().int(),
   companyId: z.string().uuid(),
+  /** Zet ook meteen een backfill klaar. Het scherm vraagt hier eerst om. */
+  backfill: z.boolean().optional(),
 });
 
 export async function POST(request: NextRequest) {
@@ -185,8 +189,31 @@ export async function POST(request: NextRequest) {
     },
   });
 
+  // De leverancier bestaat nu. Lukt de backfill niet, dan is dat geen reden om
+  // de activatie terug te draaien: aanmaken en backfillen zijn twee handelingen
+  // die toevallig achter één knop zitten. Het scherm toont wat er misging.
+  let backfill: { runId: string; jobs: number } | null = null;
+  let backfillError: string | null = null;
+  if (parsed.data.backfill) {
+    const start = await readBackfillStart();
+    if (!start) {
+      backfillError = "No backfill start date is set.";
+    } else {
+      try {
+        // enqueueBackfill weigert met een reden in plaats van te gooien; de
+        // catch eromheen is voor het onverwachte, zodat een omgevallen database
+        // de activatie niet alsnog op een 500 zet nadat de leverancier bestaat.
+        const result = await enqueueBackfill(relation.fabricId, start);
+        if (result.ok) backfill = { runId: result.runId, jobs: result.jobs };
+        else backfillError = result.message;
+      } catch (e) {
+        backfillError = e instanceof Error ? e.message : "Could not start the backfill";
+      }
+    }
+  }
+
   return NextResponse.json(
-    { supplierId: supplier.id, code: supplier.code, name: supplier.name },
+    { supplierId: supplier.id, code: supplier.code, name: supplier.name, backfill, backfillError },
     { status: 201 }
   );
 }

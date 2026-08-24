@@ -226,6 +226,7 @@ Role switching, supplier switching, and transporter switching are only available
 - **StagingKbtShcost** — Raw salessheet cost data from Fabric.
 - **SyncJob** — One endpoint over one window, optionally scoped to a supplier. Carries `runId`/`sequence` (chain order, unique together), `status`, `attempts`, `importBatchId`.
 - **SyncSchedule** — Two rows, `intraday` and `nightly`. Interval or time of day, endpoints, window, and per-endpoint window overrides.
+- **Record provenance** — `Lot`, `Transaction`, `Grower`, `SalesSheetCost` and `LotCorrection` carry `lastImportBatchId`, so the import screen can click through to what a run touched. It holds only the *last* run: a later run takes the origin over, and the screen says so rather than showing an unexplained empty list. `Supplier` carries no origin. A lots run counts lots and lot corrections together in `recordsCreated`, and the records dialog lists both — lots first, corrections behind them.
 
 ### Other Entities
 - **Company** — Multi-tenant company entity (Coloriginz, OZ Import, MyPeony). Determines branding.
@@ -296,6 +297,7 @@ Fabric DAX query -> Power Automate -> POST /api/import/* (JSON array)
 ```
 
 ### Key Behaviors
+- **The portal only carries consignment.** Fabric delivers partijen with an `inkooptype_code`: `CONS` (consignment), `FOB` and `CIF` (purchase). The lots import drops everything that is not consignment, and it does so *before* the missing-supplier check — otherwise purchase relations end up in `details.skippedSuppliers` and the import screen invites you to create exactly the wrong suppliers. The set of accepted codes lives in `CONSIGNMENT_PURCHASE_TYPES` (`src/lib/sync/purchase-type.ts`); `details.skippedPurchaseTypes` counts what was dropped per code, which is the check on that set. Transactions follow by themselves: the orders import skips an orderregel whose lot is not in the portal
 - All imports use **upsert** (INSERT ON CONFLICT UPDATE) via Prisma or raw SQL
 - Fabric IDs (`fabricId`, `fabricPartId`, `fabricParthdrId`, `fabricOrdregId`, `fabricShkostId`) are used as match keys
 - Costs import recalculates SalesSheet totals (totalTurnover from lots, totalCosts from cost lines, netResult = turnover - costs) via raw SQL CTE
@@ -312,8 +314,19 @@ Vercel Cron (every 5 min) -> POST /api/sync/tick
    reads SyncSchedule, queues SyncJobs in chain order, dispatches one at a time
    -> POST <PA_WEBHOOK_FETCH_URL> { env, endpoint, batchId, query }   -> 202
       PA runs the SQL, posts rows to <base for env>/api/import/<endpoint>
-   -> the import route reuses batchId and marks the SyncJob done
+   -> the import route reuses batchId, marks the SyncJob done, and dispatches
+      the next job itself -> the chain runs to the end without waiting for a tick
 ```
+
+**The chain is self-propelling.** `completeJobForBatch()` in `src/lib/sync/runner.ts` is
+what the import route calls when a job lands; it flips the job to `done` and immediately
+dispatches the next one. Without it a tick moves the queue exactly one step, so a nightly
+round of five endpoints takes 25 minutes on production and stands still on test, where
+Vercel Cron never fires. A tick (or the "Advance queue" button) still *starts* a round —
+it is the only thing that queues one — but it no longer has to walk it. A failed import
+cancels the rest of its own run and lets the queue continue with what is left; without
+that the successors sit on `pending` forever, since a job is only claimable once its
+predecessor is `done`.
 
 - **Chain order `suppliers -> growers -> lots -> orders -> costs` is enforced by the queue**, not by convention. The lots import silently drops partijen whose supplier does not exist; that is how COLXROOD and COLXBAK lost 317 salessheets.
 - **Two schedules**, rows in `SyncSchedule`: `intraday` (lots+orders, 2-day window, every 6h) and `nightly` (all five, 7 days, `windowOverrides: {costs: 28}`). Costs need a wider window because settlement runs weeks behind delivery — after one week only 45% of cost lines exist, after three weeks all of them.
@@ -324,6 +337,7 @@ Vercel Cron (every 5 min) -> POST /api/sync/tick
 
 ### Querying Fabric
 
+- **The marts change shape without warning, and a fetch-flow failure is silent.** On 21 August 2026 `marts.fct_salesheets_costs` lost `levering_datum` (now `_datum_key_levering`) and its three descriptive cost columns moved to `marts.dim_kost` as `kost_naam` / `kosttype_code` / `kosttype_naam` — note the missing underscore. The costs sync broke that day and nothing said so: `PA_WEBHOOK_FETCH_URL` answers 202 the moment the flow starts, so a SQL error never reaches the portal and the job sits on `dispatched` until the reaper kills it 15 minutes later. When an endpoint goes quiet, check its columns with `SELECT TOP 1 *` through the ask flow before looking anywhere else — a query against a column that no longer exists comes back as a 502 in under a second, which is far too fast to be a timeout.
 - **Do not trust a Fabric column because its name fits.** Three were wrong in one day: `leverancier_contact_inkoper` is not the account manager (`leverancier_verantwoordelijke` is), `vor_omzet` is not the settlement turnover (it is `vor_aantal * afrekenprijs_per_steel`), and `inkoopfust_volume` is a trolley fraction, not the stem count (`inkoop_factuur_aantal` is). Check candidate columns against data the portal already holds.
 - **System views fail through the SQL connector**: `INFORMATION_SCHEMA.COLUMNS` and `.TABLES` both return 502. Discover columns with `SELECT TOP 1 *` and read the keys.
 - **The ask flow is for cheap questions.** A `COUNT(*)` over a full fact table times out at 504; scope every question to a supplier or a period.
@@ -337,7 +351,11 @@ Salessheet PDFs are imported via `POST /api/shipments/import-email`, also authen
 2. PDF content parsing (`salessheet-pdf-parser.ts`) — extracts reference from PDF text
 3. Match against `SalesSheet.invoiceNumber`
 
-Matched PDFs are uploaded to Vercel Blob and linked via `SalesSheet.pdfDocumentId -> Document`.
+Matched PDFs are uploaded to Vercel Blob and linked via `SalesSheet.pdfDocumentId -> Document`. A link is only made when the delivery date printed on the PDF matches the candidate exactly — the reference alone is not enough, since sales sheet numbers recycle per year.
+
+The filename parser knows three shapes, tried in order: the rich Power Automate form (`COLCICE - 04_23_2026 00_15_00 - 212-28 - 401546.PDF`), the digits-only form (`135-23-380914.pdf`), and the loose form (`C002 Blom-371364.pdf`) where anything after the final hyphen is our invoice number if it is four digits or more. Covered by `scripts/checks/salessheet-filename.ts`.
+
+The local archive in `private_input/salessheets` is pushed through this same route by `scripts/link-salessheet-pdfs.ts` (dry-run by default). See `docs/salessheet-pdfs-koppelen.md`.
 
 ---
 
@@ -373,7 +391,9 @@ Matched PDFs are uploaded to Vercel Blob and linked via `SalesSheet.pdfDocumentI
 | `/api/admin/commercie` | GET | Commercie/admin users list |
 | `/api/admin/suppliers` | GET | Supplier management with aggregates |
 | `/api/admin/import-batches` | GET | Import batch history |
-| `/api/admin/fabric-relations` | GET | Fabric relation staging data |
+| `/api/admin/import-batches/[id]/records` | GET | The records one run created or updated, paginated |
+| `/api/admin/import-batches/[id]/skipped` | GET | The relations one run dropped, split into growers and internal bookings |
+| `/api/admin/fabric-relations` | GET, POST | Fabric relation staging data; POST activates one as a Supplier |
 | `/api/activate` | POST | Account activation (set password) |
 | `/api/forgot-password` | POST | Request password reset email |
 | `/api/reset-password` | POST | Reset password with token |
@@ -551,6 +571,7 @@ All fust actions logged to FustAuditLog (19 event types). Denormalized `orderId`
 - Salessheet shows: total turnover, itemized costs (commission, handling, logistics), net result
 - The supplier receives the net result minus costs
 - **Key metric:** net yield per stem (netto opbrengst/steel)
+- Coloriginz also buys outright (FOB/CIF). Those lots are settled at purchase, the turnover is not the supplier's, and they never enter the portal — see the consignment filter in the import pipeline
 
 ### Data Hierarchy (Fabric -> Portal)
 ```
@@ -577,7 +598,9 @@ Standard auction quality codes (110, 120, 130, 154, 160, 170) mapped in `quality
 
 ### Commands
 ```bash
-npm run dev          # Start dev server (fails from cmd.exe: NODE_OPTIONS='...' is POSIX syntax — use bash)
+# npm run dev fails on Windows: npm shells scripts through cmd.exe, which chokes on
+# the POSIX NODE_OPTIONS='...' prefix. Bash does not help. Invoke next directly:
+NODE_OPTIONS='--max-old-space-size=2048' npx next dev
 npm run check        # Run the check scripts in scripts/checks/ (pure functions, no test framework)
 npm run build        # Production build
 npx prisma db push   # Push schema changes (NOT migrate dev)
@@ -612,6 +635,11 @@ Supplier accounts are created via admin UI with activation emails.
 - **Database changes**: Use `prisma db push`, not `prisma migrate dev`.
 - **Emails**: Use CID inline attachments (base64 Buffer), never external image URLs.
 - `useSearchParams()` requires Suspense boundary.
+- **Zod 4, not 3**: `z.record(keySchema, valueSchema)` requires *every* key to be present. For a partial map like `windowOverrides` use `z.partialRecord()`, or a save with `{}` is rejected.
+- **Tailwind variants beat unprefixed utilities**: the base `DialogContent` carries `sm:max-w-sm`, so a plain `max-w-4xl` never applies on desktop no matter the order. Write `sm:max-w-4xl`. Three dialogs in `features/fust` still have this bug.
+- **Base UI `SelectValue` renders the raw value, not the item label.** Fine when the value is human-readable; pass a function as children when it is an id.
+- **Paginate on a unique sort.** `ORDER BY` on a non-unique key plus `OFFSET` lets Postgres return a row on two pages or on none — measured, not theoretical. Always append `{ id: "asc" }`.
+- **Prisma `Json?` fields**: writing `null` does not type-check against the update input — use `Prisma.JsonNull` to store a JSON null, or `undefined` to leave the column alone.
 
 ---
 

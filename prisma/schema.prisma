@@ -155,8 +155,14 @@ model Grower {
 
   lots           Lot[]
 
+  /// Welke ImportBatch dit record voor het laatst heeft aangeraakt. Losse string
+  /// zonder relatie, net als de staging-tabellen: batches worden nooit verwijderd
+  /// en een onDelete-regel zou hier dus niets doen.
+  lastImportBatchId String?
+
   @@index([supplierId])
   @@index([fabricId])
+  @@index([lastImportBatchId])
 }
 
 model Certificate {
@@ -237,7 +243,13 @@ model SalesSheetCost {
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @default(now()) @updatedAt
 
+  /// Welke ImportBatch dit record voor het laatst heeft aangeraakt. Losse string
+  /// zonder relatie, net als de staging-tabellen: batches worden nooit verwijderd
+  /// en een onDelete-regel zou hier dus niets doen.
+  lastImportBatchId String?
+
   @@index([salesSheetId])
+  @@index([lastImportBatchId])
 }
 
 // ─── LOTS (PARTIJEN) ────────────────────────────────────
@@ -282,6 +294,11 @@ model Lot {
   qualityIssues  QualityIssue[]
   corrections    LotCorrection[]
 
+  /// Welke ImportBatch dit record voor het laatst heeft aangeraakt. Losse string
+  /// zonder relatie, net als de staging-tabellen: batches worden nooit verwijderd
+  /// en een onDelete-regel zou hier dus niets doen.
+  lastImportBatchId String?
+
   @@unique([lotNumber, supplierId])
   @@index([supplierId])
   @@index([supplierId, productName])
@@ -292,6 +309,7 @@ model Lot {
   @@index([refNumber])
   @@index([fabricPartId])
   @@index([fabricParthdrId])
+  @@index([lastImportBatchId])
 }
 
 // ─── CORRECTION REASON CODES (REDENCODES) ──────────────────
@@ -328,9 +346,15 @@ model LotCorrection {
   createdAt          DateTime @default(now())
   updatedAt          DateTime @default(now()) @updatedAt
 
+  /// Welke ImportBatch dit record voor het laatst heeft aangeraakt. Losse string
+  /// zonder relatie, net als de staging-tabellen: batches worden nooit verwijderd
+  /// en een onDelete-regel zou hier dus niets doen.
+  lastImportBatchId String?
+
   @@index([lotId])
   @@index([fabricPartId])
   @@index([correctionReasonId])
+  @@index([lastImportBatchId])
 }
 
 // ─── TRANSACTIONS ────────────────────────────────────────
@@ -351,12 +375,18 @@ model Transaction {
   createdAt           DateTime @default(now())
   updatedAt           DateTime @default(now()) @updatedAt
 
+  /// Welke ImportBatch dit record voor het laatst heeft aangeraakt. Losse string
+  /// zonder relatie, net als de staging-tabellen: batches worden nooit verwijderd
+  /// en een onDelete-regel zou hier dus niets doen.
+  lastImportBatchId String?
+
   @@index([lotId])
   @@index([date])
   @@index([salesType])
   @@index([fabricOrdregId])
   @@index([bronFeitExtra])
   @@index([correctionReasonId])
+  @@index([lastImportBatchId])
 }
 
 // ─── IMPORT BATCHES ─────────────────────────────────────
@@ -949,6 +979,9 @@ model SyncJob {
   windowTo         DateTime
   supplierFabricId Int?      // rel_id_leverancier; alleen gevuld bij een backfill voor één leverancier
   source           String    // "schedule", "nightly", "backfill"
+  /// 0 = geplande ronde, 1 = backfill. De claim sorteert hierop, zodat werk aan
+  /// het verleden nooit voorgaat op de dagelijkse sync.
+  priority         Int       @default(0)
   status           String    @default("pending") // "pending", "dispatched", "done", "failed", "cancelled"
   attempts         Int       @default(0)
   importBatchId    String?
@@ -957,7 +990,7 @@ model SyncJob {
   dispatchedAt     DateTime?
   completedAt      DateTime?
 
-  @@index([status, createdAt])
+  @@index([status, priority, createdAt])
   @@unique([runId, sequence])
   @@index([importBatchId])
 }

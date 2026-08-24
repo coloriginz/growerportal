@@ -25,8 +25,12 @@ const sampleWindow = { from: new Date("2026-07-01T00:00:00Z"), to: new Date("202
 
 const plain = costsQuery(sampleWindow);
 check("costs: bevat de brontabel", plain.includes("marts.fct_salesheets_costs"));
-check("costs: venster begint inclusief", /levering_datum\s*>=\s*'2026-07-01'/.test(plain));
-check("costs: venster eindigt exclusief", /levering_datum\s*<\s*'2026-08-01'/.test(plain));
+// De kostennamen staan sinds 21-08-2026 in dim_kost; zonder deze join komen
+// description en costTypeCode leeg binnen en dan valt de fout pas op in de UI.
+check("costs: haalt de namen uit dim_kost", /LEFT JOIN marts\.dim_kost/.test(plain));
+check("costs: gebruikt de nieuwe datumkolom", /c\._datum_key_levering\s*>=\s*'2026-07-01'/.test(plain));
+check("costs: venster eindigt exclusief", /c\._datum_key_levering\s*<\s*'2026-08-01'/.test(plain));
+check("costs: de oude kolomnaam is weg", !/[^_]levering_datum/.test(plain));
 check(
   "costs: geen leveranciersfilter zonder id",
   !/AND\s+parthdr_id\s+IN\s*\(SELECT\s+parthdr_id\s+FROM\s+marts\.fct_partijen/.test(plain)

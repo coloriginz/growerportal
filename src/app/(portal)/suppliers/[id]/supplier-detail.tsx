@@ -28,9 +28,11 @@ import {
   RiArrowLeftLine,
   RiSaveLine,
   RiMailSendLine,
+  RiHistoryLine,
 } from "@remixicon/react";
 import { useLanguage } from "@/components/providers/language-provider";
 import { toast } from "sonner";
+import { BackfillConfirmDialog } from "@/components/sync/backfill-confirm-dialog";
 
 interface CompanyOption {
   id: string;
@@ -42,6 +44,8 @@ interface SupplierData {
   id: string;
   code: string;
   name: string;
+  /** rel_id_leverancier; ontbreekt bij een leverancier die niet uit Fabric komt. */
+  fabricId: number | null;
   company: string | null;
   street: string | null;
   city: string | null;
@@ -85,7 +89,13 @@ interface SupplierData {
   }[];
 }
 
-export function SupplierDetail({ supplierId }: { supplierId: string }) {
+export function SupplierDetail({
+  supplierId,
+  isAdmin = false,
+}: {
+  supplierId: string;
+  isAdmin?: boolean;
+}) {
   const [supplier, setSupplier] = useState<SupplierData | null>(null);
   const [companies, setCompanies] = useState<CompanyOption[] | null>(null);
   const [loading, setLoading] = useState(true);
@@ -94,6 +104,8 @@ export function SupplierDetail({ supplierId }: { supplierId: string }) {
   const [newUserEmail, setNewUserEmail] = useState("");
   const [sendingActivation, setSendingActivation] = useState(false);
   const [resendingUserId, setResendingUserId] = useState<string | null>(null);
+  const [confirmingBackfill, setConfirmingBackfill] = useState(false);
+  const [backfilling, setBackfilling] = useState(false);
   const { t } = useLanguage();
   const router = useRouter();
 
@@ -275,6 +287,38 @@ export function SupplierDetail({ supplierId }: { supplierId: string }) {
     }
   }
 
+  async function handleBackfill(fabricId: number) {
+    setBackfilling(true);
+    try {
+      const res = await fetch("/api/sync/backfill", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ supplierFabricId: fabricId }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        // De route weigert met een leesbare reden — er loopt er al een, of er is
+        // geen basisdatum. Die reden staat er al goed; er hoort geen eigen tekst
+        // overheen die minder zegt dan het antwoord zelf.
+        toast.error(
+          typeof data?.error === "string" ? data.error : "Failed to start the backfill"
+        );
+        return;
+      }
+      toast.success(`Backfill queued for ${supplier?.code ?? fabricId}`, {
+        description: `${data.jobs} sync jobs. Its lots arrive over the coming rounds, oldest quarter first.`,
+      });
+    } catch {
+      toast.error("Failed to start the backfill");
+    } finally {
+      setBackfilling(false);
+      // De bevestiging sluit ook na een weigering: geen van de twee redenen —
+      // er loopt er al een, of er is geen basisdatum — gaat weg door nog eens
+      // op dezelfde knop te drukken.
+      setConfirmingBackfill(false);
+    }
+  }
+
   async function handleDeactivateUser(userId: string) {
     const res = await fetch(`/api/admin/users/${userId}`, {
       method: "PATCH",
@@ -296,6 +340,8 @@ export function SupplierDetail({ supplierId }: { supplierId: string }) {
     );
   }
 
+  const fabricId = supplier.fabricId;
+
   return (
     <div className="page-content">
       <div className="page-header">
@@ -313,7 +359,31 @@ export function SupplierDetail({ supplierId }: { supplierId: string }) {
             </h1>
           </div>
         </div>
+        {/* Zonder Fabric-relatie is er geen historie op te halen, dus dan ook
+            geen knop. */}
+        {isAdmin && fabricId !== null && (
+          <Button
+            variant="outline"
+            disabled={backfilling}
+            onClick={() => setConfirmingBackfill(true)}
+          >
+            <RiHistoryLine className="mr-2 h-4 w-4" />
+            Backfill history
+          </Button>
+        )}
       </div>
+
+      {confirmingBackfill && fabricId !== null && (
+        <BackfillConfirmDialog
+          supplier={{ code: supplier.code, name: supplier.company || supplier.name }}
+          confirmLabel="Backfill history"
+          // Geen tweede knop: de leverancier bestaat hier al, dus er valt niets
+          // te doen behalve backfillen of annuleren.
+          onConfirm={() => void handleBackfill(fabricId)}
+          onCancel={() => setConfirmingBackfill(false)}
+          busy={backfilling}
+        />
+      )}
 
       <form onSubmit={handleSave} className="space-y-6">
         {/* Profile Section */}

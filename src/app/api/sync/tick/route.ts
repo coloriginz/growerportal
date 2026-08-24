@@ -17,9 +17,21 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // Lokaal niets versturen: Power Automate kan localhost niet bereiken.
+  // Niets versturen als er geen doelomgeving is. Lokaal klopt dat — Power
+  // Automate kan localhost niet bereiken — maar het gebeurt ook als de variabele
+  // ontbreekt of verkeerd gespeld is, en dat is een configuratiefout die er niet
+  // uit mag zien als een bewuste keuze. Vandaar de aangetroffen waarde erbij:
+  // productie tikte na de eerste deploy netjes elke vijf minuten en deed niets,
+  // met "development" als reden, terwijl NEXT_PUBLIC_APP_ENV daar simpelweg niet
+  // gezet was. De waarde is publiek, dus hem tonen kost niets.
   if (!resolveSyncEnv()) {
-    return NextResponse.json({ dryRun: true, reason: "development" });
+    const gevonden = process.env.NEXT_PUBLIC_APP_ENV;
+    return NextResponse.json({
+      dryRun: true,
+      reason: gevonden
+        ? `NEXT_PUBLIC_APP_ENV is "${gevonden}"; alleen "test" en "production" versturen`
+        : `NEXT_PUBLIC_APP_ENV is niet gezet; alleen "test" en "production" versturen`,
+    });
   }
 
   // tick() geeft { reaped, orphanBatches, enqueued, dispatched, failed } terug. Die laatste is

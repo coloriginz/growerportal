@@ -5,6 +5,8 @@ import { useLanguage } from "@/components/providers/language-provider";
 import { useFetch } from "@/hooks/use-fetch";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Pagination } from "@/components/pagination";
+import { pageLabels } from "@/components/pagination-labels";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -30,8 +32,6 @@ import {
 } from "@/components/ui/sheet";
 import {
   RiMailLine,
-  RiArrowLeftSLine,
-  RiArrowRightSLine,
   RiRefreshLine,
   RiExternalLinkLine,
   RiFileTextLine,
@@ -271,29 +271,12 @@ export function FustEmailLog() {
               <p className="text-sm text-muted-foreground">
                 {data.pagination.total} emails
               </p>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="h-8 w-8"
-                  disabled={page <= 1}
-                  onClick={() => setPage(page - 1)}
-                >
-                  <RiArrowLeftSLine className="h-4 w-4" />
-                </Button>
-                <span className="text-sm">
-                  {page} / {data.pagination.totalPages}
-                </span>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="h-8 w-8"
-                  disabled={page >= data.pagination.totalPages}
-                  onClick={() => setPage(page + 1)}
-                >
-                  <RiArrowRightSLine className="h-4 w-4" />
-                </Button>
-              </div>
+              <Pagination
+                page={page}
+                totalPages={data.pagination.totalPages}
+                onPageChange={setPage}
+                labels={pageLabels}
+              />
             </div>
           )}
         </>

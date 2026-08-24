@@ -1,9 +1,11 @@
 import { randomUUID } from "crypto";
 import { prisma } from "@/lib/db";
 import { isDue, windowForEndpoint, type ScheduleState } from "./schedule";
+import { backfillJobs, quarterChunks, quarterLabel } from "./backfill";
 import { inChainOrder, isSyncEndpoint, type SyncEndpoint } from "./types";
 import { buildQuery } from "./queries";
 import { fetchInto, describeError, DispatchError } from "./dispatch";
+import { resolveSyncEnv } from "@/lib/env";
 
 /** Een job die langer dan dit onderweg is, is dood. */
 const STALE_MINUTES = 15;
@@ -46,7 +48,7 @@ export async function enqueueRun(
           endpoint,
           windowFrom: window.from,
           windowTo: window.to,
-          source: schedule.name === "nightly" ? "nightly" : "schedule",
+          source: schedule.name,
         };
       }),
     });
@@ -60,6 +62,241 @@ export async function enqueueRun(
   return endpoints.length;
 }
 
+/**
+ * Zet een ronde klaar zonder naar het schema te kijken. Voor de knop "run now":
+ * lastRunAt wordt gewoon gestempeld, zodat de eerstvolgende tick er niet nóg een
+ * ronde bovenop zet.
+ */
+export async function enqueueRunNow(name: string, now: Date = new Date()): Promise<number> {
+  const schedule = await prisma.syncSchedule.findUnique({ where: { name } });
+  if (!schedule) throw new Error(`Unknown schedule '${name}'`);
+  return enqueueRun(schedule, now);
+}
+
+export type BackfillPlan = { chunks: number; jobs: number; from: Date; to: Date };
+
+/**
+ * Wat een backfill gaat kosten, zonder iets klaar te zetten. De bevestiging in
+ * het scherm draait hierop, en bewust niet op een telling uit Fabric: dat zou
+ * de knop afhankelijk maken van een flow die aantoonbaar uit kan vallen — op
+ * 19 augustus lag die anderhalve dag plat.
+ */
+export function planBackfill(startDate: Date, now: Date = new Date()): BackfillPlan {
+  const chunks = quarterChunks(startDate, now);
+  return {
+    chunks: chunks.length,
+    jobs: backfillJobs(chunks).length,
+    from: chunks[0]?.from ?? startDate,
+    to: chunks[chunks.length - 1]?.to ?? startDate,
+  };
+}
+
+/**
+ * Een backfill is klaargezet, of hij is geweigerd met een reden die op het
+ * scherm mag. Geen exception: de twee weigeringen hieronder zijn verwachte
+ * antwoorden, geen storingen. Wie ze als `Error` gooit dwingt zijn aanroeper
+ * tot een `catch` die er niet van te onderscheiden is als de database wegvalt —
+ * dan wordt een uitgevallen Neon een 409 met "er loopt al een backfill".
+ */
+export type EnqueueBackfillResult =
+  | { ok: true; runId: string; jobs: number }
+  | { ok: false; reason: "already_running" | "nothing_to_backfill"; message: string };
+
+/**
+ * Zet een backfill klaar voor één leverancier: kwekers vooraan, daarna per
+ * kalenderkwartaal partijen, orderregels en kosten, alles onder één runId.
+ *
+ * Weigert als er al een open backfill voor hem staat: twee tegelijk leveren
+ * dezelfde upserts op en maken de voortgang onleesbaar. Die controle is
+ * advies, geen slot — twee gelijktijdige aanroepen kunnen er allebei langs.
+ * Dat is aanvaard: dit hangt achter een admin-knop die met de hand wordt
+ * ingedrukt, en het ergste gevolg is dubbel werk, geen verkeerde data.
+ *
+ * Geen transactie om de `createMany` heen, anders dan bij `enqueueRun`. Die
+ * heeft er één omdat hij twee dingen schrijft — de jobs én `lastRunAt` — en een
+ * halve schrijfactie daar dezelfde ronde nog eens laat klaarzetten. Hier is het
+ * één statement, en dat is in Postgres al atomair.
+ */
+export async function enqueueBackfill(
+  supplierFabricId: number,
+  startDate: Date,
+  now: Date = new Date()
+): Promise<EnqueueBackfillResult> {
+  const bestaand = await prisma.syncJob.findFirst({
+    where: {
+      supplierFabricId,
+      source: "backfill",
+      status: { in: ["pending", "dispatched"] },
+    },
+    select: { runId: true },
+  });
+  if (bestaand) {
+    return {
+      ok: false,
+      reason: "already_running",
+      message: `A backfill for this supplier is already running (${bestaand.runId}).`,
+    };
+  }
+
+  const specs = backfillJobs(quarterChunks(startDate, now));
+  if (specs.length === 0) {
+    return {
+      ok: false,
+      reason: "nothing_to_backfill",
+      message: "The backfill start date is in the future; there is nothing to backfill.",
+    };
+  }
+
+  const runId = randomUUID();
+  await prisma.syncJob.createMany({
+    data: specs.map((spec) => ({
+      runId,
+      sequence: spec.sequence,
+      endpoint: spec.endpoint,
+      windowFrom: spec.from,
+      windowTo: spec.to,
+      supplierFabricId,
+      source: "backfill",
+      priority: 1,
+    })),
+  });
+
+  return { ok: true, runId, jobs: specs.length };
+}
+
+export type OpenBackfill = {
+  runId: string;
+  supplierFabricId: number;
+  total: number;
+  done: number;
+  failed: number;
+  /** Waar hij nu is, als "lots 2025 Q3"; null als er niets meer wacht. */
+  current: string | null;
+  /** Zijn eerstvolgende brok staat klaar, maar een geplande ronde gaat voor. */
+  waitingOnRound: boolean;
+};
+
+/**
+ * De backfills die nog niet klaar zijn, met hun voortgang, voor de kaart in het
+ * scherm. Een afgeronde backfill verdwijnt; zijn historie staat in de batchlijst.
+ *
+ * De jobs in twee stappen in plaats van één: eerst de runIds die nog een job
+ * hebben die niet `done` is, dan alleen de jobs van die runs. Alles ophalen en
+ * in geheugen filteren werkt vandaag — vierendertig rijen per backfill — maar
+ * dan groeit wat er over de lijn komt met elke backfill die ooit gedraaid
+ * heeft, terwijl het antwoord juist krimpt.
+ */
+export async function openBackfills(): Promise<OpenBackfill[]> {
+  const openRuns = await prisma.syncJob.findMany({
+    where: { source: "backfill", status: { not: "done" } },
+    select: { runId: true },
+    distinct: ["runId"],
+  });
+  if (openRuns.length === 0) return [];
+
+  const jobs = await prisma.syncJob.findMany({
+    where: { runId: { in: openRuns.map((r) => r.runId) } },
+    select: {
+      runId: true,
+      supplierFabricId: true,
+      status: true,
+      sequence: true,
+      endpoint: true,
+      windowFrom: true,
+    },
+    orderBy: [{ runId: "asc" }, { sequence: "asc" }],
+  });
+
+  const perRun = new Map<string, typeof jobs>();
+  for (const job of jobs) {
+    const rijen = perRun.get(job.runId);
+    if (rijen) rijen.push(job);
+    else perRun.set(job.runId, [job]);
+  }
+
+  // Dat een backfill op een geplande ronde wacht is niet aan zijn eigen rijen te
+  // zien: het zit in de sortering van claimNextJob. Staat er ergens een job met
+  // priority 0 open, dan pakt de claim die eerst — pending omdat de sortering
+  // hem voorrang geeft, dispatched omdat er er maar één tegelijk uit staat. Eén
+  // vraag beantwoordt dat voor alle backfills tegelijk.
+  const geplandeRonde = await prisma.syncJob.findFirst({
+    where: { priority: 0, status: { in: ["pending", "dispatched"] } },
+    select: { id: true },
+  });
+
+  const backfills: OpenBackfill[] = [];
+  for (const [runId, rijen] of perRun) {
+    // `supplierFabricId` is nullable in het schema omdat een geplande ronde hem
+    // leeg laat. Bij een backfill vult enqueueBackfill hem altijd, maar het type
+    // weet dat niet en met de hand aangemaakte rijen ook niet. Zo'n run is niet
+    // te tonen — de kaart heeft er de leverancier bij nodig — dus hij valt weg.
+    const supplierFabricId = rijen[0].supplierFabricId;
+    if (supplierFabricId === null) continue;
+
+    const lopend =
+      rijen.find((r) => r.status === "dispatched") ?? rijen.find((r) => r.status === "pending");
+
+    backfills.push({
+      runId,
+      supplierFabricId,
+      total: rijen.length,
+      done: rijen.filter((r) => r.status === "done").length,
+      failed: rijen.filter((r) => r.status === "failed").length,
+      // Het kwartaal, niet de begindatum van het venster: "2025 Q3" is wat het
+      // scherm vraagt en wat de brok in de bevestiging ook heette. Volgnummer 0
+      // is de stamdata-job, die alle kwartalen overspant en dus bij geen enkel
+      // hoort.
+      current: lopend
+        ? lopend.sequence === 0
+          ? lopend.endpoint
+          : `${lopend.endpoint} ${quarterLabel(lopend.windowFrom)}`
+        : null,
+      // Alleen als zijn eigen brok nog wacht. Staat die op `dispatched`, dan is
+      // hij zelf aan de beurt en wacht hij nergens op — ook niet op de ronde die
+      // daarna komt.
+      waitingOnRound: geplandeRonde !== null && lopend?.status === "pending",
+    });
+  }
+
+  return backfills;
+}
+
+/**
+ * Zet een gestrande backfill weer aan vanaf de brok waar hij bleef steken.
+ * Retourneert het aantal jobs dat weer op `pending` staat.
+ *
+ * Een gefaalde job annuleert de rest van zijn run — streng, en terecht, want
+ * een gat middenin een backfill ziet niemand terug. Maar zonder hervatten begin
+ * je na een storing in kwartaal negen weer bij kwartaal één. De vensters staan
+ * al gematerialiseerd op de geannuleerde jobs, dus hervatten is niet meer dan
+ * ze terugzetten en de gefaalde job zijn pogingen teruggeven.
+ *
+ * Het statusfilter is de hele veiligheid. `done` valt erbuiten, anders haalt
+ * elke hervatting het hele verleden opnieuw op; `dispatched` en `pending` ook,
+ * dus een backfill die nog loopt wordt hier niet uit zijn ritme gehaald. En een
+ * teruggezette job kan pas aan de beurt komen als zijn voorganger `done` is —
+ * dat bewaakt claimNextJob al.
+ *
+ * Geen transactie eromheen: één updateMany is één statement, en dat is in
+ * Postgres al atomair.
+ */
+export async function resumeBackfill(runId: string): Promise<number> {
+  const hersteld = await prisma.syncJob.updateMany({
+    // Alleen backfills: een geannuleerde geplande ronde terugzetten zou een
+    // venster van weken geleden opnieuw ophalen, en dat lost het schema zelf op.
+    where: { runId, source: "backfill", status: { in: ["failed", "cancelled"] } },
+    data: {
+      status: "pending",
+      attempts: 0,
+      lastError: null,
+      dispatchedAt: null,
+      completedAt: null,
+    },
+  });
+
+  return hersteld.count;
+}
+
 type ClaimedJob = {
   id: string;
   endpoint: string;
@@ -71,10 +308,16 @@ type ClaimedJob = {
 };
 
 /**
- * Claimt de volgende job in één atomaire stap. De twee NOT EXISTS-clausules
- * dragen de beide regels van het systeem:
+ * Claimt de volgende job in één atomaire stap. De twee NOT EXISTS-clausules en
+ * de sortering dragen samen de drie regels van het systeem:
  *   1. er staat er hoogstens één tegelijk uit
  *   2. binnen een ronde is de vorige klaar voordat de volgende gaat
+ *   3. een backfill komt pas aan de beurt als er geen geplande ronde wacht
+ *
+ * Die derde regel is enkel deze ORDER BY. Een extra NOT EXISTS is overbodig:
+ * staat er een gewone job te wachten, dan pakt de sortering die per definitie
+ * eerst. Een lopende backfill-job wordt niet afgebroken — hij maakt zijn brok
+ * af en de rest van de backfill wacht tot de ronde klaar is.
  *
  * Twee ticks die elkaar overlappen kunnen in het uiterste geval allebei een job
  * claimen uit verschillende rondes — de volgorde binnen een ronde blijft dan
@@ -94,7 +337,7 @@ async function claimNextJob(): Promise<ClaimedJob | null> {
           SELECT 1 FROM "SyncJob" p
           WHERE p."runId" = j."runId" AND p.sequence < j.sequence AND p.status <> 'done'
         )
-      ORDER BY j."createdAt", j.sequence
+      ORDER BY j.priority, j."createdAt", j.sequence
       LIMIT 1
       FOR UPDATE SKIP LOCKED
     )
@@ -209,8 +452,10 @@ async function failJob(jobId: string, message: string, batchId?: string) {
  * partijen die er niet zijn worden stil weggegooid; een halve ronde die je ziet
  * is beter dan een hele die gaten trekt.
  *
- * Bij een backfill geldt dit alleen binnen de brok: elke brok is een eigen
- * runId en de andere brokken lopen gewoon door.
+ * Een backfill is één runId over al zijn kwartalen — dat is het enige wat de
+ * kwekers vóór alle kwartalen houdt — dus een gestrande brok annuleert daar de
+ * hele rest van de backfill. Streng, en terecht: een gat middenin ziet niemand
+ * terug. `resumeBackfill` zet hem daarna terug op het gestrande kwartaal.
  */
 async function cancelRestOfRun(jobId: string): Promise<void> {
   const job = await prisma.syncJob.findUnique({
@@ -321,4 +566,82 @@ export async function tick(now: Date = new Date()) {
   }
 
   return { reaped, orphanBatches, enqueued, dispatched, failed };
+}
+
+/**
+ * Een job is klaar: afvinken en meteen de volgende versturen.
+ *
+ * Dit is wat de ketting zelfrijdend maakt. Zonder deze aanroep zet alleen de
+ * cron een job weg — één per tick, dus een nachtronde van vijf endpoints duurt
+ * een half uur, en op test, waar Vercel Cron niet vuurt, staat de wachtrij stil
+ * tot iemand op "Advance queue" drukt. Nu duwt elke afgeronde import zijn eigen
+ * opvolger naar buiten.
+ *
+ * De verzending wordt afgewacht en niet losgelaten met `void`: Vercel kapt een
+ * functie af zodra hij zijn antwoord heeft gegeven, dus werk ná de response
+ * gebeurt niet. Het kost de import-route de tijd van één webhook-aanroep, die
+ * met 202 terugkomt zodra de flow gestart is.
+ *
+ * Retourneert of er nog iets verstuurd is, puur voor de logs.
+ */
+export async function completeJobForBatch(batchId: string): Promise<void> {
+  const { count } = await prisma.syncJob.updateMany({
+    where: { importBatchId: batchId, status: "dispatched" },
+    data: { status: "done", completedAt: new Date() },
+  });
+
+  // Geen job bij deze batch: een handmatige import of een oude DAX-flow. Die
+  // hoort geen ketting in gang te zetten.
+  if (count === 0) return;
+
+  await continueChain();
+}
+
+/**
+ * Een job is gestrand op de terugweg — de import zelf gaf een fout. Zelfde
+ * afhandeling als wanneer het versturen misgaat: de job faalt, de rest van zijn
+ * ronde vervalt (orders zonder hun partijen worden stil weggegooid), en de
+ * wachtrij loopt door met wat er nog staat.
+ *
+ * Zonder het annuleren blijven de opvolgers eeuwig op `pending` staan: ze zijn
+ * niet claimbaar zolang hun voorganger niet `done` is, en niets ruimt ze op.
+ */
+export async function failJobForBatch(batchId: string, message: string): Promise<void> {
+  const job = await prisma.syncJob.findFirst({
+    where: { importBatchId: batchId, status: "dispatched" },
+    select: { id: true },
+  });
+  if (!job) return;
+
+  await prisma.syncJob.update({
+    where: { id: job.id },
+    data: { status: "failed", lastError: message.slice(0, 1000), completedAt: new Date() },
+  });
+  await cancelRestOfRun(job.id);
+  await continueChain();
+}
+
+/**
+ * De volgende job versturen, als er een klaarstaat en er een doelomgeving is.
+ *
+ * Fouten blijven hier: de import die dit aanroept is geslaagd, en dat antwoord
+ * mag niet alsnog omvallen omdat de volgende flow onbereikbaar was. Wat er
+ * blijft staan pakt de eerstvolgende tick op.
+ */
+async function continueChain(): Promise<void> {
+  // Zonder doelomgeving stuurt dispatch.ts niets; dan zou de claim de job wel
+  // op 'dispatched' zetten en hem daarna laten falen. Lokaal is dat de normale
+  // situatie, geen storing.
+  if (!resolveSyncEnv()) return;
+
+  try {
+    const { dispatched, failed } = await dispatchNext();
+    if (failed) {
+      console.warn(`[sync] job ${failed} gefaald tijdens het doorzetten van de ketting`);
+    } else if (dispatched) {
+      console.info(`[sync] job ${dispatched} verstuurd, ketting loopt door`);
+    }
+  } catch (error) {
+    console.error(`[sync] doorzetten van de ketting mislukt: ${describeError(error)}`);
+  }
 }

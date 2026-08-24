@@ -90,3 +90,48 @@ export function parseSalesSheetFilenameSimple(filename: string): { reference: st
 
   return { reference, ourInvoiceNumber };
 }
+
+/**
+ * Last resort: the same shape, but with a reference that is not purely numeric.
+ *
+ * The archive is full of these: "C002 Blom-371364.pdf", "CL00125-371114.pdf",
+ * "OZ250072-378954.pdf", "16872 TLLU6894182-392035.pdf". The rule is that
+ * everything after the final hyphen is our own invoice number when it is at
+ * least four digits, and everything before it is the reference — letters and
+ * spaces included, because SalesSheet.invoiceNumber carries both ("C00003963",
+ * "20169 240626").
+ *
+ * What this rule also catches that it should not:
+ *
+ * - Any PDF at all that happens to end in "-<four or more digits>". A scan
+ *   named "contract-2024.pdf" yields reference "contract".
+ * - A hyphen that belongs to the reference rather than to the separator.
+ *   "C705 - Gribholm-389381.pdf" yields reference "C705 - Gribholm" while the
+ *   database holds "C705"; the cosmetic suffix stays glued to the reference.
+ * - A tail that is not one of our invoice numbers but some other number. The
+ *   caller writes ourInvoiceNumber onto the sales sheet, so a wrong tail is a
+ *   wrong number in the database.
+ *
+ * Why that is acceptable: the filename is a hint, not the decision. Nothing is
+ * linked without a hit on SalesSheet.invoiceNumber (or its "-<parthdrId>"
+ * variant) *and* an exact match on the delivery date printed inside the PDF —
+ * see api/shipments/import-email. A reference that is wrong or invented finds
+ * no sales sheet and ends up as a reported "no_match", and a reference that is
+ * right but paired with a wrong tail only reaches the ourInvoiceNumber write
+ * after the date has already confirmed the sales sheet. The four-digit floor on
+ * the tail is what keeps the rule from reading a name like "cape-12" as a
+ * reference plus an invoice number; our own numbers run well past 300000.
+ */
+export function parseSalesSheetFilenameLoose(filename: string): { reference: string; ourInvoiceNumber: string } | null {
+  const name = filename.replace(/\.[^.]+$/, "");
+
+  const lastDash = name.lastIndexOf("-");
+  if (lastDash <= 0) return null;
+
+  const reference = name.slice(0, lastDash).trim();
+  const ourInvoiceNumber = name.slice(lastDash + 1).trim();
+
+  if (!reference || !/^\d{4,}$/.test(ourInvoiceNumber)) return null;
+
+  return { reference, ourInvoiceNumber };
+}

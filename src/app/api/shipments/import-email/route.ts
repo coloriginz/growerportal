@@ -3,9 +3,18 @@ import { prisma } from "@/lib/db";
 import { Prisma } from "@/generated/prisma";
 import { put, del } from "@vercel/blob";
 import { requireImportAuth } from "@/lib/import-auth";
-import { parseSalesSheetFilename, parseSalesSheetFilenameSimple } from "@/lib/salessheet-filename-parser";
+import {
+  parseSalesSheetFilename,
+  parseSalesSheetFilenameSimple,
+  parseSalesSheetFilenameLoose,
+} from "@/lib/salessheet-filename-parser";
 import { parseSalesSheetPdf } from "@/lib/salessheet-pdf-parser";
 import { z } from "zod";
+
+// Elke bijlage kost een PDF-parse plus een blob-upload; een mail met een handvol
+// salessheets erin haalt de standaardlimiet niet. De bulk-koppeling in
+// scripts/link-salessheet-pdfs.ts stuurt er bewust meerdere per verzoek.
+export const maxDuration = 300;
 
 const attachmentSchema = z.object({
   name: z.string(),
@@ -197,8 +206,10 @@ async function processAttachment(
     reference = parsed.reference;
     ourInvoiceNumber = parsed.ourInvoiceNumber;
   } else {
-    // Fallback: simple filename like "135-23-380914.pdf"
-    const simple = parseSalesSheetFilenameSimple(attachment.name);
+    // Fallback: simple filename like "135-23-380914.pdf", then the loose form
+    // that also allows letters and spaces in the reference ("C002 Blom-371364").
+    const simple =
+      parseSalesSheetFilenameSimple(attachment.name) ?? parseSalesSheetFilenameLoose(attachment.name);
     if (simple) {
       reference = simple.reference;
       ourInvoiceNumber = simple.ourInvoiceNumber;

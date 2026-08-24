@@ -296,6 +296,21 @@ valt diezelfde partij de volgende korte ronde nog stééds binnen het venster en
 binnen. Het herstelt zichzelf, **zolang `windowDays` ruimer is dan de tijd tussen twee nachtrondes**.
 Bij 45 dagen tegen 24 uur is dat met grote marge het geval.
 
+**Er is ook een bovengrens, en die is hard.** Op 18 augustus kwam de nachtronde niet meer rond: de
+orders-query leverde 15.229 rijen over acht dagen en Power Automate kwam daarmee simpelweg niet terug —
+geen foutmelding, geen 202-met-nasleep, de job bleef op `dispatched` tot de opruimer hem na een kwartier
+terugzette. Gemeten: 6.573 rijen slaagt in 16 seconden, 6.626 in 8, en 11.128 ging de dag ervoor nog
+net goed. Ergens tussen elf- en vijftienduizend rijen houdt de flow ermee op.
+
+Daarom heeft `orders` op test een uitzondering van 3 dagen gekregen. Dat is dezelfde
+`windowOverrides`-kaart als bij `costs`, alleen in de andere richting: kosten hebben een bréder venster
+nodig, orderregels een smaller. En het is een grens die meebeweegt — de dichtheid groeide in één dag met
+ruim een derde, dus dit is geen instelling die je één keer goed zet.
+
+**Wat dat betekent voor de bewaking.** Een te groot venster faalt stil: de flow komt niet terug, de job
+blijft hangen, en pas de opruimer maakt er iets zichtbaars van. Loopt een endpoint herhaaldelijk in die
+opruimer, dan is een te grote payload de eerste verdenking — niet een storing bij Fabric.
+
 Die voorwaarde is de reden dat `windowDays` een instelling is en geen constante: wie hem onder de
 stamdata-frequentie zet, breekt de zelfherstellende eigenschap.
 

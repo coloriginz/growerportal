@@ -31,14 +31,14 @@ export async function POST(request: NextRequest) {
     rowSchema: growerSchema,
     schemaKeys: growerKeys,
     aliases: growerAliases,
-    handler: async (growers) => {
+    handler: async (growers, batchId) => {
       if (growers.length === 0) return { created: 0, updated: 0, skipped: 0 };
-      return upsertGrowers(growers);
+      return upsertGrowers(growers, batchId);
     },
   });
 }
 
-async function upsertGrowers(growers: Grower[]) {
+async function upsertGrowers(growers: Grower[], batchId: string | null) {
   // Build a map of incoming grower data keyed by fabricId
   const incomingMap = new Map<number, Grower>();
   for (const row of growers) {
@@ -86,6 +86,7 @@ async function upsertGrowers(growers: Grower[]) {
           code: newCode,
           country: newCountry,
           city: newCity,
+          lastImportBatchId: batchId,
         },
       });
       updated++;

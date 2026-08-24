@@ -104,4 +104,177 @@ check(
     l.from.getTime()
 );
 
+import { windowAdvies } from "../../src/lib/sync/schedule";
+
+const basis = {
+  name: "nightly",
+  enabled: true,
+  intervalMin: null as number | null,
+  atTime: "03:00" as string | null,
+  endpoints: ["suppliers", "growers", "lots", "orders", "costs"],
+  windowDays: 7,
+  windowOverrides: { costs: 28 } as unknown,
+  lastRunAt: null as Date | null,
+};
+
+const velden = (a: ReturnType<typeof windowAdvies>) => a.map((x) => x.veld);
+
+check("gezonde nachtronde geeft geen waarschuwing", windowAdvies(basis).length === 0,
+  JSON.stringify(windowAdvies(basis)));
+
+check(
+  "costs onder 21 dagen waarschuwt",
+  velden(windowAdvies({ ...basis, windowOverrides: { costs: 7 } })).includes("windowOverrides")
+);
+
+check(
+  "costs zonder uitzondering erft een te smal rondevenster",
+  velden(windowAdvies({ ...basis, windowOverrides: null })).includes("windowOverrides")
+);
+
+check(
+  "costs op 21 dagen waarschuwt niet",
+  windowAdvies({ ...basis, windowOverrides: { costs: 21 } }).length === 0
+);
+
+check(
+  "een venster van 1 dag bij een zesuurs-ronde waarschuwt niet",
+  windowAdvies({
+    ...basis, name: "intraday", atTime: null, intervalMin: 360,
+    endpoints: ["lots", "orders"], windowDays: 1, windowOverrides: null,
+  }).length === 0,
+  "zes uur past vier keer in een dag, dus 1 dag is ruim twee rondes"
+);
+
+check(
+  "een dagelijkse ronde met een venster van 1 dag waarschuwt",
+  velden(windowAdvies({ ...basis, windowDays: 1, windowOverrides: { costs: 28 } })).includes("windowDays")
+);
+
+check(
+  "een interval onder vijf minuten waarschuwt",
+  velden(windowAdvies({
+    ...basis, atTime: null, intervalMin: 2, endpoints: ["lots"], windowOverrides: null, windowDays: 7,
+  })).includes("intervalMin")
+);
+
+check(
+  "een schema zonder endpoints waarschuwt",
+  velden(windowAdvies({ ...basis, endpoints: [] })).includes("endpoints")
+);
+
+check(
+  "een schema zonder interval en zonder tijdstip waarschuwt",
+  velden(windowAdvies({ ...basis, atTime: null, intervalMin: null })).includes("schema")
+);
+
+check(
+  "een te smalle uitzondering wijst naar windowOverrides, ook als hij gelijk is aan windowDays",
+  velden(
+    windowAdvies({
+      ...basis,
+      atTime: null,
+      intervalMin: 1440,
+      endpoints: ["lots"],
+      windowDays: 1,
+      windowOverrides: { lots: 1 },
+    })
+  ).includes("windowOverrides"),
+  "de waarschuwing hoort bij het veld dat de waarde levert, niet bij het veld met hetzelfde getal"
+);
+
+check(
+  "een uitgezet schema waarschuwt nergens over",
+  windowAdvies({ ...basis, enabled: false, endpoints: [], windowDays: 1 }).length === 0
+);
+
+// ─── Ketenwaarschuwingen over de schema's heen ─────────────
+
+import { ketenAdvies } from "../../src/lib/sync/schedule";
+
+const intradayNu = { enabled: true, endpoints: ["lots", "orders"] };
+const nightlyNu = {
+  enabled: true,
+  endpoints: ["suppliers", "growers", "lots", "orders", "costs"],
+};
+
+const codes = (a: ReturnType<typeof ketenAdvies>) => a.map((x) => x.code);
+
+check(
+  "de huidige twee schema's geven geen ketenwaarschuwing",
+  ketenAdvies([intradayNu, nightlyNu]).length === 0,
+  JSON.stringify(ketenAdvies([intradayNu, nightlyNu]))
+);
+
+check(
+  "nightly uitgezet waarschuwt",
+  codes(ketenAdvies([intradayNu, { ...nightlyNu, enabled: false }])).includes(
+    "leveranciersronde-ontbreekt"
+  ),
+  "zonder nachtronde komt er nooit meer een nieuwe leverancier binnen"
+);
+
+check(
+  "nightly uitgezet waarschuwt ook dat lots dan weggegooid worden",
+  codes(ketenAdvies([intradayNu, { ...nightlyNu, enabled: false }])).includes(
+    "lots-zonder-leveranciers"
+  )
+);
+
+check(
+  "suppliers weggehaald bij nightly waarschuwt",
+  codes(
+    ketenAdvies([
+      intradayNu,
+      { ...nightlyNu, endpoints: ["growers", "lots", "orders", "costs"] },
+    ])
+  ).includes("leveranciersronde-ontbreekt")
+);
+
+check(
+  "growers weggehaald bij nightly waarschuwt",
+  codes(
+    ketenAdvies([
+      intradayNu,
+      { ...nightlyNu, endpoints: ["suppliers", "lots", "orders", "costs"] },
+    ])
+  ).includes("leveranciersronde-ontbreekt"),
+  "growers hangt aan dezelfde ketenkop als suppliers"
+);
+
+check(
+  "alleen intraday ingeschakeld waarschuwt",
+  ketenAdvies([intradayNu, { ...nightlyNu, enabled: false }]).length === 2
+);
+
+check(
+  "intraday met suppliers en growers erbij waarschuwt niet, ook zonder nachtronde",
+  ketenAdvies([
+    { enabled: true, endpoints: ["suppliers", "growers", "lots", "orders"] },
+    { ...nightlyNu, enabled: false },
+  ]).length === 0,
+  "de keten is compleet zolang één ingeschakeld schema de kop meebrengt"
+);
+
+check(
+  "intraday met alleen suppliers erbij waarschuwt nog steeds over growers",
+  codes(
+    ketenAdvies([
+      { enabled: true, endpoints: ["suppliers", "lots", "orders"] },
+      { ...nightlyNu, enabled: false },
+    ])
+  ).includes("leveranciersronde-ontbreekt"),
+  "suppliers alleen is niet genoeg: growers hoort bij dezelfde kop"
+);
+
+check(
+  "een verzameling zonder lots waarschuwt niet over weggegooide partijen",
+  !codes(
+    ketenAdvies([{ enabled: true, endpoints: ["suppliers", "growers"] }])
+  ).includes("lots-zonder-leveranciers")
+);
+
+check("een lege verzameling waarschuwt over de ontbrekende ketenkop",
+  codes(ketenAdvies([])).includes("leveranciersronde-ontbreekt"));
+
 process.exit(failures ? 1 : 0);

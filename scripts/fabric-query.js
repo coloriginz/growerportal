@@ -24,7 +24,12 @@ try {
   console.error("Let op: cache-persistence plugin niet geladen, login verloopt na een uur.");
 }
 
-const SERVER = "gxj6wkn4weouxoe35jxcon4hmi-l7hqrjfpqx4exjealdfohrh4he.datawarehouse.fabric.microsoft.com";
+// Het endpoint hangt aan het wárehouse-item, niet aan de workspace: wordt het
+// item opnieuw aangemaakt (deployment pipeline, dbt-teardown), dan verandert het
+// achtervoegsel en blijft het oude adres antwoorden op een leeg omhulsel.
+const SERVER =
+  process.env.FABRIC_SERVER ||
+  "gxj6wkn4weouxoe35jxcon4hmi-bd7jcf6wfpgurdnlardqqbs62m.datawarehouse.fabric.microsoft.com";
 const DATABASE = process.env.FABRIC_DB || "wh_transform";
 const SCOPE = "https://database.windows.net/.default";
 // Well-known public client id van Azure CLI; geen secret nodig.
