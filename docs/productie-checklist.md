@@ -4,26 +4,25 @@
 > **productie** nog moeten gebeuren. Instellingen en schemawijzigingen reizen niet mee met een deploy;
 > alleen code doet dat. Streep af wat gedaan is en verwijder dit bestand zodra het leeg is.
 
-## 1. Schemawijzigingen
+## 1. Schemawijzigingen — GEDAAN op 24 augustus 2026
 
-Twee kolommen zijn op test met de hand gezet, omdat `prisma db push` op het werkstation niet kan
-verbinden (poort 5432 is dicht op het werknetwerk). Op productie moet dezelfde SQL draaien, tegen de
-productiedatabase, **vóór** de code daar deployt — anders schrijven de imports naar een kolom die er
-niet is.
+Uitgevoerd via de Neon HTTP-driver tegen `.env.production`. Het bleken er meer dan de twee die hier
+stonden: `lastImportBatchId` ontbrak op vijf tabellen, niet op één.
 
 ```sql
--- herkomst per correctie (taak van 19 augustus)
-ALTER TABLE "LotCorrection" ADD COLUMN "lastImportBatchId" TEXT;
-CREATE INDEX "LotCorrection_lastImportBatchId_idx" ON "LotCorrection"("lastImportBatchId");
-
--- voorrang in de sync-wachtrij (backfill, 20 augustus)
+ALTER TABLE "Grower"         ADD COLUMN "lastImportBatchId" TEXT;
+ALTER TABLE "Lot"            ADD COLUMN "lastImportBatchId" TEXT;
+ALTER TABLE "LotCorrection"  ADD COLUMN "lastImportBatchId" TEXT;
+ALTER TABLE "SalesSheetCost" ADD COLUMN "lastImportBatchId" TEXT;
+ALTER TABLE "Transaction"    ADD COLUMN "lastImportBatchId" TEXT;
 ALTER TABLE "SyncJob" ADD COLUMN "priority" INTEGER NOT NULL DEFAULT 0;
-DROP INDEX IF EXISTS "SyncJob_status_createdAt_idx";
-CREATE INDEX "SyncJob_status_priority_createdAt_idx" ON "SyncJob"("status", "priority", "createdAt");
+-- plus een index per lastImportBatchId-kolom,
+-- SyncJob_status_createdAt_idx vervangen door SyncJob_status_priority_createdAt_idx
 ```
 
-`.env.production` wijst naar de productiedatabase. Uitvoeren kan via de Neon HTTP-driver, net als op
-test.
+Geen handwerk meer nodig om te weten wát er mist: lees `prisma/schema.prisma`, vraag
+`information_schema.columns` op tegen de productiedatabase en vergelijk de twee. Dat vond hier vier
+kolommen die niemand had opgeschreven.
 
 ## 2. Omgevingsvariabelen
 
@@ -74,10 +73,10 @@ Draai eerst zonder `--apply`: dat is de standaard en toont wat hij zou doen.
 
 ## 5. Volgorde
 
-1. SQL uit §1 tegen de productiedatabase
+1. ~~SQL uit §1 tegen de productiedatabase~~ — gedaan 24 augustus 2026
 2. `NEXT_PUBLIC_APP_ENV` zetten
 3. Beide Power Automate-verbindingen controleren
-4. Merge naar `main` en laten deployen
+4. ~~Merge naar `main` en laten deployen~~ — gedaan 24 augustus 2026 (`1d05752`)
 5. Eén ronde met de hand aftikken en de aantallen nalopen vóór je het schema aanzet
 6. Schedules aanzetten, basisdatum zetten
 7. Backfills draaien voor de leveranciers die je wilt
@@ -94,3 +93,25 @@ Draai eerst zonder `--apply`: dat is de standaard en toont wat hij zou doen.
   alleen aan wat je bewust wilt: aanzetten haalt zijn historie op, en dat is uren werk.
 - **Niet-consignatie.** `SELECT COUNT(*) FROM "Lot" WHERE "purchaseType" <> 'CONS'` hoort nul te zijn
   en te blijven. Staat er iets, dan is het filter niet meegekomen.
+
+## 7. Later, geen blokkade: sleutel per omgeving
+
+Test en productie delen sinds 24 augustus 2026 dezelfde `IMPORT_API_KEY`, omdat de haal-flow één
+vaste `Authorization`-header meestuurt en productie daardoor met 401 antwoordde. Dat werkt, maar het
+betekent dat een lek aan de testkant ook schrijftoegang tot de productie-imports geeft.
+
+De flow weet al in welke omgeving hij post — daar hangt de `BaseUrl`-compose van af. Een tweede
+compose ernaast maakt de sleutels weer los van elkaar:
+
+```
+ImportKey = if(equals(triggerBody()?['env'], 'production'), '<productiesleutel>', '<testsleutel>')
+Authorization: Bearer @{outputs('ImportKey')}
+```
+
+Twee dingen die daarbij horen:
+
+- **Secure inputs aan** op de HTTP-actie, en secure outputs op die compose. Nu staat de sleutel
+  leesbaar in de inputs van elke run in de flowgeschiedenis.
+- **De huidige sleutel vervangen** bij die gelegenheid; hij is in een screenshot terechtgekomen.
+  Roteren kan zonder onderbreking: nieuwe als `IMPORT_API_KEY`, huidige als
+  `IMPORT_API_KEY_PREVIOUS`, flow omzetten, `PREVIOUS` weghalen.
