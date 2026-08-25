@@ -28,6 +28,12 @@ check("costs: bevat de brontabel", plain.includes("marts.fct_salesheets_costs"))
 // De kostennamen staan sinds 21-08-2026 in dim_kost; zonder deze join komen
 // description en costTypeCode leeg binnen en dan valt de fout pas op in de UI.
 check("costs: haalt de namen uit dim_kost", /LEFT JOIN marts\.dim_kost/.test(plain));
+check("costs: neemt de kostcode mee", /d\.kost_code\s+AS "Kost Code"/.test(plain));
+check("costs: neemt salesheet_type mee", /c\.salesheet_type\s+AS "Salesheet Type"/.test(plain));
+check("costs: neemt is_inclusief mee", /c\.is_inclusief\s+AS "Is Inclusief"/.test(plain));
+// Deze twee voeden SalesSheet.lastReceiptDate en lastRegistrationDate. Ze staan
+// niet op SalesSheetCost, dus wie alleen dat model bekijkt houdt ze voor dood.
+check("costs: houdt de leveringsdatums voor de afrekening", /laatste_ontvangstdatum/.test(plain) && /laatste_aanmelddatum/.test(plain));
 check("costs: gebruikt de nieuwe datumkolom", /c\._datum_key_levering\s*>=\s*'2026-07-01'/.test(plain));
 check("costs: venster eindigt exclusief", /c\._datum_key_levering\s*<\s*'2026-08-01'/.test(plain));
 check("costs: de oude kolomnaam is weg", !/[^_]levering_datum/.test(plain));

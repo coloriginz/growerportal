@@ -211,7 +211,7 @@ Role switching, supplier switching, and transporter switching are only available
 - **Supplier** — Login entity (leverancier). Has code, name, fabricId, feature toggles, season config, fust settings.
 - **Grower** — Farm sub-entity under Supplier (kweker). Has fabricId, name, code, country, city. Linked to Lots.
 - **SalesSheet** — Invoice/shipment grouping (levering). Maps to `parthdr_id` in Fabric. Has totalTurnover, totalCosts, netResult, optional PDF link.
-- **SalesSheetCost** — Individual cost line on a salessheet. Maps to `shkost_id` in Fabric. Has description, amount, costTypeCode.
+- **SalesSheetCost** — Individual cost line on a salessheet. Maps to `shkost_id` in Fabric. Has description, amount, costTypeCode, `costCode` (the stable code behind the name), `salesSheetType` (`IN` = inkoopzijde: freight, handling, distribution, crate rent; `VE` = verkoopzijde: commission, transaction levy, receivables insurance) and `isInclusief` (the delivery runs on an all-in arrangement; every cost line of such a delivery carries it, and it changes no amount). `laatste_ontvangstdatum` and `laatste_aanmelddatum` come in on the cost rows but belong to the delivery: the import takes the latest per salessheet and writes them to `SalesSheet.lastReceiptDate` and `lastRegistrationDate`, which is why you will not find them on the cost model.
 - **Lot** — Batch of flowers (partij). Maps to `part_id` in Fabric. Has productName, articleGroup, stemLength, totalStems, quality codes (s1/s2/s3), correction fields.
 - **LotCorrection** — Volume/colli correction on a lot. Links to CorrectionReasonCode. Has facttypeSub ("correctie"/"productiecorrectie").
 - **CorrectionReasonCode** — Lookup table for correction reasons from Fabric. Has code, Dutch/English names, type.

@@ -240,6 +240,21 @@ model SalesSheetCost {
   costTypeName   String?   // Kost Type Naam
   totalTurnover  Decimal?  @db.Decimal(12, 2) // Totaal Omzet (context)
   totalQuantity  Int?      // Totaal Aantal (context)
+
+  /// kost_code uit marts.dim_kost. De naam staat in `description`, maar namen
+  /// worden hernoemd en codes niet — hierop matcht een volgende bronwijziging.
+  costCode       String?
+
+  /// salesheet_type: "IN" is de inkoopzijde (vracht, verwerking, distributie,
+  /// fusthuur, inklaring) en "VE" de verkoopzijde (commissie, transactieheffing,
+  /// debiteurenverzekering). Dat is de tweedeling waarin een afrekening leest.
+  salesSheetType String?
+
+  /// is_inclusief: deze levering loopt op een all-in afspraak, waarbij alle
+  /// kostenregels van de levering het vlaggetje dragen — niet een deel ervan.
+  /// Verandert geen bedrag; het maakt zichtbaar waarom zo'n levering een
+  /// kostenaandeel van 80% kan hebben waar de rest onder de 20% zit.
+  isInclusief    Boolean?
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @default(now()) @updatedAt
 

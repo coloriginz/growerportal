@@ -17,6 +17,13 @@ const costSchema = z.object({
   "Totaal Omzet": z.number().nullable().optional(),
   "Totaal Aantal": z.number().nullable().optional(),
   "Salesheet Amount": z.number(),
+  "Kost Code": z.string().nullable().optional(),
+  "Salesheet Type": z.string().nullable().optional(),
+  // De SQL-connector stuurt een bit als true/false, DAX als 1/0. Beide accepteren,
+  // anders valt de hele ronde om op validatie zodra de bron van vorm verandert.
+  "Is Inclusief": z.union([z.boolean(), z.number()]).nullable().optional(),
+  // Deze twee horen bij de levering, niet bij de kostenregel: ze landen op
+  // SalesSheet.lastReceiptDate en lastRegistrationDate, per afrekening de laatste.
   "Laatste Ontvangstdatum": z.string().nullable().optional(),
   "Laatste Aanmelddatum": z.string().nullable().optional(),
 });
@@ -46,6 +53,19 @@ export async function POST(request: NextRequest) {
       return upsertCosts(costs, batchId);
     },
   });
+}
+
+/**
+ * `is_inclusief` komt als bit (true/false) of als getal (1/0) binnen, afhankelijk
+ * van welke connector de rij stuurde. Onbekend blijft `null` en wordt geen
+ * `false`: "we weten het niet" en "het is niet inclusief" zijn niet hetzelfde,
+ * en een oude rij die nooit opnieuw is opgehaald hoort niet stilzwijgend als
+ * gewone levering te gelden.
+ */
+function leesInclusief(row: Cost): boolean | null {
+  const waarde = row["Is Inclusief"];
+  if (waarde === null || waarde === undefined) return null;
+  return typeof waarde === "number" ? waarde !== 0 : waarde;
 }
 
 async function upsertCosts(costs: Cost[], batchId: string | null) {
@@ -109,6 +129,9 @@ async function upsertCosts(costs: Cost[], batchId: string | null) {
         description,
         amount,
         fabricKostId: row["Kost ID"] || null,
+        costCode: row["Kost Code"]?.trim() || null,
+        salesSheetType: row["Salesheet Type"]?.trim() || null,
+        isInclusief: leesInclusief(row),
         costTypeCode: row["Kost Type Code"] || null,
         costTypeName: row["Kost Type Naam"] || null,
         totalTurnover:
@@ -125,6 +148,9 @@ async function upsertCosts(costs: Cost[], batchId: string | null) {
         amount,
         fabricShkostId: row["Shkost ID"],
         fabricKostId: row["Kost ID"] || null,
+        costCode: row["Kost Code"]?.trim() || null,
+        salesSheetType: row["Salesheet Type"]?.trim() || null,
+        isInclusief: leesInclusief(row),
         costTypeCode: row["Kost Type Code"] || null,
         costTypeName: row["Kost Type Naam"] || null,
         totalTurnover:
@@ -147,6 +173,9 @@ async function upsertCosts(costs: Cost[], batchId: string | null) {
            description = u.val->>'description',
            amount = (u.val->>'amount')::numeric,
            "fabricKostId" = (u.val->>'fabricKostId')::int,
+           "costCode" = u.val->>'costCode',
+           "salesSheetType" = u.val->>'salesSheetType',
+           "isInclusief" = (u.val->>'isInclusief')::boolean,
            "costTypeCode" = u.val->>'costTypeCode',
            "costTypeName" = u.val->>'costTypeName',
            "totalTurnover" = (u.val->>'totalTurnover')::numeric,
