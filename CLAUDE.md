@@ -635,6 +635,8 @@ Supplier accounts are created via admin UI with activation emails.
 - **Never run `next build` while dev server is running** — breaks CSS output.
 - **Never use `vercel deploy`** — use `git push` to deploy (avoids leaking .env).
 - **Database changes**: Use `prisma db push`, not `prisma migrate dev`.
+- **Check whether port 5432 is open before assuming it is not.** It differs per network: on some connections outbound TCP to Neon is blocked and `prisma` times out, on others both the pooler and the direct host answer fine. Measure it (`Test-NetConnection <direct host> -Port 5432`, or `npx prisma db execute --url "<DIRECT_URL>" --stdin` with `SELECT 1;`) and then choose: `db push` when it is open, `@neondatabase/serverless` over HTTPS when it is not. Adding columns by hand while push would have worked is how a database drifts from the schema
+- **`npx prisma migrate diff --from-url "<DIRECT_URL>" --to-schema-datamodel prisma/schema.prisma --script` prints the drift without applying it.** "This is an empty migration" means the database matches the schema — the cheapest way to check an environment before or after a hand-run `ALTER`
 - **Emails**: Use CID inline attachments (base64 Buffer), never external image URLs.
 - `useSearchParams()` requires Suspense boundary.
 - **Zod 4, not 3**: `z.record(keySchema, valueSchema)` requires *every* key to be present. For a partial map like `windowOverrides` use `z.partialRecord()`, or a save with `{}` is rejected.

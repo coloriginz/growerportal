@@ -9,6 +9,10 @@
 Uitgevoerd via de Neon HTTP-driver tegen `.env.production`. Het bleken er meer dan de twee die hier
 stonden: `lastImportBatchId` ontbrak op vijf tabellen, niet op één.
 
+> Dat het met de hand ging was overigens niet nodig: poort 5432 blijkt per netwerk te verschillen en
+> stond op dat moment gewoon open, dus `prisma db push` had gekund. Meet het eerst — zie de
+> ontwikkelnotities in `CLAUDE.md`.
+
 ```sql
 ALTER TABLE "Grower"         ADD COLUMN "lastImportBatchId" TEXT;
 ALTER TABLE "Lot"            ADD COLUMN "lastImportBatchId" TEXT;
