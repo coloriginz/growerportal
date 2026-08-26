@@ -789,7 +789,7 @@ function SupplierDashboard({ data, lastUpdated, refetch, chartNav, chartData, to
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>{t("shipments.invoiceNumber")}</TableHead>
+                  <TableHead>{t("shipments.shipmentNumber")}</TableHead>
                   <TableHead>{t("shipments.deliveryDate")}</TableHead>
                   <TableHead className="text-right">{t("sales.stems")}</TableHead>
                   <TableHead className="text-right">{t("shipments.turnover")}</TableHead>
