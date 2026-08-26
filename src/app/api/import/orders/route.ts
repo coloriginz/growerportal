@@ -196,6 +196,8 @@ async function upsertOrders(orders: Order[], batchId: string | null) {
 
   // Phase 3: Collect all transaction data per lot
   let txSkipped = 0;
+  /** Per Fabric-relatie hoeveel orderregels hun partij tegenspraken. */
+  const mismatchByRelId = new Map<number, number>();
   const affectedLotIds = new Set<string>();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const txDataByLot = new Map<string, any[]>();
@@ -204,6 +206,32 @@ async function upsertOrders(orders: Order[], batchId: string | null) {
     const lotInfo = lotMap.get(row.part_id);
     if (!lotInfo) {
       txSkipped++;
+      continue;
+    }
+
+    /*
+     * De partij bepaalt van wie de omzet is, en de orderregel moet dat bevestigen.
+     *
+     * `lotMap` droeg de leverancier van de partij al mee maar deed er niets mee,
+     * zodat een orderregel zijn omzet stilzwijgend op de partij van een andere
+     * leverancier kon zetten. Vandaag komt dat niet voor — nul van 3.673.261
+     * orderregels spreken hun partij tegen (gemeten 26-08-2026) — dus dit kost
+     * niets zolang de bron consistent is.
+     *
+     * Loopt het wél uiteen, dan is de ketenvolgorde uit de pas of Fabric heeft de
+     * partij herbestemd naar een relatie die hier geen leverancier is
+     * (`supplierMap.get` geeft dan undefined, wat nooit gelijk is aan de
+     * leverancier van de partij). Overslaan en melden is dan het enige veilige:
+     * de omzet van de één op de partij van de ander schrijven is precies wat
+     * niet mag, en de volgende lots-ronde zet de partij alsnog goed.
+     */
+    const rowSupplierId = supplierMap.get(row.rel_id_leverancier);
+    if (rowSupplierId !== lotInfo.supplierId) {
+      txSkipped++;
+      mismatchByRelId.set(
+        row.rel_id_leverancier,
+        (mismatchByRelId.get(row.rel_id_leverancier) ?? 0) + 1
+      );
       continue;
     }
 
@@ -410,6 +438,11 @@ async function upsertOrders(orders: Order[], batchId: string | null) {
       skippedNoOrdregId,
       txWritten,
       txDeleted,
+      // Alleen aanwezig als er iets te melden is, zodat de aanwezigheid van de
+      // sleutel zelf het signaal is.
+      ...(mismatchByRelId.size > 0
+        ? { supplierMismatch: Object.fromEntries(mismatchByRelId) }
+        : {}),
     },
     extra: {
       valid: validOrders.length,
