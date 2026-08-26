@@ -22,6 +22,30 @@ interface SyncSettings {
 /** De leverancier waar het over gaat; bij een overgeslagen relatie kan de code ontbreken. */
 export type BackfillConfirmSupplier = { code: string | null; name: string | null };
 
+/** De opgeloste startdatum zoals beide POST-antwoorden hem meegeven. */
+export type BackfillStartInfo = {
+  from: string;
+  quarter: string;
+  source: "fabric" | "setting";
+  firstDelivery: string | null;
+};
+
+/**
+ * Vanaf welk kwartaal er gepland is en waarom, als staartzin voor de melding na
+ * het starten. Eén formulering voor de leverancierspagina en het
+ * overgeslagen-paneel: het antwoord is hetzelfde, dus de zin ook.
+ *
+ * Leeg als de server niets meestuurt — dan is de melding een zin korter en dat
+ * is beter dan een gegokte reden.
+ */
+export function backfillStartSentence(start: BackfillStartInfo | null | undefined): string {
+  if (!start) return "";
+  if (start.source === "fabric" && start.firstDelivery) {
+    return ` from ${start.quarter}, its first delivery (${formatDate(start.firstDelivery)})`;
+  }
+  return ` from ${start.quarter}, the global start date`;
+}
+
 /**
  * Wat een backfill kost, vóórdat hij begint: welke leverancier, vanaf welke
  * datum, hoeveel kwartalen en hoeveel jobs, en wanneer hij aan de beurt is.
@@ -101,6 +125,15 @@ export function BackfillConfirmDialog({
               <dt className="text-muted-foreground">Sync jobs</dt>
               <dd>{formatNumber(data?.jobs ?? 0)}</dd>
             </dl>
+            {/* Een bovengrens en geen belofte: de startdatum wordt bij het
+                starten per leverancier opgelost tegen zijn eerste consignatie-
+                partij, en die kan later liggen. Hier alvast vragen zou de knop
+                afhankelijk maken van de vraag-flow, en dat is precies wat deze
+                bevestiging niet doet. */}
+            <p className="text-xs text-muted-foreground">
+              At most — if this supplier&apos;s first consignment lot is more recent, the backfill
+              starts at that quarter instead and there are fewer.
+            </p>
             <p className="text-xs text-muted-foreground">
               It runs whenever no scheduled round is waiting, so it spreads out over the coming
               rounds instead of holding up the daily sync.

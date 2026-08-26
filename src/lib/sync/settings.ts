@@ -1,8 +1,12 @@
 import { prisma } from "@/lib/db";
 
 /**
- * De basisdatum voor backfills. Eén instelling voor alle leveranciers; een
- * datum per leverancier is een verfijning waar nu geen vraag achter zit.
+ * De ondergrens voor backfills: hoe ver de portal terug wíl. Hoe ver terugvragen
+ * zin heeft, weet Fabric — `resolveBackfillStart` in `backfill-start.ts` vraagt
+ * per leverancier de eerste consignatiepartij op en neemt de latere van de twee.
+ * Daarom staat er hier geen datum per leverancier: die zou een tweede kopie zijn
+ * van iets wat in Fabric al staat en die loopt uit de pas zodra een leverancier
+ * eerdere historie krijgt.
  *
  * Bewust niet in `/api/admin/settings`: die route geeft 403 zodra `isTest`
  * onwaar is en controleert geen rol — hij is gebouwd voor de e-mailinstellingen

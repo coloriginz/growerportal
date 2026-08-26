@@ -1,4 +1,5 @@
 import { costsQuery } from "../../src/lib/sync/queries/costs";
+import { firstDeliveryQuery } from "../../src/lib/sync/queries/first-delivery";
 import { growersQuery } from "../../src/lib/sync/queries/growers";
 import { lotsQuery } from "../../src/lib/sync/queries/lots";
 import { ordersQuery } from "../../src/lib/sync/queries/orders";
@@ -145,6 +146,21 @@ check(
   /AND\s+rel_id_leverancier\s*=\s*12345/.test(ordersFiltered)
 );
 
+// --- first delivery ---
+
+const eersteLevering = firstDeliveryQuery(12345);
+check("first delivery: vraagt de vroegste leverdatum", /MIN\(leverdatum\)/.test(eersteLevering));
+check(
+  "first delivery: filtert op deze leverancier",
+  /WHERE rel_id_leverancier = 12345/.test(eersteLevering)
+);
+// Een relatie kan jarenlang op inkoop geleverd hebben en pas vorige maand op
+// consignatie; zonder dit filter plant de backfill vanaf die inkoophistorie.
+check(
+  "first delivery: alleen consignatie telt mee",
+  /inkooptype_code IN \('CONS'\)/.test(eersteLevering)
+);
+
 // Eigenschap: voor elke invoer levert supplierClause óf een lege string, óf exact
 // "AND <kolom> = <geheel getal>" op. Nooit iets daartussenin — dat zou betekenen dat
 // willekeurige tekst tussen de kolom en de rest van de query terecht kan komen.
@@ -198,6 +214,26 @@ for (const [label, input] of hostileInputs) {
     `growerViaPartijenClause weert of accepteert veilig: ${label}`,
     GROWER_VIA_PARTIJEN_PATTERN.test(result),
     result
+  );
+}
+
+// firstDeliveryQuery weigert in plaats van een leeg fragment terug te geven: een
+// MIN zonder leveranciersfilter is de eerste partij van het hele warehouse, en
+// dat antwoord ziet er geloofwaardig uit terwijl het nergens over gaat.
+const FIRST_DELIVERY_PATTERN =
+  /^SELECT MIN\(leverdatum\) AS "eerste_levering"\nFROM marts\.fct_partijen\nWHERE rel_id_leverancier = -?\d+\n {2}AND inkooptype_code IN \('CONS'\)$/;
+
+for (const [label, input] of hostileInputs) {
+  let gebouwd: string | null = null;
+  try {
+    gebouwd = firstDeliveryQuery(input as unknown as number);
+  } catch {
+    gebouwd = null;
+  }
+  check(
+    `firstDeliveryQuery weert of accepteert veilig: ${label}`,
+    gebouwd === null || FIRST_DELIVERY_PATTERN.test(gebouwd),
+    gebouwd ?? "geweigerd"
   );
 }
 

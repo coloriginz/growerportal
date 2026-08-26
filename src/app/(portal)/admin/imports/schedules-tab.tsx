@@ -606,14 +606,17 @@ function ScheduleEditor({
 
 export interface SyncSettingsResponse {
   backfillStartDate: string | null;
-  /** Wat die datum per leverancier oplevert, uitgerekend door de server. */
+  /** De bovengrens per leverancier, uitgerekend door de server. */
   quarters: number;
   jobs: number;
 }
 
 /**
- * De basisdatum voor backfills: één datum voor alle leveranciers, dus hij hoort
- * bij de schema's en niet bij een leverancier.
+ * De ondergrens voor backfills: hoe ver de portal terug wil, voor alle
+ * leveranciers gelijk, dus hij hoort bij de schema's en niet bij een leverancier.
+ * Wat een backfill werkelijk gaat kosten hangt er ook van af wanneer die
+ * leverancier zijn eerste consignatiepartij leverde, en dat wordt pas bij het
+ * starten aan Fabric gevraagd — vandaar "at most" hieronder.
  *
  * Het aantal kwartalen komt van de server mee en wordt hier niet nagerekend —
  * de definitie van "een kwartaal" staat op één plek. De prijs is dat het getal
@@ -692,7 +695,7 @@ function BackfillStartField({
               ? "Not saved yet — the quarter count below follows the saved date."
               : saved === ""
                 ? "No start date set. A backfill needs one before it can start."
-                : `${settings.quarters} quarter${settings.quarters === 1 ? "" : "s"} per supplier, ${settings.jobs} job${settings.jobs === 1 ? "" : "s"}.`}
+                : `At most ${settings.quarters} quarter${settings.quarters === 1 ? "" : "s"} per supplier, ${settings.jobs} job${settings.jobs === 1 ? "" : "s"} — a supplier whose first consignment lot is more recent starts at that quarter instead.`}
           </p>
         )}
       </CardContent>

@@ -3,6 +3,12 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { requireAuth } from "@/lib/api-helpers";
 import { readBackfillStart } from "@/lib/sync/settings";
+import {
+  describeStart,
+  hasStart,
+  resolveBackfillStart,
+  type BackfillStartDescription,
+} from "@/lib/sync/backfill-start";
 import { enqueueBackfill } from "@/lib/sync/runner";
 
 export async function GET() {
@@ -192,20 +198,37 @@ export async function POST(request: NextRequest) {
   // De leverancier bestaat nu. Lukt de backfill niet, dan is dat geen reden om
   // de activatie terug te draaien: aanmaken en backfillen zijn twee handelingen
   // die toevallig achter één knop zitten. Het scherm toont wat er misging.
-  let backfill: { runId: string; jobs: number } | null = null;
+  let backfill: {
+    runId: string;
+    jobs: number;
+    start: BackfillStartDescription;
+  } | null = null;
   let backfillError: string | null = null;
   if (parsed.data.backfill) {
-    const start = await readBackfillStart();
-    if (!start) {
+    const globalStart = await readBackfillStart();
+    if (!globalStart) {
       backfillError = "No backfill start date is set.";
     } else {
       try {
         // enqueueBackfill weigert met een reden in plaats van te gooien; de
         // catch eromheen is voor het onverwachte, zodat een omgevallen database
         // de activatie niet alsnog op een 500 zet nadat de leverancier bestaat.
-        const result = await enqueueBackfill(relation.fabricId, start);
-        if (result.ok) backfill = { runId: result.runId, jobs: result.jobs };
-        else backfillError = result.message;
+        // resolveBackfillStart hoort daar ook binnen: die praat met Fabric, en
+        // een activatie mag niet omvallen op een flow die het even niet doet.
+        const resolution = await resolveBackfillStart(relation.fabricId, globalStart);
+        if (!hasStart(resolution)) {
+          backfillError =
+            "This relation has no consignment lots in Fabric, so there is nothing to backfill.";
+        } else {
+          const result = await enqueueBackfill(relation.fabricId, resolution.start);
+          if (result.ok) {
+            backfill = {
+              runId: result.runId,
+              jobs: result.jobs,
+              start: describeStart(resolution),
+            };
+          } else backfillError = result.message;
+        }
       } catch (e) {
         backfillError = e instanceof Error ? e.message : "Could not start the backfill";
       }

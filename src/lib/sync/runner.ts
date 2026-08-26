@@ -172,6 +172,12 @@ export type OpenBackfill = {
   failed: number;
   /** Waar hij nu is, als "lots 2025 Q3"; null als er niets meer wacht. */
   current: string | null;
+  /**
+   * Het kwartaal waar hij begint, als "2026 Q3". Uit het vroegste venster van
+   * zijn eigen jobs en niet uit de instelling: de startdatum wordt per
+   * leverancier opgelost, dus de instelling zegt niets over déze run.
+   */
+  from: string;
   /** Zijn eerstvolgende brok staat klaar, maar een geplande ronde gaat voor. */
   waitingOnRound: boolean;
 };
@@ -251,6 +257,15 @@ export async function openBackfills(): Promise<OpenBackfill[]> {
           ? lopend.endpoint
           : `${lopend.endpoint} ${quarterLabel(lopend.windowFrom)}`
         : null,
+      // Het vroegste venster en niet dat van volgnummer 0: die stamdatajob
+      // overspant alle kwartalen en begint toevallig even vroeg, maar dat is
+      // geen belofte waar een label op mag leunen.
+      from: quarterLabel(
+        rijen.reduce(
+          (vroegste, r) => (r.windowFrom < vroegste ? r.windowFrom : vroegste),
+          rijen[0].windowFrom
+        )
+      ),
       // Alleen als zijn eigen brok nog wacht. Staat die op `dispatched`, dan is
       // hij zelf aan de beurt en wacht hij nergens op — ook niet op de ronde die
       // daarna komt.

@@ -21,6 +21,10 @@ export interface OpenBackfillRow {
   current: string | null;
   /** Er staat een geplande ronde vóór hem in de wachtrij. */
   waitingOnRound: boolean;
+  /** Het kwartaal waar hij begint, als "2026 Q3". */
+  from: string;
+  /** Waarom hij daar begint; null als er geen basisdatum is om mee te vergelijken. */
+  fromSource: "fabric" | "setting" | null;
   code: string | null;
   name: string | null;
 }
@@ -47,6 +51,17 @@ function progressLabel(backfill: OpenBackfillRow): string {
     return `Waiting for a scheduled round — next up: ${backfill.current}`;
   }
   return `Current chunk: ${backfill.current}`;
+}
+
+/**
+ * Vanaf welk kwartaal hij is ingepland, en waarom. De reden staat er zodat een
+ * korte backfill niet als een fout leest: een leverancier die pas sinds juli
+ * levert hoort één kwartaal te krijgen, geen zeven.
+ */
+function startLabel(backfill: OpenBackfillRow): string {
+  if (backfill.fromSource === "fabric") return `From ${backfill.from} — first delivery`;
+  if (backfill.fromSource === "setting") return `From ${backfill.from} — global start date`;
+  return `From ${backfill.from}`;
 }
 
 function ResumeButton({ runId, onResumed }: { runId: string; onResumed: () => void }) {
@@ -136,7 +151,9 @@ export function BackfillCard({ registerRefresh }: { registerRefresh: (refresh: (
               />
             </div>
 
-            <p className="text-xs text-muted-foreground">{progressLabel(backfill)}</p>
+            <p className="text-xs text-muted-foreground">
+              {progressLabel(backfill)} &middot; {startLabel(backfill)}
+            </p>
 
             {backfill.failed > 0 && (
               <div className="flex items-center justify-between gap-4 rounded-md bg-amber-50 p-2 text-xs text-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
