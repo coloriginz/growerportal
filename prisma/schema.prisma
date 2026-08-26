@@ -233,13 +233,34 @@ model SalesSheetCost {
   salesSheetId  String
   salesSheet    SalesSheet @relation(fields: [salesSheetId], references: [id], onDelete: Cascade)
   description   String     // e.g. "Commission direct sales", "Handling charges"
-  amount        Decimal    @db.Decimal(12, 2)
+  // Zes decimalen en niet twee: Fabric levert kostenbedragen met vijf decimalen
+  // (10.01952, 555.35736) en de afrekening telt die onafgerond op voordat zij
+  // afrondt. Rondde de import elke regel eerst af, dan telde de portal de
+  // afgeronde bedragen op en week het totaal een cent af van de sales sheet —
+  // round-then-sum tegen sum-then-round. De regels worden nog steeds op twee
+  // decimalen getoond; alleen het optellen gebeurt nu over de echte waarden.
+  amount        Decimal    @db.Decimal(14, 6)
   fabricShkostId Int?      @unique // shkost_id from Fabric
   fabricKostId   Int?      // kost_id from Fabric
   costTypeCode   String?   // Kost Type Code (VRK, VEI, INK, VWK)
   costTypeName   String?   // Kost Type Naam
   totalTurnover  Decimal?  @db.Decimal(12, 2) // Totaal Omzet (context)
   totalQuantity  Int?      // Totaal Aantal (context)
+
+  /// kost_code uit marts.dim_kost. De naam staat in `description`, maar namen
+  /// worden hernoemd en codes niet — hierop matcht een volgende bronwijziging.
+  costCode       String?
+
+  /// salesheet_type: "IN" is de inkoopzijde (vracht, verwerking, distributie,
+  /// fusthuur, inklaring) en "VE" de verkoopzijde (commissie, transactieheffing,
+  /// debiteurenverzekering). Dat is de tweedeling waarin een afrekening leest.
+  salesSheetType String?
+
+  /// is_inclusief: deze levering loopt op een all-in afspraak, waarbij alle
+  /// kostenregels van de levering het vlaggetje dragen — niet een deel ervan.
+  /// Verandert geen bedrag; het maakt zichtbaar waarom zo'n levering een
+  /// kostenaandeel van 80% kan hebben waar de rest onder de 20% zit.
+  isInclusief    Boolean?
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @default(now()) @updatedAt
 

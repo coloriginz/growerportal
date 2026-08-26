@@ -32,7 +32,10 @@ import {
 } from "@remixicon/react";
 import { useLanguage } from "@/components/providers/language-provider";
 import { toast } from "sonner";
-import { BackfillConfirmDialog } from "@/components/sync/backfill-confirm-dialog";
+import {
+  BackfillConfirmDialog,
+  backfillStartSentence,
+} from "@/components/sync/backfill-confirm-dialog";
 
 interface CompanyOption {
   id: string;
@@ -306,7 +309,7 @@ export function SupplierDetail({
         return;
       }
       toast.success(`Backfill queued for ${supplier?.code ?? fabricId}`, {
-        description: `${data.jobs} sync jobs. Its lots arrive over the coming rounds, oldest quarter first.`,
+        description: `${data.jobs} sync jobs${backfillStartSentence(data.start)}. Its lots arrive over the coming rounds, oldest quarter first.`,
       });
     } catch {
       toast.error("Failed to start the backfill");

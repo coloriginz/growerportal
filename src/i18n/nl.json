@@ -212,6 +212,8 @@
     "title": "Leveringen",
     "details": "Leveringsdetails",
     "invoiceNumber": "Factuurnummer",
+    "invoiceDate": "Factuurdatum",
+    "shipmentNumber": "Leveringsnummer",
     "deliveryDate": "Leverdatum",
     "lots": "Partijen",
     "stems": "Stelen",

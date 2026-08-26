@@ -16,7 +16,18 @@ const costSchema = z.object({
   "Kost Type Naam": z.string().nullable().optional(),
   "Totaal Omzet": z.number().nullable().optional(),
   "Totaal Aantal": z.number().nullable().optional(),
-  "Salesheet Amount": z.number(),
+  // Nullable, want acht kostenregels in het warehouse hebben geen bedrag —
+  // Transactie heffing, Afhandelingskosten en Meermaligfust, vrijwel allemaal op
+  // een levering met omzet nul. Als `z.number()` valt de héle ronde om op
+  // validatie: één onvulbare rij kostte zo een kwartaal van 874 regels.
+  "Salesheet Amount": z.number().nullable(),
+  "Kost Code": z.string().nullable().optional(),
+  "Salesheet Type": z.string().nullable().optional(),
+  // De SQL-connector stuurt een bit als true/false, DAX als 1/0. Beide accepteren,
+  // anders valt de hele ronde om op validatie zodra de bron van vorm verandert.
+  "Is Inclusief": z.union([z.boolean(), z.number()]).nullable().optional(),
+  // Deze twee horen bij de levering, niet bij de kostenregel: ze landen op
+  // SalesSheet.lastReceiptDate en lastRegistrationDate, per afrekening de laatste.
   "Laatste Ontvangstdatum": z.string().nullable().optional(),
   "Laatste Aanmelddatum": z.string().nullable().optional(),
 });
@@ -46,6 +57,19 @@ export async function POST(request: NextRequest) {
       return upsertCosts(costs, batchId);
     },
   });
+}
+
+/**
+ * `is_inclusief` komt als bit (true/false) of als getal (1/0) binnen, afhankelijk
+ * van welke connector de rij stuurde. Onbekend blijft `null` en wordt geen
+ * `false`: "we weten het niet" en "het is niet inclusief" zijn niet hetzelfde,
+ * en een oude rij die nooit opnieuw is opgehaald hoort niet stilzwijgend als
+ * gewone levering te gelden.
+ */
+function leesInclusief(row: Cost): boolean | null {
+  const waarde = row["Is Inclusief"];
+  if (waarde === null || waarde === undefined) return null;
+  return typeof waarde === "number" ? waarde !== 0 : waarde;
 }
 
 async function upsertCosts(costs: Cost[], batchId: string | null) {
@@ -101,7 +125,16 @@ async function upsertCosts(costs: Cost[], batchId: string | null) {
     }
 
     const description = row["Kost Naam"]?.trim() || "Unknown cost";
-    const amount = Math.round(row["Salesheet Amount"] * 100) / 100;
+    // Onafgerond wegschrijven. De kolom houdt zes decimalen vast en het totaal
+    // van de afrekening wordt verderop als ROUND(SUM(amount), 2) berekend —
+    // dezelfde volgorde die de sales sheet aanhoudt. Rondde deze regel eerst af,
+    // dan liep dat totaal een cent uit de pas: 892,8108 werd 892,81 en vijf van
+    // die afrondingen samen tilden 1.710,35 naar 1.710,36. De schermen tonen
+    // kostenregels via formatCurrencyDetailed en ronden dus zelf al af.
+    // Een leeg bedrag wordt nul en de regel blijft bestaan: hij heeft een
+    // shkost_id en een naam, en telt met nul niets op bij het totaal. Overslaan
+    // zou hem laten verdwijnen van een afrekening waar hij in de bron wél staat.
+    const amount = row["Salesheet Amount"] ?? 0;
 
     if (costExistsSet.has(row["Shkost ID"])) {
       costUpdateData.push({
@@ -109,6 +142,9 @@ async function upsertCosts(costs: Cost[], batchId: string | null) {
         description,
         amount,
         fabricKostId: row["Kost ID"] || null,
+        costCode: row["Kost Code"]?.trim() || null,
+        salesSheetType: row["Salesheet Type"]?.trim() || null,
+        isInclusief: leesInclusief(row),
         costTypeCode: row["Kost Type Code"] || null,
         costTypeName: row["Kost Type Naam"] || null,
         totalTurnover:
@@ -125,6 +161,9 @@ async function upsertCosts(costs: Cost[], batchId: string | null) {
         amount,
         fabricShkostId: row["Shkost ID"],
         fabricKostId: row["Kost ID"] || null,
+        costCode: row["Kost Code"]?.trim() || null,
+        salesSheetType: row["Salesheet Type"]?.trim() || null,
+        isInclusief: leesInclusief(row),
         costTypeCode: row["Kost Type Code"] || null,
         costTypeName: row["Kost Type Naam"] || null,
         totalTurnover:
@@ -147,6 +186,9 @@ async function upsertCosts(costs: Cost[], batchId: string | null) {
            description = u.val->>'description',
            amount = (u.val->>'amount')::numeric,
            "fabricKostId" = (u.val->>'fabricKostId')::int,
+           "costCode" = u.val->>'costCode',
+           "salesSheetType" = u.val->>'salesSheetType',
+           "isInclusief" = (u.val->>'isInclusief')::boolean,
            "costTypeCode" = u.val->>'costTypeCode',
            "costTypeName" = u.val->>'costTypeName',
            "totalTurnover" = (u.val->>'totalTurnover')::numeric,
@@ -174,6 +216,60 @@ async function upsertCosts(costs: Cost[], batchId: string | null) {
         }
       }
     }
+  }
+
+  /*
+   * Phase 3b: opruimen wat Fabric heeft ingetrokken.
+   *
+   * Het warehouse geeft de kostenregels van een levering soms opnieuw uit onder
+   * nieuwe `shkost_id`'s. Een upsert op die sleutel ziet dat niet: de nieuwe
+   * regels komen erbij, de oude blijven staan, en `totalCosts` telt ze allebei
+   * op. Gemeten op 26 augustus 2026: 470 van de 7.879 leveringen droegen zo
+   * 1.109 overtollige regels, tot veertien kopieën van dezelfde kostenpost op
+   * één afrekening. Dat drukt het nettoresultaat dat de kweker ziet.
+   *
+   * Daarom per levering verzoenen in plaats van alleen bijwerken: van de
+   * leveringen die deze payload aandraagt verdwijnen de regels waarvan de
+   * `shkost_id` er niet in zit.
+   *
+   * Dat mag omdat een vensterophaling de complete kostenset van een levering
+   * teruggeeft — gemeten, niet aangenomen: geen enkele levering in
+   * `marts.fct_salesheets_costs` heeft regels met meer dan één
+   * `_datum_key_levering`, dus er kan geen geldige regel buiten het venster
+   * vallen. Een levering die de payload niet noemt blijft ongemoeid, zodat een
+   * leeg of half antwoord nooit een afrekening leegveegt.
+   *
+   * `fabricShkostId IS NOT NULL` sluit regels uit die niet uit Fabric komen:
+   * die hebben geen sleutel om ze aan te herkennen en zijn niet van ons.
+   */
+  let removed = 0;
+  if (affectedSSIds.size > 0) {
+    const perSheet = new Map<string, number[]>();
+    for (const row of costs) {
+      const ssId = ssMap.get(row["Parthdr ID"]);
+      if (!ssId) continue;
+      const lijst = perSheet.get(ssId);
+      if (lijst) lijst.push(row["Shkost ID"]);
+      else perSheet.set(ssId, [row["Shkost ID"]]);
+    }
+
+    removed = await prisma.$executeRawUnsafe(
+      `WITH payload AS (
+         SELECT v.val->>'salesSheetId' AS ss_id,
+                (elem)::int AS shkost_id
+         FROM jsonb_array_elements($1::jsonb) AS v(val),
+              jsonb_array_elements_text(v.val->'shkostIds') AS elem
+       )
+       DELETE FROM "SalesSheetCost" c
+       WHERE c."salesSheetId" IN (SELECT ss_id FROM payload)
+         AND c."fabricShkostId" IS NOT NULL
+         AND NOT EXISTS (
+           SELECT 1 FROM payload p
+           WHERE p.ss_id = c."salesSheetId"
+             AND p.shkost_id = c."fabricShkostId"
+         )`,
+      JSON.stringify([...perSheet].map(([salesSheetId, shkostIds]) => ({ salesSheetId, shkostIds })))
+    );
   }
 
   // Phase 4: Recalculate salessheet totals via single raw SQL
@@ -260,11 +356,15 @@ async function upsertCosts(costs: Cost[], batchId: string | null) {
     }
   }
 
+  // `removed` staat apart van skipped: overgeslagen gaat over rijen die binnenkwamen
+  // en niet geplaatst konden worden, opgeruimd over regels die de portal al had en
+  // die de bron niet meer kent. Een opruiming die je niet ziet is net zo stil als
+  // het probleem dat hij oplost, dus hij hoort in de batch én in het antwoord.
   return {
     created,
     updated,
     skipped,
-    details: { salesSheetsRecalculated: ssRecalculated },
-    extra: { salesSheetsRecalculated: ssRecalculated },
+    details: { salesSheetsRecalculated: ssRecalculated, costsRemoved: removed },
+    extra: { salesSheetsRecalculated: ssRecalculated, costsRemoved: removed },
   };
 }

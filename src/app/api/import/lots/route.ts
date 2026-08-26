@@ -130,6 +130,28 @@ async function upsertLots(partijen: Partij[], batchId: string | null) {
     byParthdr.get(row.parthdr_id)!.push(row);
   }
 
+  /*
+   * Leveringen waarvan de partijen het oneens zijn over de leverancier.
+   *
+   * De code hieronder leidt de leverancier van een hele levering af uit
+   * `rows[0]`. Dat is vandaag terecht — warehouse-breed heeft geen enkele
+   * `parthdr_id` meer dan één `rel_id_leverancier` (gemeten 26-08-2026, net als
+   * `part_id`: nul) — maar het is een aanname, en een die niemand zou merken als
+   * hij wegviel: alle partijen van de levering kregen dan stilzwijgend de
+   * leverancier van de eerste rij, en dat is precies hoe data van de één bij de
+   * ander belandt.
+   *
+   * Bij tegenspraak wordt de hele levering overgeslagen en gemeld. Niet gokken
+   * en niet half importeren: een afrekening die voor de helft bij de verkeerde
+   * leverancier staat is erger dan een afrekening die ontbreekt en waarover een
+   * melding staat.
+   */
+  const gemengdeLeveringen = new Map<number, number[]>();
+  for (const [parthdrId, rows] of byParthdr) {
+    const relIds = new Set(rows.map((r) => r.rel_id_leverancier));
+    if (relIds.size > 1) gemengdeLeveringen.set(parthdrId, [...relIds]);
+  }
+
   const allParthdrIds = [...byParthdr.keys()];
   const allPartIds = baseRows.map((p) => p.part_id);
 
@@ -168,6 +190,7 @@ async function upsertLots(partijen: Partij[], batchId: string | null) {
   const newSsInvoiceNumbers: string[] = [];
   for (const [parthdrId, rows] of byParthdr) {
     if (ssMap.has(parthdrId)) continue;
+    if (gemengdeLeveringen.has(parthdrId)) continue;
     const supplierId = supplierMap.get(rows[0].rel_id_leverancier);
     if (!supplierId) continue;
     let inv = rows[0]["Inkoop Factuur Nummer"]?.trim() || null;
@@ -208,17 +231,44 @@ async function upsertLots(partijen: Partij[], batchId: string | null) {
     });
   };
 
-  const ssUpdateData: { fabricParthdrId: number; deliveryDate: string }[] = [];
+  /*
+   * `supplierId` gaat mee in de bijwerking, en dat is geen detail.
+   *
+   * Fabric kan een levering aan een andere relatie toewijzen. Zolang de
+   * bijwerking alleen de leverdatum zette, verhuisde de afrekening in de portal
+   * nooit mee: eenmaal onder een leverancier aangemaakt bleef hij daar staan,
+   * ook als het warehouse hem allang aan iemand anders gaf. Levering
+   * "19883 Van Dijk" stond zo onder MDHAGED terwijl Fabric hem aan MDHAGE geeft,
+   * en INT000072 onder COLXAFRI terwijl hij bij Ole Engai hoort. Een leverancier
+   * zag dus omzet en kosten van een ander.
+   *
+   * Fabric is de bron voor deze toewijzing, dus de portal volgt hem.
+   */
+  const ssUpdateData: { fabricParthdrId: number; deliveryDate: string; supplierId: string }[] = [];
+
+  /** Overgeslagen leveringen: `parthdr_id` -> de relatie die Fabric eraan geeft. */
+  const overgeslagenParthdrs = new Map<number, number>();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const ssCreateData: any[] = [];
 
   for (const [parthdrId, rows] of byParthdr) {
     const firstRow = rows[0];
+    // Tegenspraak over de leverancier: hier één keer geteld, en verderop in de
+    // partijenlus opnieuw overgeslagen zonder te tellen.
+    if (gemengdeLeveringen.has(parthdrId)) {
+      skipped += rows.length;
+      continue;
+    }
     const supplierId = supplierMap.get(firstRow.rel_id_leverancier);
     if (!supplierId) {
       skipped += rows.length;
       const productieCount = rows.filter((r) => isProductie(r["Facttype Sub"])).length;
       noteSkipped(firstRow.rel_id_leverancier, rows.length, productieCount);
+      // Onthouden welke levering dit was. Draagt de portal hem al, dan is dit
+      // geen onbekende relatie maar een herbestemming, en dat is een zwaarder
+      // signaal: er staat dan een afrekening bij een leverancier die hem
+      // volgens Fabric niet meer heeft. Zie `herbestemdWeg` verderop.
+      overgeslagenParthdrs.set(parthdrId, firstRow.rel_id_leverancier);
       continue;
     }
 
@@ -230,6 +280,7 @@ async function upsertLots(partijen: Partij[], batchId: string | null) {
       ssUpdateData.push({
         fabricParthdrId: parthdrId,
         deliveryDate: deliveryDate.toISOString(),
+        supplierId,
       });
       ssUpdated++;
     } else {
@@ -265,6 +316,7 @@ async function upsertLots(partijen: Partij[], batchId: string | null) {
       `UPDATE "SalesSheet" AS t
        SET
          "deliveryDate" = (u.val->>'deliveryDate')::timestamp,
+         "supplierId" = u.val->>'supplierId',
          "updatedAt" = NOW()
        FROM jsonb_array_elements($1::jsonb) AS u(val)
        WHERE t."fabricParthdrId" = (u.val->>'fabricParthdrId')::int`,
@@ -306,6 +358,7 @@ async function upsertLots(partijen: Partij[], batchId: string | null) {
          NOW()
        FROM jsonb_array_elements($1::jsonb) AS v(val)
        ON CONFLICT ("fabricParthdrId") DO UPDATE SET
+         "supplierId" = EXCLUDED."supplierId",
          "deliveryDate" = EXCLUDED."deliveryDate",
          "updatedAt" = NOW()`,
       JSON.stringify(ssJsonData)
@@ -333,6 +386,8 @@ async function upsertLots(partijen: Partij[], batchId: string | null) {
 
   for (const [parthdrId, rows] of byParthdr) {
     const firstRow = rows[0];
+    // Al geteld in de afrekeningenlus hierboven.
+    if (gemengdeLeveringen.has(parthdrId)) continue;
     const supplierId = supplierMap.get(firstRow.rel_id_leverancier);
     if (!supplierId) continue;
 
@@ -356,6 +411,12 @@ async function upsertLots(partijen: Partij[], batchId: string | null) {
       if (lotExistsSet.has(row.part_id)) {
         lotUpdateData.push({
           fabricPartId: row.part_id,
+          // Leverancier en afrekening horen ook hier bij te werken, niet alleen
+          // in de ON CONFLICT hieronder: een bestaande partij loopt langs dit
+          // pad en zou anders achterblijven bij de leverancier waaronder hij
+          // ooit is aangemaakt, terwijl zijn afrekening al verhuisd was.
+          supplierId,
+          salesSheetId,
           lotNumber,
           productName,
           articleGroup: deriveArticleGroup(productName),
@@ -420,6 +481,8 @@ async function upsertLots(partijen: Partij[], batchId: string | null) {
     await prisma.$executeRawUnsafe(
       `UPDATE "Lot" AS t
        SET
+         "supplierId" = u.val->>'supplierId',
+         "salesSheetId" = u.val->>'salesSheetId',
          "lotNumber" = u.val->>'lotNumber',
          "productName" = u.val->>'productName',
          "articleGroup" = u.val->>'articleGroup',
@@ -521,6 +584,13 @@ async function upsertLots(partijen: Partij[], batchId: string | null) {
          NOW()
        FROM jsonb_array_elements($1::jsonb) AS v(val)
        ON CONFLICT ("fabricPartId") DO UPDATE SET
+         -- Leverancier en afrekening volgen Fabric mee. Zonder deze twee bleef
+         -- een partij hangen bij de leverancier waaronder hij ooit is
+         -- aangemaakt, ook nadat het warehouse hem had herbestemd. Botsen op
+         -- (lotNumber, supplierId) kan in theorie; gemeten over 67.393 partijen
+         -- komt geen enkel partijnummer bij twee leveranciers voor.
+         "supplierId" = EXCLUDED."supplierId",
+         "salesSheetId" = EXCLUDED."salesSheetId",
          "lotNumber" = EXCLUDED."lotNumber",
          "productName" = EXCLUDED."productName",
          "articleGroup" = EXCLUDED."articleGroup",
@@ -659,9 +729,47 @@ async function upsertLots(partijen: Partij[], batchId: string | null) {
     }
   }
 
+  // Correcties kennen geen sleutel, dus ze worden per part_id weggegooid en
+  // opnieuw weggeschreven. Ze allemaal als "created" tellen laat een ronde die
+  // niets nieuws vond twintig nieuwe correcties melden — dezelfde vertekening
+  // als bij de orderregels. Wat er stond en teruggezet is, is een wijziging.
+  const correctionsUpdated = Math.min(correctionsCreated, correctionsDeleted);
+  const correctionsNew = correctionsCreated - correctionsUpdated;
+
+  /*
+   * Leveringen die de portal al heeft, maar die Fabric aan een relatie geeft
+   * die hier geen leverancier is.
+   *
+   * Dat is iets anders dan een onbekende relatie waarvan we nog nooit iets
+   * zagen: deze afrekening staat nú bij een leverancier die hem volgens de bron
+   * niet meer heeft, en die ziet dus omzet en kosten van een ander. Het verdient
+   * een eigen melding, anders verdwijnt het in het aantal overgeslagen partijen.
+   *
+   * Alleen melden, niet verplaatsen — er is geen leverancier om hem heen te
+   * zetten. Zodra iemand die relatie activeert verhuist de levering vanzelf mee,
+   * want de bijwerking hierboven zet `supplierId` volgens Fabric. Deze melding
+   * is dus precies de aanwijzing om dat te doen.
+   */
+  const herbestemdWeg: Record<string, { leveringen: number; van: string[] }> = {};
+  if (overgeslagenParthdrs.size > 0) {
+    const bestaand = await prisma.salesSheet.findMany({
+      where: { fabricParthdrId: { in: [...overgeslagenParthdrs.keys()] } },
+      select: { fabricParthdrId: true, supplier: { select: { code: true } } },
+    });
+    for (const sheet of bestaand) {
+      const relId = overgeslagenParthdrs.get(sheet.fabricParthdrId!);
+      if (relId === undefined) continue;
+      const sleutel = String(relId);
+      const entry = herbestemdWeg[sleutel] ?? { leveringen: 0, van: [] };
+      entry.leveringen++;
+      if (!entry.van.includes(sheet.supplier.code)) entry.van.push(sheet.supplier.code);
+      herbestemdWeg[sleutel] = entry;
+    }
+  }
+
   return {
-    created: lotCreated + correctionsCreated,
-    updated: lotUpdated,
+    created: lotCreated + correctionsNew,
+    updated: lotUpdated + correctionsUpdated,
     // recordsSkipped is "weggegooid", en dat zijn nu twee dingen: rijen zonder
     // leverancier en rijen van het verkeerde inkooptype. Beide tellen mee, maar
     // ze blijven in details uit elkaar te houden — skippedSuppliers per rel_id,
@@ -670,7 +778,13 @@ async function upsertLots(partijen: Partij[], batchId: string | null) {
     details: {
       salesSheets: { created: ssCreated, updated: ssUpdated },
       lots: { created: lotCreated, updated: lotUpdated },
-      corrections: { created: correctionsCreated, deleted: correctionsDeleted, skipped: correctionsSkipped },
+      corrections: {
+        created: correctionsNew,
+        updated: correctionsUpdated,
+        written: correctionsCreated,
+        deleted: correctionsDeleted,
+        skipped: correctionsSkipped,
+      },
       // Hoeveel partijen er per inkooptype zijn weggegooid. Dit is tegelijk de
       // controle op CONSIGNMENT_PURCHASE_TYPES: staat hier een code die we niet
       // kennen, dan gooien we mogelijk iets weg dat wél consignatie is.
@@ -685,11 +799,23 @@ async function upsertLots(partijen: Partij[], batchId: string | null) {
           .sort((a, b) => b[1].partijen - a[1].partijen)
           .slice(0, 50)
       ),
+      // Alleen aanwezig als er iets te melden is; anders draagt elke batch een
+      // lege sleutel en gaat de betekenis van zijn aanwezigheid verloren.
+      ...(Object.keys(herbestemdWeg).length > 0 ? { reattributedAway: herbestemdWeg } : {}),
+      ...(gemengdeLeveringen.size > 0
+        ? { mixedSupplierDeliveries: Object.fromEntries(gemengdeLeveringen) }
+        : {}),
     },
     extra: {
       salesSheets: { created: ssCreated, updated: ssUpdated },
       lots: { created: lotCreated, updated: lotUpdated },
-      corrections: { created: correctionsCreated, deleted: correctionsDeleted, skipped: correctionsSkipped },
+      corrections: {
+        created: correctionsNew,
+        updated: correctionsUpdated,
+        written: correctionsCreated,
+        deleted: correctionsDeleted,
+        skipped: correctionsSkipped,
+      },
       skipped,
       skippedNotConsignment,
     },

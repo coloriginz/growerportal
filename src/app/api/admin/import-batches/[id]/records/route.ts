@@ -56,6 +56,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       startedAt: true,
       recordsCreated: true,
       recordsUpdated: true,
+      details: true,
     },
   });
   if (!batch) {
@@ -94,16 +95,27 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   const kind: Kind = KIND_BY_ENDPOINT[batch.endpoint];
   const createdFilter = { gte: batch.startedAt };
   const updatedFilter = { lt: batch.startedAt };
-  const createdAt = mode === "created" ? createdFilter : updatedFilter;
+  // Een orderregel-import gooit alles binnen zijn venster weg en zet het opnieuw
+  // neer, dus elke rij is vers en de scheiding hierboven zegt niets meer. Beide
+  // tabbladen tonen dan dezelfde lijst: alles wat deze ronde schreef. De
+  // verdeling nieuw/gewijzigd staat wél in de totalen — die komt uit het aantal
+  // verwijderde rijen, niet uit de rijen zelf.
+  const rewritesEverything = kind === "orders";
+  const createdAt = rewritesEverything
+    ? createdFilter
+    : mode === "created"
+      ? createdFilter
+      : updatedFilter;
   const skip = (page - 1) * PAGE_SIZE;
 
   // De telling gaat vooraf aan het ophalen omdat een lots-ronde twee tabellen
   // achter elkaar plakt: hoeveel partijen er in deze modus zijn bepaalt waar de
   // correcties op de pagina beginnen.
   const counts = await countRecords(kind, id, createdFilter, updatedFilter);
-  const records = await fetchRecords(kind, id, createdAt, skip, counts.primary[mode]);
+  const listMode: Mode = rewritesEverything ? "created" : mode;
+  const records = await fetchRecords(kind, id, createdAt, skip, counts.primary[listMode]);
 
-  const total = counts[mode];
+  const total = counts[listMode];
 
   return NextResponse.json({
     batchId: batch.id,
@@ -111,7 +123,12 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     startedAt: batch.startedAt,
     kind,
     reason: null,
-    notes: divergenceNotes(mode, reported[mode], total),
+    notes: rewriteNotes(kind, batch.details, reported).concat(
+      // Bij een herschrijvende import zegt het verschil tussen gemeld en
+      // getoond niets over een latere ronde: de lijst is dan bewust de hele
+      // ronde in plaats van één helft ervan.
+      rewritesEverything ? [] : divergenceNotes(mode, reported[mode], total, rewrittenCount(kind, batch.details))
+    ),
     mode,
     page,
     pageSize: PAGE_SIZE,
@@ -129,14 +146,75 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
  * herkomst over van alles wat hij opnieuw aanraakte; wat die ronde eerder
  * aanraakte is dan niet meer aan hem toe te schrijven.
  */
-function divergenceNotes(mode: Mode, reported: number, found: number): string[] {
+function divergenceNotes(
+  mode: Mode,
+  reported: number,
+  found: number,
+  rewritten: number
+): string[] {
   const gap = reported - found;
   if (gap <= 0) return [];
+
+  // Herschreven records dragen een verse aanmaakdatum en staan daardoor onder
+  // "created", hoe ze ook geteld zijn. Wie dat niet zegt, schrijft het gat toe
+  // aan een latere ronde en stuurt de lezer de verkeerde kant op.
+  if (mode === "updated" && rewritten > 0) {
+    const rest = gap - rewritten;
+    const eerste =
+      `The run reports ${reported} updated; this list has ${found}. ` +
+      `${rewritten} of them were rewritten rather than edited in place, so they carry a fresh ` +
+      "creation date and appear under created.";
+    return rest > 0
+      ? [
+          eerste,
+          `A later run has touched the remaining ${rest} record${rest === 1 ? "" : "s"} again ` +
+            "and now carries their origin.",
+        ]
+      : [eerste];
+  }
 
   return [
     `The run reports ${reported} ${mode}; this list has ${found}. ` +
       `A later run has touched the other ${gap} record${gap === 1 ? "" : "s"} ` +
       "again and now carries their origin.",
+  ];
+}
+
+/** Hoeveel records deze ronde overschreef in plaats van bijwerkte. */
+function rewrittenCount(kind: Kind, details: unknown): number {
+  if (!details || typeof details !== "object") return 0;
+  const d = details as Record<string, unknown>;
+  if (kind === "orders") return typeof d.txDeleted === "number" ? d.txDeleted : 0;
+  if (kind === "lots") {
+    const corrections = d.corrections;
+    if (corrections && typeof corrections === "object") {
+      const c = corrections as Record<string, unknown>;
+      return typeof c.updated === "number" ? c.updated : 0;
+    }
+  }
+  return 0;
+}
+
+/**
+ * De uitleg bovenaan een lijst van een import die alles opnieuw wegschrijft.
+ * Zonder deze regel lijkt het alsof een ronde over een smal venster honderden
+ * regels vond die de vorige ronde gemist had.
+ */
+function rewriteNotes(
+  kind: Kind,
+  details: unknown,
+  reported: { created: number; updated: number }
+): string[] {
+  if (kind !== "orders") return [];
+  const rewritten = rewrittenCount(kind, details);
+  const written = reported.created + reported.updated;
+  if (written === 0) return [];
+
+  return [
+    `This run wrote ${written} row${written === 1 ? "" : "s"}: ${reported.created} that were not ` +
+      `there before and ${rewritten} that replaced an existing row. The orders import deletes and ` +
+      "reinserts everything inside its window, so a row cannot say afterwards which of the two it " +
+      "was — both tabs show the same list.",
   ];
 }
 

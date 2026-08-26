@@ -19,6 +19,12 @@ import { isoDate, supplierViaPartijenClause } from "./helpers";
  * De join is LEFT: een kostenregel zonder dimensieregel hoort wél mee te komen,
  * anders verdwijnt hij stilzwijgend uit de afrekening.
  *
+ * `laatste_ontvangstdatum` en `laatste_aanmelddatum` horen bij de levering en
+ * niet bij de kostenregel: de import neemt er per afrekening de laatste van en
+ * zet die op `SalesSheet.lastReceiptDate` en `lastRegistrationDate`. Ze staan
+ * dus niet voor niets in deze query, ook al vind je ze niet terug op
+ * `SalesSheetCost`.
+ *
  * `parthdr_id` in de leveranciersclausule blijft onvoorwaardelijk: `dim_kost`
  * heeft die kolom niet, dus hij is niet ambigu.
  */
@@ -29,11 +35,14 @@ SELECT
   c.parthdr_id       AS "Parthdr ID",
   c.kost_id          AS "Kost ID",
   d.kost_naam        AS "Kost Naam",
+  d.kost_code        AS "Kost Code",
   d.kosttype_code    AS "Kost Type Code",
   d.kosttype_naam    AS "Kost Type Naam",
   c.totaal_omzet     AS "Totaal Omzet",
   c.totaal_verkoop_aantal AS "Totaal Aantal",
   c.salesheet_amount AS "Salesheet Amount",
+  c.salesheet_type   AS "Salesheet Type",
+  c.is_inclusief     AS "Is Inclusief",
   c.laatste_ontvangstdatum AS "Laatste Ontvangstdatum",
   c.laatste_aanmelddatum   AS "Laatste Aanmelddatum"
 FROM marts.fct_salesheets_costs c

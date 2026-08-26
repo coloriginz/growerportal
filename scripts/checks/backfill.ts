@@ -1,4 +1,10 @@
 import { quarterChunks, backfillJobs } from "../../src/lib/sync/backfill";
+import {
+  applyBackfillFloor,
+  describeStart,
+  firstDeliveryFrom,
+  resolveBackfillStart,
+} from "../../src/lib/sync/backfill-start";
 
 let failures = 0;
 function check(label: string, condition: boolean, detail?: string) {
@@ -88,5 +94,109 @@ check("elf kwartalen zijn vierendertig jobs", backfillJobs(elf).length === 34,
 check("zonder brokken zijn er geen jobs", backfillJobs([]).length === 0,
   "een basisdatum in de toekomst loopt hierin door; zonder afvanger leest hij chunks[0]");
 
-console.log(failures === 0 ? "\nalle controles geslaagd" : `\n${failures} controle(s) gefaald`);
-process.exit(failures === 0 ? 0 : 1);
+// ─── De startdatum per leverancier ───────────────────────────────────────────
+
+const globaal = d("2025-01-01");
+
+// De ondergrens is de hele valkuil: COLXGREE levert sinds 30-08-2023, en puur op
+// de eerste partij plannen maakt zijn backfill juist groter.
+const gevestigd = applyBackfillFloor(d("2023-08-30"), globaal);
+check("een eerste levering vóór de globale datum verliest",
+  gevestigd.start?.getTime() === globaal.getTime() && gevestigd.source === "setting",
+  "anders groeit de backfill van een gevestigde leverancier van zeven naar twaalf kwartalen");
+check("de gevonden levering blijft in het antwoord staan",
+  gevestigd.firstDelivery !== null && gevestigd.firstDelivery.toISOString().startsWith("2023-08-30"),
+  "het scherm mag laten zien wat er gevraagd is, ook als het niet doorslaggevend was");
+
+// COLXIMA: eerste partij 10-07-2026, dus één kwartaal in plaats van zeven.
+const nieuw = applyBackfillFloor(d("2026-07-10"), globaal);
+check("een latere eerste levering schuift de start op",
+  nieuw.start !== null && nieuw.start.toISOString().startsWith("2026-07-01") &&
+  nieuw.source === "fabric");
+check("de opgeschoven start scheelt zes kwartalen",
+  quarterChunks(nieuw.start!, d("2026-08-25")).length === 1 &&
+  quarterChunks(globaal, d("2026-08-25")).length === 7);
+
+check("een eerste levering in hetzelfde kwartaal als de globale datum verandert niets",
+  (() => {
+    const zelfde = applyBackfillFloor(d("2025-02-05"), globaal);
+    return zelfde.start?.getTime() === globaal.getTime() && zelfde.source === "setting";
+  })(),
+  "het kwartaal van 05-02-2025 begint vóór de globale datum, dus die houdt stand");
+
+const geenPartij = applyBackfillFloor(null, globaal);
+check("geen consignatiepartij levert geen startdatum op",
+  geenPartij.start === null && geenPartij.source === "fabric",
+  "liever niets in de wachtrij dan tweeëntwintig jobs die allemaal leeg terugkomen");
+
+// Het antwoord van de vraag-flow.
+check("een leeg antwoord is geen partij", firstDeliveryFrom([]) === null);
+check("een rij met een lege MIN is geen partij",
+  firstDeliveryFrom([{ eerste_levering: null }]) === null);
+check("de datum wordt als UTC gelezen",
+  firstDeliveryFrom([{ eerste_levering: "2026-07-01T00:00:00" }])
+    ?.toISOString() === "2026-07-01T00:00:00.000Z",
+  "lokaal gelezen valt deze grensdatum ten oosten van UTC een kwartaal te vroeg");
+check("de kolomnaam doet er niet toe",
+  firstDeliveryFrom([{ willekeurig: "2026-07-10" }])?.toISOString().startsWith("2026-07-10") === true,
+  "de flow staat los van deze code; een hernoemde alias mag geen stille null geven");
+check("een onleesbaar antwoord gooit",
+  (() => {
+    try {
+      firstDeliveryFrom([{ eerste_levering: "onzin" }]);
+      return false;
+    } catch {
+      return true;
+    }
+  })(),
+  "een kapotte flow is iets anders dan een leverancier zonder partijen");
+
+// De resolver zelf, met een ask die niets over het net doet.
+const askt = (rijen: Record<string, unknown>[]) => {
+  const gesteld: string[] = [];
+  return {
+    gesteld,
+    ask: async (query: string) => {
+      gesteld.push(query);
+      return rijen;
+    },
+  };
+};
+
+async function main() {
+  const goed = askt([{ eerste_levering: "2026-07-10T00:00:00" }]);
+  const uitFabric = await resolveBackfillStart(4711, globaal, goed.ask);
+  check("de resolver neemt de datum uit Fabric over",
+    uitFabric.start !== null && uitFabric.start.toISOString().startsWith("2026-07-01") &&
+    uitFabric.source === "fabric");
+  check("de vraag is op deze leverancier en op consignatie gefilterd",
+    /rel_id_leverancier = 4711/.test(goed.gesteld[0]) &&
+    /inkooptype_code IN \('CONS'\)/.test(goed.gesteld[0]),
+    "een MIN zonder leveranciersfilter is de eerste partij van het hele warehouse");
+
+  const leeg = await resolveBackfillStart(4711, globaal, askt([]).ask);
+  check("een lege MIN geeft geen startdatum", leeg.start === null && leeg.source === "fabric");
+
+  const stuk = await resolveBackfillStart(4711, globaal, async () => {
+    throw new Error("Vraag-flow gaf 504");
+  });
+  check("een falende vraag-flow valt terug op de globale datum",
+    stuk.start?.getTime() === globaal.getTime() &&
+    stuk.source === "setting" &&
+    stuk.firstDelivery === null,
+    "een leverancier on-boarden mag niet stranden op een haperende flow");
+
+  check("het antwoord voor het scherm noemt kwartaal, dag en reden",
+    (() => {
+      const beschreven = describeStart({ ...uitFabric, start: uitFabric.start! });
+      return beschreven.quarter === "2026 Q3" &&
+        beschreven.from === "2026-07-01" &&
+        beschreven.firstDelivery === "2026-07-10" &&
+        beschreven.source === "fabric";
+    })());
+
+  console.log(failures === 0 ? "\nalle controles geslaagd" : `\n${failures} controle(s) gefaald`);
+  process.exit(failures === 0 ? 0 : 1);
+}
+
+void main();

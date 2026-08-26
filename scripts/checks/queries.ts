@@ -1,4 +1,5 @@
 import { costsQuery } from "../../src/lib/sync/queries/costs";
+import { firstDeliveryQuery } from "../../src/lib/sync/queries/first-delivery";
 import { growersQuery } from "../../src/lib/sync/queries/growers";
 import { lotsQuery } from "../../src/lib/sync/queries/lots";
 import { ordersQuery } from "../../src/lib/sync/queries/orders";
@@ -28,6 +29,12 @@ check("costs: bevat de brontabel", plain.includes("marts.fct_salesheets_costs"))
 // De kostennamen staan sinds 21-08-2026 in dim_kost; zonder deze join komen
 // description en costTypeCode leeg binnen en dan valt de fout pas op in de UI.
 check("costs: haalt de namen uit dim_kost", /LEFT JOIN marts\.dim_kost/.test(plain));
+check("costs: neemt de kostcode mee", /d\.kost_code\s+AS "Kost Code"/.test(plain));
+check("costs: neemt salesheet_type mee", /c\.salesheet_type\s+AS "Salesheet Type"/.test(plain));
+check("costs: neemt is_inclusief mee", /c\.is_inclusief\s+AS "Is Inclusief"/.test(plain));
+// Deze twee voeden SalesSheet.lastReceiptDate en lastRegistrationDate. Ze staan
+// niet op SalesSheetCost, dus wie alleen dat model bekijkt houdt ze voor dood.
+check("costs: houdt de leveringsdatums voor de afrekening", /laatste_ontvangstdatum/.test(plain) && /laatste_aanmelddatum/.test(plain));
 check("costs: gebruikt de nieuwe datumkolom", /c\._datum_key_levering\s*>=\s*'2026-07-01'/.test(plain));
 check("costs: venster eindigt exclusief", /c\._datum_key_levering\s*<\s*'2026-08-01'/.test(plain));
 check("costs: de oude kolomnaam is weg", !/[^_]levering_datum/.test(plain));
@@ -139,6 +146,21 @@ check(
   /AND\s+rel_id_leverancier\s*=\s*12345/.test(ordersFiltered)
 );
 
+// --- first delivery ---
+
+const eersteLevering = firstDeliveryQuery(12345);
+check("first delivery: vraagt de vroegste leverdatum", /MIN\(leverdatum\)/.test(eersteLevering));
+check(
+  "first delivery: filtert op deze leverancier",
+  /WHERE rel_id_leverancier = 12345/.test(eersteLevering)
+);
+// Een relatie kan jarenlang op inkoop geleverd hebben en pas vorige maand op
+// consignatie; zonder dit filter plant de backfill vanaf die inkoophistorie.
+check(
+  "first delivery: alleen consignatie telt mee",
+  /inkooptype_code IN \('CONS'\)/.test(eersteLevering)
+);
+
 // Eigenschap: voor elke invoer levert supplierClause óf een lege string, óf exact
 // "AND <kolom> = <geheel getal>" op. Nooit iets daartussenin — dat zou betekenen dat
 // willekeurige tekst tussen de kolom en de rest van de query terecht kan komen.
@@ -192,6 +214,26 @@ for (const [label, input] of hostileInputs) {
     `growerViaPartijenClause weert of accepteert veilig: ${label}`,
     GROWER_VIA_PARTIJEN_PATTERN.test(result),
     result
+  );
+}
+
+// firstDeliveryQuery weigert in plaats van een leeg fragment terug te geven: een
+// MIN zonder leveranciersfilter is de eerste partij van het hele warehouse, en
+// dat antwoord ziet er geloofwaardig uit terwijl het nergens over gaat.
+const FIRST_DELIVERY_PATTERN =
+  /^SELECT MIN\(leverdatum\) AS "eerste_levering"\nFROM marts\.fct_partijen\nWHERE rel_id_leverancier = -?\d+\n {2}AND inkooptype_code IN \('CONS'\)$/;
+
+for (const [label, input] of hostileInputs) {
+  let gebouwd: string | null = null;
+  try {
+    gebouwd = firstDeliveryQuery(input as unknown as number);
+  } catch {
+    gebouwd = null;
+  }
+  check(
+    `firstDeliveryQuery weert of accepteert veilig: ${label}`,
+    gebouwd === null || FIRST_DELIVERY_PATTERN.test(gebouwd),
+    gebouwd ?? "geweigerd"
   );
 }
 

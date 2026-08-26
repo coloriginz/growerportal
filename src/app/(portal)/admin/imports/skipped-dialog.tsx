@@ -20,7 +20,10 @@ import {
 import { RiAlertLine, RiCheckLine } from "@remixicon/react";
 import { toast } from "sonner";
 import { useFetch } from "@/hooks/use-fetch";
-import { BackfillConfirmDialog } from "@/components/sync/backfill-confirm-dialog";
+import {
+  BackfillConfirmDialog,
+  backfillStartSentence,
+} from "@/components/sync/backfill-confirm-dialog";
 import { formatDate, formatNumber, formatTime } from "@/lib/format";
 import type { ImportBatch } from "./shared";
 
@@ -162,7 +165,7 @@ export function SkippedDialog({ batch, onClose }: { batch: ImportBatch; onClose:
         const naam = body?.code ?? row.code ?? row.relId;
         toast.success(`Supplier ${naam} created`, {
           description: body?.backfill
-            ? `${body.backfill.jobs} backfill jobs queued. Its lots arrive over the coming rounds, oldest quarter first.`
+            ? `${body.backfill.jobs} backfill jobs queued${backfillStartSentence(body.backfill.start)}. Its lots arrive over the coming rounds, oldest quarter first.`
             : "Its skipped lots arrive on the next round by themselves — the sync window is rolling.",
         });
         // De activatie is geslaagd en blijft staan; alleen de backfill niet.

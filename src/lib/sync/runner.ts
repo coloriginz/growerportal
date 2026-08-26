@@ -172,6 +172,12 @@ export type OpenBackfill = {
   failed: number;
   /** Waar hij nu is, als "lots 2025 Q3"; null als er niets meer wacht. */
   current: string | null;
+  /**
+   * Het kwartaal waar hij begint, als "2026 Q3". Uit het vroegste venster van
+   * zijn eigen jobs en niet uit de instelling: de startdatum wordt per
+   * leverancier opgelost, dus de instelling zegt niets over déze run.
+   */
+  from: string;
   /** Zijn eerstvolgende brok staat klaar, maar een geplande ronde gaat voor. */
   waitingOnRound: boolean;
 };
@@ -251,6 +257,15 @@ export async function openBackfills(): Promise<OpenBackfill[]> {
           ? lopend.endpoint
           : `${lopend.endpoint} ${quarterLabel(lopend.windowFrom)}`
         : null,
+      // Het vroegste venster en niet dat van volgnummer 0: die stamdatajob
+      // overspant alle kwartalen en begint toevallig even vroeg, maar dat is
+      // geen belofte waar een label op mag leunen.
+      from: quarterLabel(
+        rijen.reduce(
+          (vroegste, r) => (r.windowFrom < vroegste ? r.windowFrom : vroegste),
+          rijen[0].windowFrom
+        )
+      ),
       // Alleen als zijn eigen brok nog wacht. Staat die op `dispatched`, dan is
       // hij zelf aan de beurt en wacht hij nergens op — ook niet op de ronde die
       // daarna komt.
@@ -643,5 +658,89 @@ async function continueChain(): Promise<void> {
     }
   } catch (error) {
     console.error(`[sync] doorzetten van de ketting mislukt: ${describeError(error)}`);
+  }
+}
+
+export type ResetResult =
+  | { ok: true; endpoint: string; dispatched: string | null }
+  | { ok: false; reason: "not_found" | "not_dispatched"; message: string };
+
+/**
+ * Zet een job die op `dispatched` blijft hangen terug in de wachtrij en
+ * verstuurt hem meteen opnieuw.
+ *
+ * Dit is het handmatige equivalent van wat `reapStaleJobs` na een kwartier doet.
+ * Die grens is er omdat de portal niet kan weten of de flow nog bezig is: de
+ * haal-flow antwoordt met 202 zodra hij start, dus een fout die pas bij het
+ * terugposten ontstaat — een verlopen sleutel, een SQL die knapt — kost je
+ * anders vijftien minuten per poging. Wie zeker weet dat er niets meer komt,
+ * hoeft daar met deze knop niet op te wachten.
+ *
+ * De pogingen gaan terug naar nul. Een job die drie keer op een
+ * configuratiefout strandde heeft zijn kansen niet aan wankelheid verspild, en
+ * na het herstellen van die fout hoort hij een volle ronde te krijgen in plaats
+ * van zijn laatste poging.
+ *
+ * De batch van de gestrande poging wordt afgesloten. Zonder dat blijft hij
+ * eeuwig op `running` staan: `reapOrphanBatches` laat batches met een job juist
+ * met rust, en de nieuwe poging opent een eigen batch.
+ *
+ * Draait de flow tóch nog, dan levert dit dezelfde query twee keer op. Dat is
+ * onschadelijk — alle vijf de endpoints upserten — en het is de reden dat de
+ * automatische reaper wél wacht en deze knop niet.
+ */
+export async function resetDispatchedJob(jobId: string): Promise<ResetResult> {
+  const job = await prisma.syncJob.findUnique({
+    where: { id: jobId },
+    select: { id: true, endpoint: true, status: true, importBatchId: true },
+  });
+  if (!job) {
+    return { ok: false, reason: "not_found", message: "Unknown job." };
+  }
+  if (job.status !== "dispatched") {
+    return {
+      ok: false,
+      reason: "not_dispatched",
+      message: `This job is ${job.status}, not dispatched — there is nothing to reset.`,
+    };
+  }
+
+  const message = "Handmatig teruggezet vanuit het importscherm";
+
+  if (job.importBatchId) {
+    await prisma.importBatch.updateMany({
+      where: { id: job.importBatchId, status: "running" },
+      data: { status: "error", errorMessage: message, completedAt: new Date() },
+    });
+  }
+
+  await prisma.syncJob.update({
+    where: { id: job.id },
+    data: {
+      status: "pending",
+      dispatchedAt: null,
+      attempts: 0,
+      lastError: message,
+      importBatchId: null,
+    },
+  });
+
+  // Meteen weer weg, anders wacht hij alsnog op de volgende tick — en op test
+  // tikt niets vanzelf.
+  const { dispatched } = (await dispatchNextIfPossible()) ?? { dispatched: null };
+  return { ok: true, endpoint: job.endpoint, dispatched };
+}
+
+/**
+ * `dispatchNext()` met dezelfde omgevingscontrole als `continueChain()`, maar
+ * met het resultaat erbij zodat de aanroeper kan zeggen wat er gebeurde.
+ */
+async function dispatchNextIfPossible(): Promise<{ dispatched: string | null } | null> {
+  if (!resolveSyncEnv()) return null;
+  try {
+    return await dispatchNext();
+  } catch (error) {
+    console.error(`[sync] versturen na een reset mislukt: ${describeError(error)}`);
+    return null;
   }
 }

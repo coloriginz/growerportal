@@ -212,6 +212,8 @@
     "title": "Shipments",
     "details": "Shipment Details",
     "invoiceNumber": "Invoice Number",
+    "invoiceDate": "Invoice Date",
+    "shipmentNumber": "Shipment Number",
     "deliveryDate": "Delivery Date",
     "lots": "Lots",
     "stems": "Stems",

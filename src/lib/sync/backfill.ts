@@ -9,8 +9,13 @@ export type BackfillChunk = { from: Date; to: Date; label: string };
  * Alles hier rekent in UTC omdat de vensters als UTC-instant naar Fabric gaan;
  * met lokale getters zou de indeling van dezelfde basisdatum verschuiven met de
  * tijdzone van de machine die de backfill start.
+ *
+ * Geëxporteerd omdat de startdatum per leverancier dezelfde indeling moet
+ * gebruiken als de brokken: wie de ondergrens op een dag in plaats van op een
+ * kwartaalgrens toepast, krijgt bij een eerste levering middenin het kwartaal
+ * van de globale datum een andere uitkomst dan de brokken erna.
  */
-function quarterStart(date: Date): Date {
+export function quarterStart(date: Date): Date {
   return new Date(Date.UTC(date.getUTCFullYear(), Math.floor(date.getUTCMonth() / 3) * 3, 1));
 }
 

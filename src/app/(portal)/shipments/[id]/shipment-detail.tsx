@@ -252,13 +252,24 @@ export function ShipmentDetail({ shipment, correctionReasons = {} }: ShipmentDet
           <div>
             <h1 className="text-2xl font-semibold tracking-tight">
               {t("shipments.details")}: {shipment.invoiceNumber}
-              {shipment.ourInvoiceNumber && (
-                <span className="ml-2 text-base font-normal text-muted-foreground">({shipment.ourInvoiceNumber})</span>
-              )}
             </h1>
-            <p className="text-sm text-muted-foreground">
-              {t("shipments.deliveryDate")}: {formatDate(shipment.deliveryDate)}
-            </p>
+            {/* Labels op een vaste breedte, zodat de waarden een kolom vormen. */}
+            <dl className="mt-1 space-y-0.5 text-sm">
+              <div className="flex gap-2">
+                <dt className="min-w-32 text-muted-foreground">{t("shipments.deliveryDate")}</dt>
+                <dd className="tabular-nums">{formatDate(shipment.deliveryDate)}</dd>
+              </div>
+              {shipment.ourInvoiceNumber && (
+                <div className="flex gap-2">
+                  <dt className="min-w-32 text-muted-foreground">{t("shipments.invoiceNumber")}</dt>
+                  <dd className="tabular-nums">{shipment.ourInvoiceNumber}</dd>
+                </div>
+              )}
+              <div className="flex gap-2">
+                <dt className="min-w-32 text-muted-foreground">{t("shipments.invoiceDate")}</dt>
+                <dd className="tabular-nums">{formatDate(shipment.invoiceDate)}</dd>
+              </div>
+            </dl>
           </div>
           {shipment.pdfDocument && (
             <a href={shipment.pdfDocument.fileUrl} target="_blank" rel="noopener noreferrer" className="inline-block">

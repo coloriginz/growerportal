@@ -171,7 +171,7 @@ export function ShipmentsContent({ supplierId }: { supplierId: string | null }) 
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>{t("shipments.invoiceNumber")}</TableHead>
+                <TableHead>{t("shipments.shipmentNumber")}</TableHead>
                 <TableHead>{t("shipments.deliveryDate")}</TableHead>
                 <TableHead className="text-right">{t("shipments.lots")}</TableHead>
                 <TableHead className="text-right">{t("shipments.stems")}</TableHead>
