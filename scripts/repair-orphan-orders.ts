@@ -26,6 +26,15 @@
  * partij- en leveringstotalen herrekenen, met exact dezelfde SQL als de
  * importroute gebruikt, zodat de uitkomst niet kan afwijken.
  *
+ * Verwijderen alléén is niet genoeg, en dat kostte een ronde om te leren: van de
+ * 146 partijen waar op 29-08-2026 een weesregel op stond, hadden er 145 in Fabric
+ * nog wél orderregels — onder een ánder ordreg_id. Het warehouse hernummert, en
+ * dat ziet er van hier af precies zo uit als intrekken. De portal had die nieuwe
+ * ids nooit opgehaald omdat het venster van juni 2026 niet meer terugkomt. Wie
+ * dan enkel opruimt, ruilt EUR 49.419 te veel in voor EUR 47.653 te weinig.
+ * Vandaar de volgorde: eerst opnieuw ophalen via /api/import/orders, dan pas de
+ * regels weggooien die dan nog steeds een dood ordreg_id dragen.
+ *
  * Twee grenzen, allebei met opzet:
  *   - Een kwartaal dat leeg terugkomt terwijl de portal er transacties heeft,
  *     wordt overgeslagen en gemeld. Fabric geeft een gefilterde query soms
@@ -35,7 +44,10 @@
  *     verwijderd (standaard 5%). Een echte intrekking is een handvol regels;
  *     raakt het meer, dan klopt de aanname niet en niet de data.
  *
- * Draaien (praat rechtstreeks met de database, dev-server niet nodig):
+ * De dev-server moet aanstaan: het opnieuw ophalen loopt langs de importroute,
+ * zodat de schrijflogica niet wordt nagebouwd.
+ *
+ * Draaien:
  *   npx tsx scripts/repair-orphan-orders.ts                    # dry run (standaard)
  *   npx tsx scripts/repair-orphan-orders.ts --apply
  *   npx tsx scripts/repair-orphan-orders.ts --supplier=PCFUP
@@ -48,12 +60,19 @@
  *   --to=YYYY-MM-DD    laatste transactiedatum (exclusief). Standaard de dag na de nieuwste.
  *   --max-share=N      afkapgrens per kwartaal in procenten. Standaard 5.
  *   --report=PAD       schrijf het rapport hierheen.
+ *   --from-report=PAD  neem de werklijst voor het opnieuw ophalen uit een eerder
+ *                      rapport. Voor een ronde waarin al is opgeruimd maar nog
+ *                      niet opgehaald.
+ *   --no-refetch       sla het opnieuw ophalen over. Alleen zinnig als je zeker
+ *                      weet dat er niet hernummerd is; dat weet je vrijwel nooit.
+ *   --api-base=URL     doelportal. Standaard $API_BASE, anders http://localhost:3000.
  */
 import { createRequire } from "module";
 import * as fs from "fs";
 import "dotenv/config";
 import { prisma } from "../src/lib/db";
 import { quarterChunks } from "../src/lib/sync/backfill";
+import { ordersQuery } from "../src/lib/sync/queries/orders";
 import { isoDate } from "../src/lib/sync/queries/helpers";
 
 const vereis = createRequire(import.meta.url);
@@ -70,6 +89,9 @@ const APPLY = process.argv.includes("--apply");
 const SUPPLIER = optie("--supplier")?.toUpperCase() ?? null;
 const MAX_SHARE = Number(optie("--max-share") ?? 5);
 const REPORT = optie("--report");
+const FROM_REPORT = optie("--from-report");
+const REFETCH = !process.argv.includes("--no-refetch");
+const API_BASE = optie("--api-base") ?? process.env.API_BASE ?? "http://localhost:3000";
 
 type Wees = {
   id: string;
@@ -216,11 +238,41 @@ async function main() {
     for (const m of overgeslagen) console.log(`  ${m}`);
   }
 
+  // De werklijst voor het opnieuw ophalen: elke leverancier maal elk kwartaal
+  // waar een weesregel op stond. Uit een eerder rapport als dat is meegegeven —
+  // dan is er al opgeruimd en hoeft alleen het ophalen nog te gebeuren.
+  const combos = new Set<string>();
+  for (const w of alleWezen) combos.add(`${w.supplier}::${kwartaalVan(w.date)}`);
+  if (FROM_REPORT) {
+    const eerder = JSON.parse(fs.readFileSync(FROM_REPORT, "utf8")) as { wezen: Wees[] };
+    for (const w of eerder.wezen) combos.add(`${w.supplier}::${kwartaalVan(new Date(w.date))}`);
+    console.log(`\nWerklijst aangevuld uit ${FROM_REPORT}`);
+  }
+
   if (!APPLY) {
+    if (REFETCH && combos.size > 0) {
+      console.log(
+        `\nZou ${combos.size} leverancier/kwartaal-ronde(s) opnieuw ophalen via ${API_BASE}`
+      );
+    }
     console.log("\nDRY RUN — er is niets gewijzigd. Draai opnieuw met --apply.");
     return;
   }
-  if (alleWezen.length === 0) return;
+
+  /*
+   * Eerst ophalen, dan pas opruimen. Een hernummerde orderregel komt binnen
+   * onder zijn nieuwe id; wat daarna nóg een dood id draagt is pas echt weg.
+   * Andersom zou de portal tussen de twee stappen in te lage omzet tonen, en
+   * bij een mislukte tweede stap blijft dat zo staan.
+   */
+  if (REFETCH && combos.size > 0) {
+    await haalOpnieuwOp([...combos], suppliers);
+  }
+
+  if (alleWezen.length === 0) {
+    console.log("\nGeen weesregels om te verwijderen.");
+    return;
+  }
 
   const ids = alleWezen.map((w) => w.id);
   const geraakt = await prisma.transaction.findMany({
@@ -234,6 +286,100 @@ async function main() {
 
   await herrekenLots(geraakteLots);
   await herrekenSalesSheets(geraakteLots);
+}
+
+/** Het kwartaal van een datum als "2026-Q2", de sleutel van de werklijst. */
+function kwartaalVan(datum: Date): string {
+  const d = new Date(datum);
+  return `${d.getUTCFullYear()}-Q${Math.floor(d.getUTCMonth() / 3) + 1}`;
+}
+
+/** Van "2026-Q2" terug naar de vensterranden. */
+function vensterVan(label: string): { from: Date; to: Date } {
+  const [jaar, kw] = label.split("-Q");
+  const maand = (Number(kw) - 1) * 3;
+  return {
+    from: new Date(Date.UTC(Number(jaar), maand, 1)),
+    to: new Date(Date.UTC(Number(jaar), maand + 3, 1)),
+  };
+}
+
+/*
+ * Haalt per leverancier per kwartaal alle orderregels opnieuw op en laat ze door
+ * /api/import/orders wegschrijven. Bewust langs de route en niet rechtstreeks naar
+ * de database: de schrijflogica hoort op één plek te staan, anders loopt een
+ * reparatie uit de pas met de import die er daarna overheen komt.
+ *
+ * De route doet een paar-gescopede delete+insert, dus dit is optellend: bestaande
+ * regels worden herschreven, hernummerde regels komen erbij, en er verdwijnt niets.
+ * Het verwijderen is een aparte stap die hierna komt.
+ */
+async function haalOpnieuwOp(
+  combos: string[],
+  suppliers: { id: string; code: string; fabricId: number | null }[]
+) {
+  console.log(`\nOpnieuw ophalen: ${combos.length} ronde(s) via ${API_BASE}`);
+  const perCode = new Map(suppliers.map((s) => [s.code, s]));
+  let gelukt = 0;
+  const mislukt: string[] = [];
+
+  for (const combo of combos.sort()) {
+    const [code, label] = combo.split("::");
+    const supplier = perCode.get(code);
+    if (!supplier?.fabricId) {
+      mislukt.push(`${combo}: leverancier niet gevonden`);
+      continue;
+    }
+    const { from, to } = vensterVan(label);
+
+    try {
+      const rijen =
+        (await queryFabric(ordersQuery({ from, to, supplierFabricId: supplier.fabricId })))[0] ?? [];
+
+      if (rijen.length === 0) {
+        // Dezelfde tegenspraak als bij de detectie: Fabric kan hier onmogelijk
+        // nul hebben, want de portal heeft er regels uit gehaald.
+        mislukt.push(`${combo}: Fabric gaf 0 rijen terug`);
+        continue;
+      }
+
+      // De mssql-driver geeft DECIMAL/NUMERIC als string terug waar Power
+      // Automate een getal stuurt; de route valideert op number en zou de hele
+      // payload afwijzen.
+      for (const r of rijen) {
+        for (const veld of ["Verkoopvolume", "Verkoop_colli", "Afrekenomzet", "Gem afrekenprijs"]) {
+          if (typeof r[veld] === "string") r[veld] = Number(r[veld]);
+        }
+      }
+
+      const res = await fetch(API_BASE + "/api/import/orders", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "Bearer " + process.env.IMPORT_API_KEY,
+        },
+        body: JSON.stringify({ orders: rijen }),
+      });
+      if (!res.ok) {
+        mislukt.push(`${combo}: HTTP ${res.status} ${(await res.text()).slice(0, 200)}`);
+        continue;
+      }
+      const uitkomst = (await res.json()) as { created?: number; updated?: number };
+      console.log(
+        `  ${code.padEnd(10)} ${label}: ${rijen.length} rijen -> ` +
+          `${uitkomst.created ?? 0} nieuw, ${uitkomst.updated ?? 0} herschreven`
+      );
+      gelukt++;
+    } catch (e) {
+      mislukt.push(`${combo}: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+
+  console.log(`Opnieuw opgehaald: ${gelukt} van ${combos.length} ronde(s)`);
+  if (mislukt.length > 0) {
+    console.log(`MISLUKT (${mislukt.length}):`);
+    for (const m of mislukt) console.log(`  ${m}`);
+  }
 }
 
 /*
