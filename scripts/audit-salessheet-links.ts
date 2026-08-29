@@ -24,7 +24,8 @@
  *   npx tsx scripts/audit-salessheet-links.ts --limit=200     # proefje
  *
  * Opties:
- *   --apply        maak foute koppelingen los. Zonder deze vlag wordt er niets gewijzigd.
+ *   --apply        maak foute koppelingen los én haal het bijbehorende document uit de
+ *                  documentenbibliotheek. Zonder deze vlag wordt er niets gewijzigd.
  *   --check-urls   controleer ook of het bestand in de blobopslag nog bestaat. Kost een
  *                  netwerkaanroep per koppeling, dus staat standaard uit.
  *   --limit=N      controleer hooguit N koppelingen.
@@ -228,18 +229,94 @@ async function main() {
   }
 
   /*
-   * Alleen de koppeling weghalen, niet het Document. Het bestand blijft in de
-   * blobopslag en in de documentenlijst staan; wat vervalt is de bewering dat
-   * het bij déze afrekening hoort. Zou het document ook verdwijnen, dan is een
-   * verkeerde koppeling niet meer terug te vinden en kan niemand nakijken wat
-   * er stond.
+   * De koppeling weghalen én het document uit de bibliotheek halen.
+   *
+   * Alleen loskoppelen was niet genoeg, en dat was lang niet te zien. De
+   * shipmentpagina toont de PDF via `SalesSheet.pdfDocumentId`, maar de
+   * documentenpagina leest `Document.supplierId` — een heel ander pad. Een
+   * losgekoppelde PDF verdween dus uit het leveringoverzicht en bleef gewoon in
+   * de documentenlijst van de verkeerde leverancier staan, downloadbaar. Bij een
+   * verkeerd gekoppelde afrekening is dat precies het deel dat ertoe doet: de
+   * omzet, kosten en kwekersnamen van een ander.
+   *
+   * Het bestand zelf blijft in de blobopslag en de bestandsnaam staat in het
+   * rapport, dus terugvinden kan nog steeds — alleen niet meer door de verkeerde
+   * leverancier. Een document dat nog aan een ándere afrekening hangt blijft
+   * staan; dan is het daar wél op zijn plek.
    */
+  let documentenVerwijderd = 0;
   if (APPLY && losTeMaken.length > 0) {
+    const betrokken = await prisma.salesSheet.findMany({
+      where: { id: { in: losTeMaken } },
+      select: { pdfDocumentId: true },
+    });
+    const documentIds = [...new Set(betrokken.map((s) => s.pdfDocumentId).filter(Boolean))] as string[];
+
     const losgemaakt = await prisma.salesSheet.updateMany({
       where: { id: { in: losTeMaken } },
       data: { pdfDocumentId: null },
     });
     console.log(`\nlosgemaakt: ${losgemaakt.count} koppelingen`);
+
+    if (documentIds.length > 0) {
+      // Pas ná het loskoppelen: zolang de afrekening er nog naar wijst, telt hij
+      // zichzelf mee als "nog in gebruik".
+      const nogInGebruik = await prisma.salesSheet.findMany({
+        where: { pdfDocumentId: { in: documentIds } },
+        select: { pdfDocumentId: true },
+      });
+      const bezet = new Set(nogInGebruik.map((s) => s.pdfDocumentId));
+      const vrij = documentIds.filter((id) => !bezet.has(id));
+      if (vrij.length > 0) {
+        documentenVerwijderd = (await prisma.document.deleteMany({ where: { id: { in: vrij } } }))
+          .count;
+        console.log(`uit de documentenbibliotheek gehaald: ${documentenVerwijderd} documenten`);
+      }
+    }
+  }
+
+  /*
+   * De restanten van eerdere rondes.
+   *
+   * Tot vandaag maakte dit script alleen de koppeling los en liet het document
+   * staan. Elke ronde daarvóór liet dus een PDF achter in de bibliotheek van een
+   * leverancier die er niets mee te maken heeft — 83 stuks bij de ronde van
+   * 29-08-2026. Die vind je niet meer via de afrekeningen, want die verwijzing is
+   * juist weg; het enige spoor is de bestandsnaam.
+   *
+   * De regel is streng gehouden: alleen documenten die aan géén enkele afrekening
+   * hangen én waarvan de naam een code draagt die een échte andere leverancier is.
+   * Een naam met een onbekende code kan van alles zijn en bewijst niets.
+   */
+  const losseDocs = await prisma.document.findMany({
+    where: { type: "salessheet", salesSheets: { none: {} } },
+    select: { id: true, fileName: true, supplier: { select: { code: true } } },
+  });
+  const bekendeCodes = new Set(
+    (await prisma.supplier.findMany({ select: { code: true } })).map((s) => s.code.toUpperCase())
+  );
+  const verkeerdGearchiveerd = losseDocs.filter((d) => {
+    const code = parseSalesSheetFilename(d.fileName)?.supplierCode?.toUpperCase();
+    return code && code !== d.supplier.code.toUpperCase() && bekendeCodes.has(code);
+  });
+
+  if (verkeerdGearchiveerd.length > 0) {
+    console.log(
+      `
+losse documenten bij de verkeerde leverancier: ${verkeerdGearchiveerd.length}`
+    );
+    for (const d of verkeerdGearchiveerd) {
+      console.log(`  ${d.supplier.code} draagt ${d.fileName}`);
+    }
+    if (APPLY) {
+      const n = (
+        await prisma.document.deleteMany({
+          where: { id: { in: verkeerdGearchiveerd.map((d) => d.id) } },
+        })
+      ).count;
+      documentenVerwijderd += n;
+      console.log(`  uit de bibliotheek gehaald: ${n}`);
+    }
   }
 
   schrijfRapport(uitkomsten);
@@ -251,6 +328,7 @@ async function main() {
   if (CHECK_URLS) console.log(`blob onbereikbaar    : ${tel("blob onbereikbaar")}${APPLY ? " (losgemaakt)" : ""}`);
   console.log(`datum wijkt af       : ${tel("datum wijkt af")}${APPLY ? " (losgemaakt)" : ""}`);
   console.log(`datum onleesbaar     : ${tel("datum onleesbaar")}`);
+  if (APPLY) console.log(`documenten verwijderd: ${documentenVerwijderd}`);
   console.log(`bestand niet gevonden: ${tel("bestand niet gevonden")}`);
   console.log(`Rapport: ${REPORT}`);
 }
