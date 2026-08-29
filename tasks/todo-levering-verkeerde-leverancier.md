@@ -4,7 +4,9 @@
 > volgde hem daar niet in: `Lot.supplierId` en `SalesSheet.supplierId` werden bij het bijwerken
 > nooit meegeschreven, dus eenmaal onder een leverancier aangemaakt verhuisde een levering nooit.
 >
-> **Status:** gemeten en gerepareerd op 26-08-2026. Eén geval wacht op een beslissing.
+> **Status:** gemeten en gerepareerd op 26-08-2026. Het laatste geval is op 29-08-2026 afgehandeld,
+> met een omgekeerde ontwerpkeuze: een levering die Fabric elders toeschrijft wordt nu verwijderd
+> in plaats van gemeld.
 
 ---
 
@@ -28,8 +30,9 @@ De twee afwijkingen:
 - **19883 Van Dijk** (12-06-2026) stond onder MDHAGED, Fabric geeft hem aan MDHAGE — beide bestaan
   in de portal. **Opgelost**: de import heeft hem verplaatst, afrekening én partij staan nu onder
   MDHAGE.
-- **INT000072** (18-06-2026, 8 partijen) staat onder COLXAFRI, Fabric geeft hem aan relatie 29778,
-  **Ole Engai Growers**, die in de portal geen leverancier is. Zie hieronder.
+- **INT000072** (18-06-2026, 8 partijen) stond onder COLXAFRI, Fabric geeft hem aan relatie 29778,
+  **Ole Engai Growers**, die in de portal geen leverancier is. **Opgelost op 29-08-2026**: de
+  levering is uit de portal gehaald. Zie "De keuze die is teruggedraaid".
 
 ## De structurele fix
 
@@ -50,14 +53,46 @@ Botsen op `(lotNumber, supplierId)` kan in theorie wanneer een partij verhuist. 
 partijen komt geen enkel partijnummer bij twee leveranciers voor, dus dat risico is theoretisch.
 
 **Vanaf nu corrigeert het zichzelf**: past Fabric een toewijzing aan, dan volgt de portal bij de
-eerstvolgende lots-ronde over dat venster. Ook voor Ole Engai — activeren is genoeg, de verhuizing
-gebeurt daarna vanzelf.
+eerstvolgende lots-ronde over dat venster.
+
+## De keuze die is teruggedraaid — 29-08-2026
+
+Punt 3 hierboven was half. "Melden en laten staan" berustte op de gedachte dat het activeren van de
+relatie de verhuizing vanzelf zou regelen. Dat zet de zaak op zijn kop: het maakt het opschonen van
+Africalla's beeld afhankelijk van een beslissing over een ándere partij, waar Africalla part noch
+deel aan heeft. Africalla en Ole Engai zijn niet gerelateerd — de een is leverancier, de ander niet —
+en de toewijzing was ooit een invoerfout die in de bron is rechtgezet.
+
+Het was bovendien niet alleen een verkeerd getal. De gekoppelde PDF heet
+`COLXOLE - 06_18_2026 07_45_00 - INT000072 - 405644.PDF`: de afrekening staat zelf op naam van Ole
+Engai en stond in de portal onder `Document.supplierId` van COLXAFRI, dat één actief account heeft.
+Een inzagelek op de omzet, kosten en prijzen van een derde.
+
+De regel is daarom omgedraaid en symmetrisch gemaakt met wat de route al deed bij het binnenkomen:
+**hoort de levering volgens Fabric bij een relatie die de portal niet voert, dan voert de portal die
+levering niet.** Partijen en het gekoppelde document gaan expliciet mee (ze cascaderen geen van
+beide vanzelf). `planReattributionRemoval()` in `src/lib/sync/reattribution.ts` draagt de beslissing
+plus een bovengrens van 25 leveringen per ronde; daarboven wordt er niets verwijderd en wel gemeld,
+want zoveel herbestemmingen tegelijk wijzen op een kapotte ronde en niet op een gecorrigeerde bron.
+Gedekt door `scripts/checks/reattribution.ts`. Melden blijft: naast `reattributedAway` nu ook
+`reattributedRemoved` en `reattributedKept`.
+
+Toegepast door de partijen van relatie 29778 door `/api/import/lots` te sturen, zodat de reparatie
+meteen het bewijs is dat de route werkt: `reattributedRemoved: 1`, COLXAFRI van 256 naar 255
+leveringen, 3.484 naar 3.476 partijen, 249 naar 248 documenten, nul losgekoppelde partijen. De
+portalbrede hercontrole over alle 7.878 leveringen geeft nu nul afwijkingen.
+
+Wordt Ole Engai later alsnog als leverancier aangemaakt, dan haalt een backfill de levering gewoon
+opnieuw op — dan onder de juiste naam.
 
 ## Wat nog openstaat
 
-- [ ] **Beslissing over INT000072.** Is Ole Engai Growers een eigen leverancier die geactiveerd moet
-      worden, of een kweker die onder COLXAFRI hoort? Zolang dit niet is beslist ziet COLXAFRI acht
-      partijen die volgens Fabric niet van hem zijn. Activeren lost het op zonder verder werk.
+- [x] ~~Beslissing over INT000072.~~ Afgehandeld op 29-08-2026: de levering is uit de portal
+      gehaald, los van de vraag of Ole Engai ooit leverancier wordt. Die vraag staat daarmee niet
+      langer iets in de weg.
+- [ ] **De blob van het verwijderde document opruimen.** De `Document`-rij is weg, de PDF staat nog
+      in de blobopslag onder een url die nergens meer wordt getoond. Een blob weggooien vanuit een
+      importroute is een onomkeerbare nevenwerking, dus dat is bewust een losse handeling.
 - [ ] **`reattributedAway` tonen in het overgeslagen-paneel.** Het staat nu in `details` en is dus
       terug te vinden, maar het paneel leest alleen `skippedSuppliers`. Deze melding verdient een
       eigen regel, want hij vraagt om een andere handeling dan "misschien een kweker aanmaken".

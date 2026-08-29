@@ -100,6 +100,18 @@ het een storing in onze code was.
       e-mailstroom binnen en staan alleen in de blobopslag. Om ook die te auditen moet het script de
       blob downloaden in plaats van het archief te lezen.
 
+      **Deze blinde vlek heeft aantoonbaar een lek verborgen — 29-08-2026.** Levering INT000072 van
+      COLXAFRI droeg `COLXOLE - 06_18_2026 07_45_00 - INT000072 - 405644.PDF`, de afrekening van Ole
+      Engai Growers, met `Document.supplierId` op COLXAFRI en één actief account daar. De audit kon
+      hem niet zien: het bestand staat niet in `private_input/salessheets`, en de audit leest het
+      archief. Gevonden langs een heel andere weg — via de leveranciertoewijzing in Fabric, zie
+      `todo-levering-verkeerde-leverancier.md`. Daarmee is dit punt geen opruimwerk meer maar de
+      vraag hoeveel van die 449 hetzelfde probleem dragen; niemand weet dat nu.
+
+      Merk op dat de audit de leverancierscode uit de bestandsnaam helemaal niet vergelijkt — hij
+      leest de PDF zelf uit het archief. Voor de blob-only koppelingen zou dat vergelijk alleen al
+      een goedkope eerste zeef zijn, zonder ook maar één bestand te downloaden.
+
 ## Waarom dit meer weegt dan een verkeerd bestand
 
 Elke andere fout in deze reeks ging over bedragen die niet klopten. Deze gaat over wie wát mag
