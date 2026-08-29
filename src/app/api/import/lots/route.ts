@@ -2,6 +2,10 @@ import { NextRequest } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { runImport } from "@/lib/import-batch";
+import {
+  planReattributionRemoval,
+  type ReattributedSheet,
+} from "@/lib/sync/reattribution";
 import { isConsignment, purchaseTypeKey } from "@/lib/sync/purchase-type";
 
 // Vercel kapt een functie zonder dit af op de standaardlimiet; de lots- en
@@ -46,6 +50,54 @@ const partijAliases = {
   // lots: inkoop_factuur_aantal matches what the portal already holds.
   "Inkoopfactuur volume": ["inkoop_factuur_aantal"],
 } as const;
+
+/*
+ * Haalt een levering volledig uit de portal, met alles wat eraan hangt.
+ *
+ * Drie dingen die niet vanzelf gaan en die je pas mist als iemand het merkt:
+ *
+ *  - `Lot.salesSheetId` is optioneel, dus partijen cascaderen níét mee met hun
+ *    afrekening; ze zouden losgekoppeld achterblijven onder de oude leverancier.
+ *    Ze worden daarom eerst apart verwijderd, waarna transacties, correcties en
+ *    kwaliteitsmeldingen wél vanzelf meegaan (die staan op Cascade).
+ *  - `SalesSheetCost` cascadeert wel mee met de afrekening.
+ *  - Het gekoppelde `Document` hangt andersom (`SalesSheet.pdfDocumentId` wijst
+ *    ernaar) en blijft dus staan — inclusief zijn eigen `supplierId`. Precies dat
+ *    document is hier het gevoelige deel: het is de sales sheet-PDF van de ándere
+ *    partij. Het gaat mee, tenzij een andere afrekening er nog aan hangt.
+ *
+ * De blob achter het document blijft staan. Die is alleen bereikbaar via een url
+ * die nergens meer wordt getoond, en een blob weggooien vanuit een importroute is
+ * een nevenwerking die niet meer terug te draaien is.
+ */
+async function verwijderLeveringen(sheetIds: string[]): Promise<number> {
+  if (sheetIds.length === 0) return 0;
+
+  const sheets = await prisma.salesSheet.findMany({
+    where: { id: { in: sheetIds } },
+    select: { id: true, pdfDocumentId: true },
+  });
+  const documentIds = [...new Set(sheets.map((s) => s.pdfDocumentId).filter(Boolean))] as string[];
+
+  await prisma.lot.deleteMany({ where: { salesSheetId: { in: sheetIds } } });
+  const verwijderd = await prisma.salesSheet.deleteMany({ where: { id: { in: sheetIds } } });
+
+  if (documentIds.length > 0) {
+    // Pas ná het verwijderen van de afrekening: zolang die er is, wijst haar
+    // pdfDocumentId nog naar dit document.
+    const nogInGebruik = await prisma.salesSheet.findMany({
+      where: { pdfDocumentId: { in: documentIds } },
+      select: { pdfDocumentId: true },
+    });
+    const bezet = new Set(nogInGebruik.map((s) => s.pdfDocumentId));
+    const vrij = documentIds.filter((id) => !bezet.has(id));
+    if (vrij.length > 0) {
+      await prisma.document.deleteMany({ where: { id: { in: vrij } } });
+    }
+  }
+
+  return verwijderd.count;
+}
 
 /** Classify a Facttype Sub value into base lot or correction */
 function isCorrection(facttypeSub: string | null | undefined): boolean {
@@ -745,17 +797,27 @@ async function upsertLots(partijen: Partij[], batchId: string | null) {
    * niet meer heeft, en die ziet dus omzet en kosten van een ander. Het verdient
    * een eigen melding, anders verdwijnt het in het aantal overgeslagen partijen.
    *
-   * Alleen melden, niet verplaatsen — er is geen leverancier om hem heen te
-   * zetten. Zodra iemand die relatie activeert verhuist de levering vanzelf mee,
-   * want de bijwerking hierboven zet `supplierId` volgens Fabric. Deze melding
-   * is dus precies de aanwijzing om dat te doen.
+   * Melden én weghalen. Er is geen leverancier om hem heen te zetten, en juist
+   * daarom hoort hij hier niet: dezelfde partij zou bij het binnenkomen zijn
+   * weggegooid omdat zijn relatie geen portalleverancier is. Hem laten staan
+   * omdat hij er toevallig al was, is die regel alleen niet toepassen op het
+   * moment dat het uitmaakt. Zie `src/lib/sync/reattribution.ts` voor waarom dat
+   * meer kost dan een verkeerd getal op een scherm.
+   *
+   * Wordt de relatie later alsnog geactiveerd, dan haalt een backfill de levering
+   * gewoon opnieuw op, dan wel onder de juiste leverancier.
    */
   const herbestemdWeg: Record<string, { leveringen: number; van: string[] }> = {};
+  let herbestemdVerwijderd = 0;
+  let herbestemdNietVerwijderd: string | null = null;
+
   if (overgeslagenParthdrs.size > 0) {
     const bestaand = await prisma.salesSheet.findMany({
       where: { fabricParthdrId: { in: [...overgeslagenParthdrs.keys()] } },
-      select: { fabricParthdrId: true, supplier: { select: { code: true } } },
+      select: { id: true, fabricParthdrId: true, supplier: { select: { code: true } } },
     });
+
+    const herbestemd: ReattributedSheet[] = [];
     for (const sheet of bestaand) {
       const relId = overgeslagenParthdrs.get(sheet.fabricParthdrId!);
       if (relId === undefined) continue;
@@ -764,6 +826,19 @@ async function upsertLots(partijen: Partij[], batchId: string | null) {
       entry.leveringen++;
       if (!entry.van.includes(sheet.supplier.code)) entry.van.push(sheet.supplier.code);
       herbestemdWeg[sleutel] = entry;
+      herbestemd.push({
+        id: sheet.id,
+        parthdrId: sheet.fabricParthdrId!,
+        supplierCode: sheet.supplier.code,
+        relId,
+      });
+    }
+
+    const plan = planReattributionRemoval({ sheets: herbestemd });
+    if (plan.mode === "remove") {
+      herbestemdVerwijderd = await verwijderLeveringen(plan.sheets.map((s) => s.id));
+    } else if (herbestemd.length > 0) {
+      herbestemdNietVerwijderd = plan.reason;
     }
   }
 
@@ -802,6 +877,11 @@ async function upsertLots(partijen: Partij[], batchId: string | null) {
       // Alleen aanwezig als er iets te melden is; anders draagt elke batch een
       // lege sleutel en gaat de betekenis van zijn aanwezigheid verloren.
       ...(Object.keys(herbestemdWeg).length > 0 ? { reattributedAway: herbestemdWeg } : {}),
+      // Hoeveel leveringen daadwerkelijk uit de portal zijn gehaald. Apart van
+      // reattributedAway, want melden en weghalen zijn twee verschillende feiten
+      // en de bovengrens kan het tweede tegenhouden zonder het eerste.
+      ...(herbestemdVerwijderd > 0 ? { reattributedRemoved: herbestemdVerwijderd } : {}),
+      ...(herbestemdNietVerwijderd ? { reattributedKept: herbestemdNietVerwijderd } : {}),
       ...(gemengdeLeveringen.size > 0
         ? { mixedSupplierDeliveries: Object.fromEntries(gemengdeLeveringen) }
         : {}),
