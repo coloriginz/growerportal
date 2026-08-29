@@ -58,6 +58,35 @@ const LIMIT = Number(argWaarde("--limit") ?? 0) || Infinity;
 const ARCHIEF = argWaarde("--archief") ?? path.join("private_input", "salessheets");
 const REPORT = argWaarde("--report") ?? path.join("tasks", "audit-salessheet-links.md");
 
+/*
+ * De ruwe tekst van de eerste pagina's, om te zien wiens afrekening het is.
+ *
+ * De leverdatum alleen is niet genoeg gebleken. Op productie hing
+ * `PCXOMRI - ... - 564 - 406743.PDF` aan levering 564 van PCXBAR (Tal Baruch) en
+ * de datum klopte tot op de dag — twee leveranciers leverden allebei op
+ * 10-07-2026 en droegen allebei shipment 564. In de PDF staat "Omri Cohen",
+ * "Ein Habesor ISRAEL" en drie keer `PCXOMRI`; "Baruch" komt er niet in voor.
+ * Zonder deze controle blijft zo'n koppeling staan omdat elk ander signaal klopt.
+ */
+async function pdfTekst(buffer: Buffer): Promise<string> {
+  const { getDocument } = await import("pdfjs-dist/legacy/build/pdf.mjs");
+  const doc = await getDocument({
+    data: new Uint8Array(buffer),
+    useSystemFonts: true,
+    verbosity: 0,
+  }).promise;
+  try {
+    let tekst = "";
+    for (let i = 1; i <= Math.min(doc.numPages, 2); i++) {
+      const inhoud = await (await doc.getPage(i)).getTextContent();
+      tekst += inhoud.items.map((it) => ("str" in it ? it.str : "")).join(" ") + "\n";
+    }
+    return tekst;
+  } finally {
+    await doc.destroy();
+  }
+}
+
 /** Alle PDF's in het archief, op kleine-letter bestandsnaam. */
 function indexeerArchief(wortel: string): Map<string, string[]> {
   const perNaam = new Map<string, string[]>();
@@ -88,7 +117,9 @@ type Uitkomst = {
     | "datum wijkt af"
     | "datum onleesbaar"
     | "bestand niet gevonden"
-    | "blob onbereikbaar";
+    | "blob onbereikbaar"
+    /** De PDF noemt zelf de code van een andere leverancier. Zwaarder dan de datum. */
+    | "andere leverancier";
   /*
    * De leverancierscode die de bestandsnaam noemt, als die afwijkt van de
    * leverancier van de afrekening. Bewust een eigen veld en niet in `status`
@@ -129,6 +160,12 @@ async function main() {
   console.log(`gekoppelde afrekeningen: ${gekoppeld.length}${teDoen.length < gekoppeld.length ? ` — beperkt tot ${teDoen.length}` : ""}`);
   console.log(APPLY ? "Foute koppelingen worden losgemaakt" : "DRY RUN — er wordt niets gewijzigd");
   console.log("");
+
+  // Vooraf, want de lus toetst er per koppeling tegen: een code in de
+  // bestandsnaam telt alleen als het een échte andere leverancier is.
+  const bekendeCodes = new Set(
+    (await prisma.supplier.findMany({ select: { code: true } })).map((s) => s.code.toUpperCase())
+  );
 
   const uitkomsten: Uitkomst[] = [];
   const losTeMaken: string[] = [];
@@ -216,7 +253,27 @@ async function main() {
       // Een onleesbare PDF is geen bewijs van een foute koppeling; alleen melden.
     }
 
-    if (!leverdatumPdf) {
+    /*
+     * De zwaarste controle staat vóór de datum: noemt de PDF zelf de code van de
+     * leverancier uit de bestandsnaam, en niet die van de afrekening, dan is het
+     * document van iemand anders — ook als elke datum klopt.
+     */
+    let anderLuidt = false;
+    if (basis.naamCode && bekendeCodes.has(basis.naamCode.toUpperCase())) {
+      try {
+        const tekst = (await pdfTekst(bron)).toUpperCase();
+        anderLuidt =
+          tekst.includes(basis.naamCode.toUpperCase()) &&
+          !tekst.includes(sheet.supplier.code.toUpperCase());
+      } catch {
+        // Onleesbaar: dan beslist de datum hieronder, zoals voorheen.
+      }
+    }
+
+    if (anderLuidt) {
+      uitkomsten.push({ ...basis, leverdatumPdf, status: "andere leverancier" });
+      losTeMaken.push(sheet.id);
+    } else if (!leverdatumPdf) {
       uitkomsten.push({ ...basis, leverdatumPdf: null, status: "datum onleesbaar" });
     } else if (leverdatumPdf === leverdatumPortal) {
       uitkomsten.push({ ...basis, leverdatumPdf, status: "klopt" });
@@ -292,9 +349,6 @@ async function main() {
     where: { type: "salessheet", salesSheets: { none: {} } },
     select: { id: true, fileName: true, supplier: { select: { code: true } } },
   });
-  const bekendeCodes = new Set(
-    (await prisma.supplier.findMany({ select: { code: true } })).map((s) => s.code.toUpperCase())
-  );
   const verkeerdGearchiveerd = losseDocs.filter((d) => {
     const code = parseSalesSheetFilename(d.fileName)?.supplierCode?.toUpperCase();
     return code && code !== d.supplier.code.toUpperCase() && bekendeCodes.has(code);
@@ -326,6 +380,7 @@ losse documenten bij de verkeerde leverancier: ${verkeerdGearchiveerd.length}`
   console.log(`gecontroleerd        : ${uitkomsten.length}`);
   console.log(`klopt                : ${tel("klopt")}`);
   if (CHECK_URLS) console.log(`blob onbereikbaar    : ${tel("blob onbereikbaar")}${APPLY ? " (losgemaakt)" : ""}`);
+  console.log(`andere leverancier   : ${tel("andere leverancier")}${APPLY ? " (losgemaakt)" : ""}`);
   console.log(`datum wijkt af       : ${tel("datum wijkt af")}${APPLY ? " (losgemaakt)" : ""}`);
   console.log(`datum onleesbaar     : ${tel("datum onleesbaar")}`);
   if (APPLY) console.log(`documenten verwijderd: ${documentenVerwijderd}`);
