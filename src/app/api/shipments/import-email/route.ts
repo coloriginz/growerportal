@@ -220,13 +220,37 @@ async function processAttachment(
   // sales sheets with the same recycled number apart.
   let pdfReference: string | null = null;
   let deliveryDate: string | null = null;
+  /*
+   * Waarom de fout hier bewaard wordt in plaats van weggegooid: een lege catch
+   * maakt van een kapotte parser een afwezige datum, en dan koppelt stap 3 op
+   * het nummer alleen. Zo zijn 83 afrekeningen aan de PDF van een andere
+   * levering geraakt — drie ervan aan die van een andere leverancier. De fout
+   * zag niemand, want het antwoord was "ambiguous_no_date", wat klinkt als een
+   * eigenschap van het document en niet als een storing in onze code.
+   */
+  let pdfFout: string | null = null;
+  /*
+   * Een parse die niets oplevert — geen referentie, geen factuurnummer en geen
+   * datum — is geen document zonder datum maar een parser die niets zag. Dat
+   * onderscheid is nodig omdat het eerste een reden is om voorzichtig te zijn
+   * en het tweede een storing die gerepareerd moet worden.
+   */
+  let pdfLeeg = false;
   try {
     const pdfParsed = await parseSalesSheetPdf(pdfBuffer);
     pdfReference = pdfParsed.reference;
     deliveryDate = pdfParsed.deliveryDate;
     ourInvoiceNumber = ourInvoiceNumber || pdfParsed.ourInvoiceNumber;
-  } catch {
-    // PDF unreadable — fall back to filename data only
+    pdfLeeg =
+      pdfParsed.reference === null &&
+      pdfParsed.deliveryDate === null &&
+      pdfParsed.ourInvoiceNumber === null;
+    if (pdfLeeg) {
+      console.error(`[salessheet] PDF leverde geen enkel veld op (${attachment.name})`);
+    }
+  } catch (error) {
+    pdfFout = error instanceof Error ? error.message : String(error);
+    console.error(`[salessheet] PDF niet te lezen (${attachment.name}): ${pdfFout}`);
   }
 
   // The filename carries the delivery date too. Without this fallback an
@@ -277,11 +301,30 @@ async function processAttachment(
     }
     salesSheet = onDate[0];
   } else {
-    // No readable date: link only when there is nothing to confuse it with.
-    if (candidates.length > 1) {
-      return { ok: false, reason: `ambiguous_no_date:${reference}` };
-    }
-    salesSheet = candidates[0];
+    /*
+     * Geen leesbare leverdatum betekent geen koppeling. Punt.
+     *
+     * Hier stond "koppel toch, zolang er maar één kandidaat is". Dat klinkt
+     * veilig en is het niet: sales sheet-nummers recyclen per jaar, dus één
+     * kandidaat betekent alleen dat de portal er van dát jaar één heeft — niet
+     * dat deze PDF erbij hoort. Zo kreeg PCXOMRI shipment 653 van 20-01-2025 de
+     * afrekening van 04-06-2025, en twaalf andere leveringen hetzelfde. Ze
+     * werden losgemaakt en meteen opnieuw fout gekoppeld, want deze uitweg stond
+     * nog open.
+     *
+     * De prijs is een niet-gekoppelde PDF wanneer het document onleesbaar is.
+     * Dat is de goedkope kant: de audit vindt er nul op duizenden, en een
+     * ontbrekende downloadknop is te herstellen. Een verkeerde niet — die laat
+     * een kweker de afrekening van een ander zien.
+     */
+    return {
+      ok: false,
+      reason: pdfFout
+        ? `pdf_unreadable:${reference}:${pdfFout.slice(0, 120)}`
+        : pdfLeeg
+          ? `pdf_empty:${reference}`
+          : `no_delivery_date:${reference}`,
+    };
   }
 
   // Step 4: Handle duplicate — delete old document if exists
@@ -299,12 +342,27 @@ async function processAttachment(
     }
   }
 
-  // Step 5: Upload to Vercel Blob
-  const blob = await put(
-    `salessheets/${Date.now()}-${attachment.name}`,
-    pdfBuffer,
-    { access: "public", contentType: "application/pdf" }
-  );
+  /*
+   * Step 5: Upload to Vercel Blob.
+   *
+   * Een mislukte upload hoort deze ene bijlage te kosten, niet het hele
+   * verzoek. Zonder deze catch gooide de route, kreeg de aanroeper een HTTP 500
+   * met een lege body, en gingen de andere bijlagen in dezelfde portie mee de
+   * afgrond in — zonder dat ergens stond waarom. Zo leek een verlopen
+   * blob-token op een storing in de PDF-verwerking.
+   */
+  let blob: Awaited<ReturnType<typeof put>>;
+  try {
+    blob = await put(
+      `salessheets/${Date.now()}-${attachment.name}`,
+      pdfBuffer,
+      { access: "public", contentType: "application/pdf" }
+    );
+  } catch (error) {
+    const bericht = error instanceof Error ? error.message : String(error);
+    console.error(`[salessheet] blob-upload mislukt (${attachment.name}): ${bericht}`);
+    return { ok: false, reason: `blob_upload_failed:${bericht.slice(0, 120)}` };
+  }
 
   // Step 6: Create Document record
   const document = await prisma.document.create({
