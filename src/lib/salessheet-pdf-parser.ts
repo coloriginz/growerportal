@@ -16,6 +16,10 @@ export interface ParsedSalesSheetPdf {
   ourInvoiceNumber: string | null;
   /** Delivery date printed on the PDF, as "YYYY-MM-DD". Null if unreadable. */
   deliveryDate: string | null;
+  /** Wat er op de PDF zelf stond. Null betekent: dit label kwam niet voor. */
+  turnover: number | null;
+  costs: number | null;
+  netResult: number | null;
 }
 
 /** Convert a Dutch "DD-MM-YYYY" or "DD-MM-YY" date to "YYYY-MM-DD". */
@@ -29,6 +33,83 @@ function parseDutchDate(value: string | null): string | null {
   if (year < 100) year += 2000;
   if (month < 1 || month > 12 || day < 1 || day > 31) return null;
   return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+/*
+ * De bedragen op de sales sheet, in beide talen.
+ *
+ * pdfjs rolt de tabelcellen uit in een volgorde waarin het bedrag bij de totalen
+ * vóór zijn label staat ("€ 2.370,30 Total nett turnover") en bij de kosten erna
+ * ("Total costs € 873,57"). Wie dat omdraait leest stelselmatig het verkeerde
+ * getal, en het valt niet op omdat er altijd wél een bedrag uitkomt.
+ *
+ * De btw-regel op Nederlandse sales sheets ("54,00 € 654,00 BTW: NETTO RESULTAAT
+ * INCL. BTW") staat er met opzet niet bij: binnenlandse leveranciers krijgen btw
+ * bovenop het netto, en de portal kent geen btw. Alleen het bedrag vóór de btw is
+ * vergelijkbaar.
+ */
+const BEDRAG = String.raw`\(?€?\s*-?[\d.]+,\d{2}\)?`;
+
+const OMZET_LABELS = ["Total nett turnover", "Totale netto omzet"];
+const KOSTEN_LABELS = ["Total costs", "Totale kosten"];
+const NETTO_LABELS = [
+  "To be received by supplier",
+  "To be paid by supplier",
+  "Te ontvangen door leverancier",
+  "Te betalen door leverancier",
+  "Nett payable / receivable to/from OZ import",
+];
+
+/** "1.763,10" en "(€ 193,78)" naar een getal. Haakjes betekenen negatief. */
+function leesBedrag(ruw: string): number | null {
+  const negatief = ruw.includes("(");
+  const schoon = ruw.replace(/[()€\s]/g, "").replace(/\./g, "").replace(",", ".");
+  const n = Number(schoon);
+  if (!Number.isFinite(n)) return null;
+  return negatief ? -Math.abs(n) : n;
+}
+
+/** Het eerste bedrag dat vlak vóór een van de labels staat. */
+function bedragVoorLabel(tekst: string, labels: readonly string[]): number | null {
+  for (const label of labels) {
+    const m = tekst.match(new RegExp(`(${BEDRAG})\\s*${escapeRegex(label)}`, "i"));
+    if (m) {
+      const n = leesBedrag(m[1]);
+      if (n !== null) return n;
+    }
+  }
+  return null;
+}
+
+/** Het eerste bedrag dat vlak ná een van de labels staat. */
+function bedragNaLabel(tekst: string, labels: readonly string[]): number | null {
+  for (const label of labels) {
+    const m = tekst.match(new RegExp(`${escapeRegex(label)}\\s*(${BEDRAG})`, "i"));
+    if (m) {
+      const n = leesBedrag(m[1]);
+      if (n !== null) return n;
+    }
+  }
+  return null;
+}
+
+function escapeRegex(waarde: string): string {
+  return waarde.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+export function parseSalesSheetAmounts(text: string): {
+  turnover: number | null;
+  costs: number | null;
+  netResult: number | null;
+} {
+  return {
+    turnover: bedragVoorLabel(text, OMZET_LABELS),
+    // Een levering zonder kosten heeft de regel niet; dat is nul en geen misser,
+    // maar het onderscheid tussen "nul" en "niet gevonden" hoort hier bewaard te
+    // blijven. De vergelijking verderop beslist wat een ontbrekende waarde betekent.
+    costs: bedragNaLabel(text, KOSTEN_LABELS) ?? bedragVoorLabel(text, KOSTEN_LABELS),
+    netResult: bedragVoorLabel(text, NETTO_LABELS),
+  };
 }
 
 /*
@@ -73,6 +154,12 @@ export async function parseSalesSheetPdf(pdfBuffer: Buffer): Promise<ParsedSales
         x: Math.round(i.transform![4]),
         y: Math.round(i.transform![5]),
       }));
+
+    // Dezelfde items als hierboven, nu plat aan elkaar geplakt in documentvolgorde.
+    // Dat is de volgorde waarin pdfjs de tabelcellen uitrolt (bedrag vóór het
+    // label bij de totalen, erna bij de kosten — zie parseSalesSheetAmounts),
+    // en het document wordt er niet nog een keer voor geopend.
+    const tekst = positioned.map((i) => i.text).join(" ");
 
     const valueRightOf = (label: RegExp): string | null => {
       const labelItem = positioned.find((i) => label.test(i.text));
@@ -149,7 +236,9 @@ export async function parseSalesSheetPdf(pdfBuffer: Buffer): Promise<ParsedSales
       }
     }
 
-    return { reference, ourInvoiceNumber, deliveryDate };
+    const { turnover, costs, netResult } = parseSalesSheetAmounts(tekst);
+
+    return { reference, ourInvoiceNumber, deliveryDate, turnover, costs, netResult };
   } finally {
     await doc.destroy();
   }
