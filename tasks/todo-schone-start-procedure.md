@@ -28,6 +28,35 @@ Die laatste is bewust: het schuivende syncvenster komt niet terug op oude period
 start is dat geen probleem — de backfill haalt alles één keer op — maar zodra het warehouse
 historie herziet, loopt de portal weer achter. Dat vraagt een terugkerende ronde, geen eenmalige.
 
+## Wat er níet opnieuw opgebouwd wordt
+
+"De database opnieuw opbouwen" kan niet letterlijk. Alleen de tabellen die uit Fabric komen zijn
+herbouwbaar; de rest bestaat alleen hier en is weg als je hem weggooit.
+
+| herbouwbaar uit Fabric | alleen in de portal |
+|---|---|
+| `Transaction`, `Lot`, `SalesSheet`, `SalesSheetCost`, `LotCorrection`, `Grower` | `User`, `Supplier`, `Document`, `ShipmentForecast`, `QualityIssue`, `Certificate`, `ChangeRequest`, alle fust-tabellen, `FustAuditLog`, `ImportBatch` |
+
+**`Supplier` is het anker en moet zijn id's houden.** Gebruikers, fustorders, prognoses en documenten
+hangen eraan; een nieuwe uuid maakt die wezen. Hetzelfde geldt voor `Document`: de blobs blijven
+bestaan, maar `SalesSheet.pdfDocumentId` wijst naar een afrekening die na de herbouw een nieuwe
+uuid heeft, dus die koppelingen moeten opnieuw gelegd worden — niet gemigreerd.
+
+Op test is die rechterkolom bijna leeg (0 fustorders, 5 prognoses). Op productie niet. Meet het
+daar vóór je begint, niet erna.
+
+## Blokkade: 397 PDF's staan alleen in de blobopslag
+
+De herbouw koppelt salessheets vanuit `private_input/salessheets`. Van de gekoppelde afrekeningen
+zijn er 397 waarvan het bestand daar niet in zit: die kwamen via de e-mailstroom binnen en bestaan
+alleen als blob. Na een herbouw zijn die koppelingen weg en niet terug te leggen — de route heeft
+het bestand zelf nodig om de leverdatum te lezen, en die is sinds 29-08-2026 verplicht.
+
+- [ ] Die 397 blobs eerst naar het archief halen, vóór de herbouw. `Document.fileUrl` staat in de
+      database, dus het is een download per stuk.
+- [ ] Daarna `scripts/audit-salessheet-links.ts` erop draaien: nu zijn ze niet te controleren, en
+      dat is de enige groep waarvan we niet weten of de koppeling klopt.
+
 ## De volgorde
 
 - [ ] **1. Leveranciers.** `/api/import/suppliers`, of activeren vanuit het Fabric-relatiescherm.

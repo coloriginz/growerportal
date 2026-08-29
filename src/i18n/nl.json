@@ -226,7 +226,12 @@
     "correction": "Correctie",
     "corrections": "Correcties",
     "correctionReason": "Reden",
-    "deleted": "Verwijderd"
+    "deleted": "Verwijderd",
+    "soldStems": "Verkochte stelen",
+    "allStatuses": "Alle statussen",
+    "statusSelling": "In verkoop",
+    "statusFinalizing": "Afrekening volgt",
+    "statusCompleted": "Afgerond"
   },
   "documents": {
     "title": "Documenten",

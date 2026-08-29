@@ -2,6 +2,10 @@ import { NextRequest } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { runImport } from "@/lib/import-batch";
+import {
+  planReattributionRemoval,
+  type ReattributedSheet,
+} from "@/lib/sync/reattribution";
 import { isConsignment, purchaseTypeKey } from "@/lib/sync/purchase-type";
 
 // Vercel kapt een functie zonder dit af op de standaardlimiet; de lots- en
@@ -46,6 +50,54 @@ const partijAliases = {
   // lots: inkoop_factuur_aantal matches what the portal already holds.
   "Inkoopfactuur volume": ["inkoop_factuur_aantal"],
 } as const;
+
+/*
+ * Haalt een levering volledig uit de portal, met alles wat eraan hangt.
+ *
+ * Drie dingen die niet vanzelf gaan en die je pas mist als iemand het merkt:
+ *
+ *  - `Lot.salesSheetId` is optioneel, dus partijen cascaderen níét mee met hun
+ *    afrekening; ze zouden losgekoppeld achterblijven onder de oude leverancier.
+ *    Ze worden daarom eerst apart verwijderd, waarna transacties, correcties en
+ *    kwaliteitsmeldingen wél vanzelf meegaan (die staan op Cascade).
+ *  - `SalesSheetCost` cascadeert wel mee met de afrekening.
+ *  - Het gekoppelde `Document` hangt andersom (`SalesSheet.pdfDocumentId` wijst
+ *    ernaar) en blijft dus staan — inclusief zijn eigen `supplierId`. Precies dat
+ *    document is hier het gevoelige deel: het is de sales sheet-PDF van de ándere
+ *    partij. Het gaat mee, tenzij een andere afrekening er nog aan hangt.
+ *
+ * De blob achter het document blijft staan. Die is alleen bereikbaar via een url
+ * die nergens meer wordt getoond, en een blob weggooien vanuit een importroute is
+ * een nevenwerking die niet meer terug te draaien is.
+ */
+async function verwijderLeveringen(sheetIds: string[]): Promise<number> {
+  if (sheetIds.length === 0) return 0;
+
+  const sheets = await prisma.salesSheet.findMany({
+    where: { id: { in: sheetIds } },
+    select: { id: true, pdfDocumentId: true },
+  });
+  const documentIds = [...new Set(sheets.map((s) => s.pdfDocumentId).filter(Boolean))] as string[];
+
+  await prisma.lot.deleteMany({ where: { salesSheetId: { in: sheetIds } } });
+  const verwijderd = await prisma.salesSheet.deleteMany({ where: { id: { in: sheetIds } } });
+
+  if (documentIds.length > 0) {
+    // Pas ná het verwijderen van de afrekening: zolang die er is, wijst haar
+    // pdfDocumentId nog naar dit document.
+    const nogInGebruik = await prisma.salesSheet.findMany({
+      where: { pdfDocumentId: { in: documentIds } },
+      select: { pdfDocumentId: true },
+    });
+    const bezet = new Set(nogInGebruik.map((s) => s.pdfDocumentId));
+    const vrij = documentIds.filter((id) => !bezet.has(id));
+    if (vrij.length > 0) {
+      await prisma.document.deleteMany({ where: { id: { in: vrij } } });
+    }
+  }
+
+  return verwijderd.count;
+}
 
 /** Classify a Facttype Sub value into base lot or correction */
 function isCorrection(facttypeSub: string | null | undefined): boolean {
@@ -427,7 +479,14 @@ async function upsertLots(partijen: Partij[], batchId: string | null) {
           s3: row.S03 || null,
           invoicedColli: row["Inkoopfactuur colli"] ?? null,
           invoicedVolume: row["Inkoopfactuur volume"] ?? null,
-          correctionVolume: row["Inslagcorrectie volume"] ?? null,
+          // Beide namen, net als het correctiepad hieronder. De SQL-query stuurt
+          // `Inslag aantal correctie`; alleen de legacy-naam lezen zette deze
+          // kolom bij elke portal-gestuurde ronde op null, waarna fase 7 hem
+          // alleen herstelde voor partijen met een correctieregel in diezelfde
+          // payload. Vandaag valt dat niet op omdat geen enkele partij een
+          // correctievolume heeft zonder correctieregels, maar het is toeval en
+          // geen ontwerp.
+          correctionVolume: row["Inslag aantal correctie"] ?? row["Inslagcorrectie volume"] ?? null,
         });
         lotUpdated++;
       } else {
@@ -455,7 +514,7 @@ async function upsertLots(partijen: Partij[], batchId: string | null) {
           s3: row.S03 || null,
           invoicedColli: row["Inkoopfactuur colli"] || null,
           invoicedVolume: row["Inkoopfactuur volume"] || null,
-          correctionVolume: row["Inslagcorrectie volume"] || null,
+          correctionVolume: row["Inslag aantal correctie"] ?? row["Inslagcorrectie volume"] ?? null,
         });
         lotCreated++;
       }
@@ -623,7 +682,26 @@ async function upsertLots(partijen: Partij[], batchId: string | null) {
   let correctionsDeleted = 0;
   let correctionsSkipped = 0;
 
-  if (correctionRows.length > 0) {
+  /*
+   * De partijen waarvan deze ronde de correcties mag herschrijven: alles wat de
+   * payload draagt en waarvan we de leverancier kennen — niet alleen de partijen
+   * die tóévallig een correctieregel meebrengen.
+   *
+   * Dat onderscheid was het lek. De opruiming keek naar `corrInsertData`, dus een
+   * partij waarvan de láátste correctie in Fabric verviel, kwam in geen enkele
+   * volgende ronde meer voor en hield zijn dode correctieregel voor altijd —
+   * dezelfde vorm als de ingetrokken orderregels, zie `src/lib/sync/withdrawal.ts`.
+   * Hier is het simpeler op te lossen dan daar: alle 17.056 correcties dragen het
+   * `part_id` van hun moederpartij (gemeten 29-08-2026, nul uitzonderingen), dus
+   * de partijen uit de payload dekken ook de correcties die eraan hingen.
+   */
+  const payloadPartIds = [
+    ...new Set(
+      consignatie.filter((r) => supplierMap.has(r.rel_id_leverancier)).map((r) => r.part_id)
+    ),
+  ];
+
+  if (payloadPartIds.length > 0) {
     // Find parent lots for correction rows by lotNumber + supplier
     const corrLotNumbers = [...new Set(correctionRows.map((r) => String(r.Partijnummer).trim()))];
     const corrSupplierFabricIds = [...new Set(correctionRows.map((r) => r.rel_id_leverancier))];
@@ -675,14 +753,23 @@ async function upsertLots(partijen: Partij[], batchId: string | null) {
       });
     }
 
-    if (corrInsertData.length > 0) {
-      // Delete existing corrections for all part_ids in this batch
-      const corrFabricPartIds = [...new Set(corrInsertData.map((d: { fabricPartId: number }) => d.fabricPartId))];
-      const deleteResult = await prisma.lotCorrection.deleteMany({
-        where: { fabricPartId: { in: corrFabricPartIds } },
-      });
-      correctionsDeleted = deleteResult.count;
+    /*
+     * Eerst opschrijven wélke partijen nu een correctie dragen, want `deleteMany`
+     * geeft alleen een aantal terug. Een partij die er na deze ronde geen meer
+     * heeft moet zijn aggregaat terug naar leeg, en zonder deze lijst weet de
+     * herberekening hieronder niet dat hij bestaat.
+     */
+    const hadCorrecties = await prisma.lotCorrection.findMany({
+      where: { fabricPartId: { in: payloadPartIds } },
+      select: { lotId: true },
+    });
 
+    const deleteResult = await prisma.lotCorrection.deleteMany({
+      where: { fabricPartId: { in: payloadPartIds } },
+    });
+    correctionsDeleted = deleteResult.count;
+
+    if (corrInsertData.length > 0) {
       // Insert all correction rows
       await prisma.$executeRawUnsafe(
         `INSERT INTO "LotCorrection" (
@@ -709,8 +796,24 @@ async function upsertLots(partijen: Partij[], batchId: string | null) {
       correctionsCreated = corrInsertData.length;
     }
 
-    // Update aggregate correctionVolume on parent lots
-    const affectedLotIds = [...new Set(corrInsertData.map((d: { lotId: string }) => d.lotId))];
+    /*
+     * Het aggregaat bijwerken van elke partij die deze ronde een correctie kreeg
+     * óf er een verloor. Die tweede helft ontbrak: de bron was alleen
+     * `corrInsertData`, en de subquery las `LotCorrection` — dus een partij
+     * zonder correcties leverde geen rij op en hield zijn oude `correctionVolume`
+     * staan, ook nadat de laatste correctie was verdwenen.
+     *
+     * De LEFT JOIN zet zo'n partij terug op NULL. Bewust alleen voor partijen die
+     * correcties hadden of kregen: `correctionVolume` wordt óók door de
+     * partijregel zelf geschreven (`Inslag aantal correctie`), en een partij die
+     * nooit een correctie had mag deze ronde niet leegmaken.
+     */
+    const affectedLotIds = [
+      ...new Set([
+        ...corrInsertData.map((d: { lotId: string }) => d.lotId),
+        ...hadCorrecties.map((c) => c.lotId),
+      ]),
+    ];
 
     if (affectedLotIds.length > 0) {
       await prisma.$executeRawUnsafe(
@@ -718,10 +821,10 @@ async function upsertLots(partijen: Partij[], batchId: string | null) {
          SET "correctionVolume" = sub.total_vol,
              "updatedAt" = NOW()
          FROM (
-           SELECT "lotId", SUM("correctionVolume") AS total_vol
-           FROM "LotCorrection"
-           WHERE "lotId" = ANY($1::text[])
-           GROUP BY "lotId"
+           SELECT ids.id AS "lotId", SUM(c."correctionVolume") AS total_vol
+           FROM unnest($1::text[]) AS ids(id)
+           LEFT JOIN "LotCorrection" c ON c."lotId" = ids.id
+           GROUP BY ids.id
          ) AS sub
          WHERE l.id = sub."lotId"`,
         affectedLotIds
@@ -745,17 +848,27 @@ async function upsertLots(partijen: Partij[], batchId: string | null) {
    * niet meer heeft, en die ziet dus omzet en kosten van een ander. Het verdient
    * een eigen melding, anders verdwijnt het in het aantal overgeslagen partijen.
    *
-   * Alleen melden, niet verplaatsen — er is geen leverancier om hem heen te
-   * zetten. Zodra iemand die relatie activeert verhuist de levering vanzelf mee,
-   * want de bijwerking hierboven zet `supplierId` volgens Fabric. Deze melding
-   * is dus precies de aanwijzing om dat te doen.
+   * Melden én weghalen. Er is geen leverancier om hem heen te zetten, en juist
+   * daarom hoort hij hier niet: dezelfde partij zou bij het binnenkomen zijn
+   * weggegooid omdat zijn relatie geen portalleverancier is. Hem laten staan
+   * omdat hij er toevallig al was, is die regel alleen niet toepassen op het
+   * moment dat het uitmaakt. Zie `src/lib/sync/reattribution.ts` voor waarom dat
+   * meer kost dan een verkeerd getal op een scherm.
+   *
+   * Wordt de relatie later alsnog geactiveerd, dan haalt een backfill de levering
+   * gewoon opnieuw op, dan wel onder de juiste leverancier.
    */
   const herbestemdWeg: Record<string, { leveringen: number; van: string[] }> = {};
+  let herbestemdVerwijderd = 0;
+  let herbestemdNietVerwijderd: string | null = null;
+
   if (overgeslagenParthdrs.size > 0) {
     const bestaand = await prisma.salesSheet.findMany({
       where: { fabricParthdrId: { in: [...overgeslagenParthdrs.keys()] } },
-      select: { fabricParthdrId: true, supplier: { select: { code: true } } },
+      select: { id: true, fabricParthdrId: true, supplier: { select: { code: true } } },
     });
+
+    const herbestemd: ReattributedSheet[] = [];
     for (const sheet of bestaand) {
       const relId = overgeslagenParthdrs.get(sheet.fabricParthdrId!);
       if (relId === undefined) continue;
@@ -764,6 +877,19 @@ async function upsertLots(partijen: Partij[], batchId: string | null) {
       entry.leveringen++;
       if (!entry.van.includes(sheet.supplier.code)) entry.van.push(sheet.supplier.code);
       herbestemdWeg[sleutel] = entry;
+      herbestemd.push({
+        id: sheet.id,
+        parthdrId: sheet.fabricParthdrId!,
+        supplierCode: sheet.supplier.code,
+        relId,
+      });
+    }
+
+    const plan = planReattributionRemoval({ sheets: herbestemd });
+    if (plan.mode === "remove") {
+      herbestemdVerwijderd = await verwijderLeveringen(plan.sheets.map((s) => s.id));
+    } else if (herbestemd.length > 0) {
+      herbestemdNietVerwijderd = plan.reason;
     }
   }
 
@@ -802,6 +928,11 @@ async function upsertLots(partijen: Partij[], batchId: string | null) {
       // Alleen aanwezig als er iets te melden is; anders draagt elke batch een
       // lege sleutel en gaat de betekenis van zijn aanwezigheid verloren.
       ...(Object.keys(herbestemdWeg).length > 0 ? { reattributedAway: herbestemdWeg } : {}),
+      // Hoeveel leveringen daadwerkelijk uit de portal zijn gehaald. Apart van
+      // reattributedAway, want melden en weghalen zijn twee verschillende feiten
+      // en de bovengrens kan het tweede tegenhouden zonder het eerste.
+      ...(herbestemdVerwijderd > 0 ? { reattributedRemoved: herbestemdVerwijderd } : {}),
+      ...(herbestemdNietVerwijderd ? { reattributedKept: herbestemdNietVerwijderd } : {}),
       ...(gemengdeLeveringen.size > 0
         ? { mixedSupplierDeliveries: Object.fromEntries(gemengdeLeveringen) }
         : {}),

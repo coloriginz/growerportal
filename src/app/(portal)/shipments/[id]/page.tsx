@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { auth } from "@/lib/auth";
 import { ShipmentDetail } from "./shipment-detail";
+import { resolveShipmentStatus } from "@/lib/shipment-status";
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -86,10 +87,22 @@ export default async function ShipmentDetailPage({ params }: Props) {
     : [];
   const correctionReasons = Object.fromEntries(reasons.map(r => [r.id, r]));
 
+  const deliveredStems = salesSheet.lots.reduce((sum, l) => sum + l.totalStems, 0);
+  const soldStems = salesSheet.lots.reduce(
+    (sum, l) => sum + l.transactions.reduce((s, tx) => s + tx.stems, 0),
+    0
+  );
+  const status = resolveShipmentStatus({
+    deliveredStems,
+    soldStems,
+    costCount: salesSheet.costs.length,
+  });
+
   return (
     <ShipmentDetail
       shipment={JSON.parse(JSON.stringify(salesSheet))}
       correctionReasons={correctionReasons}
+      status={status}
     />
   );
 }

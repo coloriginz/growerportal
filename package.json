@@ -7,7 +7,7 @@
     "build": "prisma generate && next build",
     "start": "next start",
     "lint": "eslint",
-    "check": "tsx scripts/checks/queries.ts && tsx scripts/checks/schedule.ts && tsx scripts/checks/import-auth.ts && tsx scripts/checks/skipped.ts && tsx scripts/checks/purchase-type.ts && tsx scripts/checks/backfill.ts && tsx scripts/checks/salessheet-filename.ts",
+    "check": "tsx scripts/checks/queries.ts && tsx scripts/checks/schedule.ts && tsx scripts/checks/import-auth.ts && tsx scripts/checks/skipped.ts && tsx scripts/checks/purchase-type.ts && tsx scripts/checks/backfill.ts && tsx scripts/checks/salessheet-filename.ts && tsx scripts/checks/shipment-status.ts && tsx scripts/checks/withdrawal.ts && tsx scripts/checks/reattribution.ts",
     "db:push": "npx prisma db push",
     "db:generate": "npx prisma generate",
     "db:seed": "npx tsx prisma/seed.ts",

@@ -5,7 +5,7 @@
 > afrekening van een concurrent downloaden.
 >
 > **Status:** oorzaak gevonden en in de basisroutes gerepareerd op 29-08-2026; 83 foute koppelingen
-> losgemaakt. Wat nog openstaat staat onderaan. Dit is dezelfde klasse als §5 van
+> losgemaakt op test, waar nu nul koppelingen fout zijn. **Op productie staan er nog 67 fout.** Wat nog openstaat staat onderaan. Dit is dezelfde klasse als §5 van
 > `docs/reconciliatie-pcfup-colbfl.md`, maar nu portalbreed geteld — en die 45 uit de kop zijn
 > alleen de gevallen die je aan de bestandsnaam ziet; de volledige audit vond er 83.
 
@@ -99,6 +99,33 @@ het een storing in onze code was.
 - [ ] **449 koppelingen zijn niet te controleren** tegen het lokale archief: die PDF's kwamen via de
       e-mailstroom binnen en staan alleen in de blobopslag. Om ook die te auditen moet het script de
       blob downloaden in plaats van het archief te lezen.
+
+      **Deze blinde vlek heeft aantoonbaar een lek verborgen — 29-08-2026.** Levering INT000072 van
+      COLXAFRI droeg `COLXOLE - 06_18_2026 07_45_00 - INT000072 - 405644.PDF`, de afrekening van Ole
+      Engai Growers, met `Document.supplierId` op COLXAFRI en één actief account daar. De audit kon
+      hem niet zien: het bestand staat niet in `private_input/salessheets`, en de audit leest het
+      archief. Gevonden langs een heel andere weg — via de leveranciertoewijzing in Fabric, zie
+      `todo-levering-verkeerde-leverancier.md`. Daarmee is dit punt geen opruimwerk meer maar de
+      vraag hoeveel van die 449 hetzelfde probleem dragen; niemand weet dat nu.
+
+      **Opgelost in het script, en toen gemeten — 29-08-2026.** `audit-salessheet-links.ts` heeft
+      nu `--blob` (haalt bestanden op die niet in het archief staan) en draagt de leverancierscode
+      uit de bestandsnaam als aparte aanwijzing in het rapport.
+
+      Uitkomst op **test**: alle 4.024 leesbare koppelingen kloppen op leverdatum. Nul fout. De 35
+      koppelingen waarvan de bestandsnaam een andere leverancier noemt, kloppen dus gewoon — de
+      code in de naam is een aanwijzing en geen bewijs, en alleen daarop losmaken zou 35 goede
+      koppelingen hebben gesloopt. Daarom staat die groep apart in het rapport en wordt hij niet
+      losgemaakt.
+
+      Uitkomst op **productie** (read-only nagerekend, 433 koppelingen, elk bestand uit de blob
+      gehaald en uitgelezen): **67 koppelingen wijzen naar de verkeerde PDF**, geverifieerd op de
+      leverdatum in het document zelf — steevast maanden tot een jaar naast de levering. Bij het
+      merendeel noemt de bestandsnaam óók een andere leverancier (COLXROOD op PCFRUT, COLXBAK op
+      COLXSHA, PCXRONEN op PCFUP, COLBUGL op PCFUP). 365 kloppen, 1 blob onbereikbaar.
+
+      Productie heeft de reparatie van 29-08 dus nog niet gehad: daar is dit lek live. Het losmaken
+      vraagt een expliciete beslissing, want het is een productiewijziging.
 
 ## Waarom dit meer weegt dan een verkeerd bestand
 

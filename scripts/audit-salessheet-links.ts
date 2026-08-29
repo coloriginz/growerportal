@@ -28,6 +28,9 @@
  *   --check-urls   controleer ook of het bestand in de blobopslag nog bestaat. Kost een
  *                  netwerkaanroep per koppeling, dus staat standaard uit.
  *   --limit=N      controleer hooguit N koppelingen.
+ *   --blob         haal bestanden die niet in het archief staan uit de blobopslag, zodat
+ *                  ook de e-mailkoppelingen op inhoud worden gecontroleerd. Traag, maar
+ *                  op productie staat élk bestand alleen daar.
  *   --archief=PAD  wortelmap met PDF's. Standaard private_input/salessheets.
  *   --report=PAD   schrijf het rapport hierheen.
  */
@@ -36,6 +39,7 @@ import * as path from "path";
 import "dotenv/config";
 import { prisma } from "../src/lib/db";
 import { parseSalesSheetPdf } from "../src/lib/salessheet-pdf-parser";
+import { parseSalesSheetFilename } from "../src/lib/salessheet-filename-parser";
 
 function argWaarde(vlag: string): string | undefined {
   const arg = process.argv.slice(2).find((a) => a.startsWith(vlag + "="));
@@ -43,6 +47,11 @@ function argWaarde(vlag: string): string | undefined {
 }
 
 const APPLY = process.argv.includes("--apply");
+/**
+ * Haal bestanden die niet in het archief staan op uit de blobopslag. Zonder dit
+ * blijft elke e-mailkoppeling ongecontroleerd — op productie is dat alles.
+ */
+const BLOB = process.argv.includes("--blob");
 const CHECK_URLS = process.argv.includes("--check-urls");
 const LIMIT = Number(argWaarde("--limit") ?? 0) || Infinity;
 const ARCHIEF = argWaarde("--archief") ?? path.join("private_input", "salessheets");
@@ -79,6 +88,20 @@ type Uitkomst = {
     | "datum onleesbaar"
     | "bestand niet gevonden"
     | "blob onbereikbaar";
+  /*
+   * De leverancierscode die de bestandsnaam noemt, als die afwijkt van de
+   * leverancier van de afrekening. Bewust een eigen veld en niet in `status`
+   * verwerkt: de telling moet op de uitkomst blijven optellen, en dit is een
+   * aanwijzing naast die uitkomst, geen uitkomst op zichzelf.
+   *
+   * En het is echt niet meer dan een aanwijzing. Op test dragen 35 koppelingen
+   * een naam met een andere code terwijl de leverdatum in de PDF gewoon klopt
+   * (gemeten 29-08-2026, alle 4.024 leesbare koppelingen nagerekend). Op productie
+   * viel het wél samen: van de zes die daar op inhoud zijn nagerekend weken alle
+   * zes óók maanden af op de datum. Alleen op de naam losmaken zou hier dus
+   * twintig goede koppelingen hebben gesloopt.
+   */
+  naamCode: string | null;
 };
 
 async function main() {
@@ -113,11 +136,16 @@ async function main() {
     const naam = sheet.pdfDocument?.fileName ?? "";
     const paden = archief.get(naam.toLowerCase()) ?? [];
     const leverdatumPortal = sheet.deliveryDate.toISOString().slice(0, 10);
+    const naamCode0 = parseSalesSheetFilename(naam)?.supplierCode ?? null;
     const basis = {
       invoiceNumber: sheet.invoiceNumber,
       supplier: sheet.supplier.code,
       leverdatumPortal,
       bestand: naam,
+      naamCode:
+        naamCode0 && naamCode0.toUpperCase() !== sheet.supplier.code.toUpperCase()
+          ? naamCode0
+          : null,
     };
 
     /*
@@ -142,14 +170,47 @@ async function main() {
       }
     }
 
-    if (paden.length === 0) {
-      uitkomsten.push({ ...basis, leverdatumPdf: null, status: "bestand niet gevonden" });
+    /*
+     * De leverancierscode uit de bestandsnaam, als eerste zeef.
+     *
+     * Kost niets — geen bestand, geen download — en hij vindt precies de
+     * koppelingen die deze audit tot 29-08-2026 niet zag: PDF's die alleen in de
+     * blobopslag staan omdat ze via de e-mailstroom binnenkwamen. Op productie
+     * staat élke gekoppelde PDF daar, dus daar was deze audit tot nu toe blind.
+     * Gemeten op die dag: 84 van 433 productiekoppelingen dragen een andere
+     * leverancierscode dan de afrekening waar ze aan hangen, en de zes die ik op
+     * inhoud narekende weken allemaal óók maanden af op de leverdatum in de PDF
+     * zelf. Twee onafhankelijke signalen, dus dit is geen ruis.
+     *
+     * Losmaken doet deze zeef niet op eigen houtje: de bestandsnaam is een
+     * aanwijzing, de leverdatum in het document is het bewijs. Staat het bestand
+     * lokaal of is `--blob` meegegeven, dan beslist die datum hieronder alsnog.
+     */
+    let bron: Buffer | null = null;
+    if (paden.length > 0) {
+      bron = fs.readFileSync(paden[0]);
+    } else if (BLOB && sheet.pdfDocument?.fileUrl) {
+      // Alleen op verzoek: dit haalt elk bestand op dat niet lokaal staat.
+      try {
+        const res = await fetch(sheet.pdfDocument.fileUrl);
+        if (res.ok) bron = Buffer.from(await res.arrayBuffer());
+      } catch {
+        // onbereikbaar; hieronder afgehandeld als "bestand niet gevonden"
+      }
+    }
+
+    if (!bron) {
+      uitkomsten.push({
+        ...basis,
+        leverdatumPdf: null,
+        status: "bestand niet gevonden",
+      });
       continue;
     }
 
     let leverdatumPdf: string | null = null;
     try {
-      leverdatumPdf = (await parseSalesSheetPdf(fs.readFileSync(paden[0]))).deliveryDate;
+      leverdatumPdf = (await parseSalesSheetPdf(bron)).deliveryDate;
     } catch {
       // Een onleesbare PDF is geen bewijs van een foute koppeling; alleen melden.
     }
@@ -185,6 +246,7 @@ async function main() {
 
   const tel = (s: Uitkomst["status"]) => uitkomsten.filter((u) => u.status === s).length;
   console.log("");
+  console.log(`gecontroleerd        : ${uitkomsten.length}`);
   console.log(`klopt                : ${tel("klopt")}`);
   if (CHECK_URLS) console.log(`blob onbereikbaar    : ${tel("blob onbereikbaar")}${APPLY ? " (losgemaakt)" : ""}`);
   console.log(`datum wijkt af       : ${tel("datum wijkt af")}${APPLY ? " (losgemaakt)" : ""}`);
@@ -215,12 +277,28 @@ function schrijfRapport(uitkomsten: Uitkomst[]) {
     "",
     "## Koppelingen waarvan de leverdatum afwijkt",
     "",
-    "| leverancier | shipment | leverdatum portal | leverdatum op PDF | bestand |",
-    "|---|---|---|---|---|",
+    "| leverancier | shipment | leverdatum portal | leverdatum op PDF | naam zegt | bestand |",
+    "|---|---|---|---|---|---|",
     ...fout.map(
       (u) =>
-        `| ${u.supplier} | ${u.invoiceNumber} | ${u.leverdatumPortal} | ${u.leverdatumPdf} | ${u.bestand} |`
+        `| ${u.supplier} | ${u.invoiceNumber} | ${u.leverdatumPortal} | ${u.leverdatumPdf} | ${u.naamCode ?? "-"} | ${u.bestand} |`
     ),
+    "",
+    /*
+     * Apart, en met opzet niet losgemaakt. Een bestandsnaam die een andere
+     * leverancier noemt terwijl de leverdatum klopt is een vraag, geen fout: op
+     * test zijn dat er 35 en ze kloppen allemaal op inhoud. Ze hier tonen maakt
+     * ze naslaanbaar zonder ze te behandelen als bewijs.
+     */
+    "## Koppelingen waarvan alleen de bestandsnaam een andere leverancier noemt",
+    "",
+    `Aanwijzing, geen bevinding: de leverdatum in de PDF is hier leidend en die klopt.`,
+    "",
+    "| leverancier | shipment | naam zegt | uitkomst | bestand |",
+    "|---|---|---|---|---|",
+    ...uitkomsten
+      .filter((u) => u.naamCode && u.status !== "datum wijkt af")
+      .map((u) => `| ${u.supplier} | ${u.invoiceNumber} | ${u.naamCode} | ${u.status} | ${u.bestand} |`),
     "",
   ];
   fs.mkdirSync(path.dirname(REPORT), { recursive: true });

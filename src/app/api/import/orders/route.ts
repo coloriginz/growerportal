@@ -2,6 +2,8 @@ import { NextRequest } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { runImport } from "@/lib/import-batch";
+import { resolveWithdrawalScope } from "@/lib/sync/withdrawal";
+import { isoDate } from "@/lib/sync/queries/helpers";
 
 // Vercel kapt een functie zonder dit af op de standaardlimiet; de lots- en
 // orders-import over een breed venster halen die niet.
@@ -198,6 +200,13 @@ async function upsertOrders(orders: Order[], batchId: string | null) {
   let txSkipped = 0;
   /** Per Fabric-relatie hoeveel orderregels hun partij tegenspraken. */
   const mismatchByRelId = new Map<number, number>();
+  /*
+   * Partijen die deze ronde niet mag opruimen. Een overgeslagen rij wordt niet
+   * teruggeschreven, dus zonder deze uitzondering zou de vensterbrede opruiming
+   * hem aanzien voor een intrekking en de bestaande omzet weggooien — terwijl er
+   * juist iets aan de hand is dat we níét konden verwerken.
+   */
+  const keepLotIds = new Set<string>();
   const affectedLotIds = new Set<string>();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const txDataByLot = new Map<string, any[]>();
@@ -232,12 +241,18 @@ async function upsertOrders(orders: Order[], batchId: string | null) {
         row.rel_id_leverancier,
         (mismatchByRelId.get(row.rel_id_leverancier) ?? 0) + 1
       );
+      // Deze partij houdt zijn bestaande transacties, ook bij een vensterbrede
+      // opruiming. De regel is overgeslagen en wordt dus niet teruggeschreven;
+      // zou het venster hem wél wegruimen, dan maakt een conflict dat de
+      // volgende lots-ronde oplost onderweg stilletjes omzet leeg.
+      keepLotIds.add(lotInfo.id);
       continue;
     }
 
     const date = new Date(row._datum_key_vertrek);
     if (isNaN(date.getTime())) {
       txSkipped++;
+      keepLotIds.add(lotInfo.id);
       continue;
     }
 
@@ -269,6 +284,9 @@ async function upsertOrders(orders: Order[], batchId: string | null) {
   // older transactions outside Power Automate's rolling query window.
   let txDeleted = 0;
   let txWritten = 0;
+  let txWithdrawn = 0;
+  let withdrawalMode = "pairs";
+  let withdrawalReason: string | null = null;
 
   if (affectedLotIds.size > 0) {
     // Collect all transaction data for bulk operations
@@ -286,6 +304,60 @@ async function upsertOrders(orders: Order[], batchId: string | null) {
         seenPairs.add(key);
         deletePairs.push({ lotId: tx.lotId as string, fabricOrdregId: tx.fabricOrdregId as number });
       }
+    }
+
+    /*
+     * Phase 4a: opruimen wat Fabric heeft ingetrokken.
+     *
+     * De paar-delete hieronder raakt alleen ordregels die de payload noemt, dus
+     * een orderregel die het warehouse laat vallen bleef eeuwig staan. Binnen het
+     * venster van een sync-job is de payload compleet, en mag alles wat daar niet
+     * in zit dus weg. resolveWithdrawalScope bewaakt wanneer dat vaststaat.
+     *
+     * Dit vangt óók de partij waarvan álle regels zijn ingetrokken: die staat
+     * niet in affectedLotIds en zou langs de paar-delete heen glippen. Vandaar
+     * dat de verwijderde partijen hieronder alsnog in affectedLotIds komen, zodat
+     * fase 5 en 6 hun totalen herrekenen.
+     */
+    const job = await findSyncJobWindow(batchId);
+    const scope = resolveWithdrawalScope({
+      job,
+      supplierId: await resolveScopedSupplierId(job?.supplierFabricId ?? null),
+      payloadRows: orders.length,
+    });
+    withdrawalMode = scope.mode;
+    if (scope.mode === "pairs") withdrawalReason = scope.reason;
+
+    if (scope.mode === "window") {
+      const withdrawn = await prisma.$queryRawUnsafe<{ lotId: string }[]>(
+        `WITH payload AS (
+           SELECT DISTINCT
+             v.val->>'lotId' AS lot_id,
+             (v.val->>'fabricOrdregId')::int AS ordreg_id
+           FROM jsonb_array_elements($1::jsonb) AS v(val)
+         )
+         DELETE FROM "Transaction" t
+         USING "Lot" l
+         WHERE t."lotId" = l.id
+           AND t.date >= $2::timestamp
+           AND t.date <  $3::timestamp
+           AND ($4::text IS NULL OR l."supplierId" = $4::text)
+           AND NOT (t."lotId" = ANY($5::text[]))
+           AND NOT EXISTS (
+             SELECT 1 FROM payload p
+             WHERE p.lot_id = t."lotId" AND p.ordreg_id = t."fabricOrdregId"
+           )
+         RETURNING t."lotId" AS "lotId"`,
+        JSON.stringify(deletePairs),
+        // Dezelfde UTC-dagrand als de vraag aan Fabric (`isoDate`), zodat de
+        // opruiming exact het venster dekt dat is uitgevraagd — niet meer.
+        isoDate(scope.from),
+        isoDate(scope.to),
+        scope.supplierId,
+        [...keepLotIds]
+      );
+      txWithdrawn = withdrawn.length;
+      for (const row of withdrawn) affectedLotIds.add(row.lotId);
     }
 
     // Delete only transactions matching (lotId, fabricOrdregId) pairs from this batch
@@ -438,6 +510,12 @@ async function upsertOrders(orders: Order[], batchId: string | null) {
       skippedNoOrdregId,
       txWritten,
       txDeleted,
+      // Alleen aanwezig als er iets is ingetrokken. Dit is geen wijziging maar
+      // een verdwijning: omzet die de portal liet zien en die er niet was.
+      ...(txWithdrawn > 0 ? { txWithdrawn } : {}),
+      // Waarom er níét vensterbreed is opgeruimd. Zonder dit is het verschil
+      // tussen "niets ingetrokken" en "niet gekeken" onzichtbaar.
+      ...(withdrawalReason ? { withdrawalSkipped: withdrawalReason } : {}),
       // Alleen aanwezig als er iets te melden is, zodat de aanwezigheid van de
       // sleutel zelf het signaal is.
       ...(mismatchByRelId.size > 0
@@ -453,9 +531,36 @@ async function upsertOrders(orders: Order[], batchId: string | null) {
         updated: txUpdated,
         written: txWritten,
         deleted: txDeleted,
+        withdrawn: txWithdrawn,
         skipped: txSkipped,
       },
+      withdrawal: { mode: withdrawalMode, ...(withdrawalReason ? { reason: withdrawalReason } : {}) },
       recalculated: { lots: lotsRecalculated, salesSheets: ssRecalculated },
     },
   };
+}
+
+/**
+ * Het venster waarover deze batch is uitgevraagd, of null als de POST niet van
+ * de portal-gestuurde sync kwam (oude DAX-flow, reparatiescript). De job staat
+ * op `dispatched` zolang de import draait; er wordt bewust niet op status
+ * gefilterd, zodat een herstart of een handmatige reset het venster niet
+ * verbergt en de opruiming stilletjes terugvalt op het oude gedrag.
+ */
+async function findSyncJobWindow(batchId: string | null) {
+  if (!batchId) return null;
+  return prisma.syncJob.findFirst({
+    where: { importBatchId: batchId },
+    select: { windowFrom: true, windowTo: true, supplierFabricId: true },
+  });
+}
+
+/** De portal-leverancier achter een rel_id, los van wat de payload droeg. */
+async function resolveScopedSupplierId(supplierFabricId: number | null) {
+  if (supplierFabricId === null) return null;
+  const supplier = await prisma.supplier.findFirst({
+    where: { fabricId: supplierFabricId },
+    select: { id: true },
+  });
+  return supplier?.id ?? null;
 }

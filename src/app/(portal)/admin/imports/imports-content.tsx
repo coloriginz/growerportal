@@ -5,6 +5,7 @@ import { useLanguage } from "@/components/providers/language-provider";
 import { DataSyncTab } from "./data-sync-tab";
 import { SchedulesTab } from "./schedules-tab";
 import { SalesSheetImportsTab } from "./salessheet-tab";
+import { ShipmentIssuesTab } from "./shipment-issues-tab";
 
 export function ImportsContent() {
   const { t } = useLanguage();
@@ -21,6 +22,7 @@ export function ImportsContent() {
           <TabsTrigger value="data-sync">Data Sync</TabsTrigger>
           <TabsTrigger value="schedules">Schedules</TabsTrigger>
           <TabsTrigger value="sales-sheets">Sales Sheets</TabsTrigger>
+          <TabsTrigger value="data-quality">Data Quality</TabsTrigger>
         </TabsList>
         <TabsContent value="data-sync" className="mt-6">
           <DataSyncTab />
@@ -30,6 +32,9 @@ export function ImportsContent() {
         </TabsContent>
         <TabsContent value="sales-sheets" className="mt-6">
           <SalesSheetImportsTab />
+        </TabsContent>
+        <TabsContent value="data-quality" className="mt-6">
+          <ShipmentIssuesTab />
         </TabsContent>
       </Tabs>
     </div>

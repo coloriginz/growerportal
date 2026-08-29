@@ -15,6 +15,15 @@ import {
 } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { ShipmentStatusBadge } from "@/components/ui/shipment-status-badge";
+import { SHIPMENT_STATUSES, type ShipmentStatus } from "@/lib/shipment-status";
 import { RiSearchLine, RiShipLine, RiDownloadLine, RiRefreshLine } from "@remixicon/react";
 import { exportToCSV } from "@/lib/export-csv";
 import { useFetch } from "@/hooks/use-fetch";
@@ -38,10 +47,19 @@ interface ShipmentRow {
   lotCount: number;
   costCount: number;
   totalStems: number;
+  soldStems: number;
+  status: ShipmentStatus;
 }
+
+const STATUS_LABEL_KEYS = {
+  selling: "shipments.statusSelling",
+  finalizing: "shipments.statusFinalizing",
+  completed: "shipments.statusCompleted",
+} as const;
 
 export function ShipmentsContent({ supplierId }: { supplierId: string | null }) {
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<ShipmentStatus | "all">("all");
   const { t } = useLanguage();
   const router = useRouter();
 
@@ -63,6 +81,7 @@ export function ShipmentsContent({ supplierId }: { supplierId: string | null }) 
   }
 
   const filtered = (shipments || []).filter((s) => {
+    if (statusFilter !== "all" && s.status !== statusFilter) return false;
     if (!search) return true;
     const q = search.toLowerCase();
     return s.invoiceNumber.toLowerCase().includes(q);
@@ -78,15 +97,24 @@ export function ShipmentsContent({ supplierId }: { supplierId: string | null }) 
               variant="outline"
               size="sm"
               onClick={() =>
-                exportToCSV(filtered, "shipments-export", [
-                  { key: "invoiceNumber", header: "Invoice Number" },
-                  { key: "deliveryDate", header: "Delivery Date" },
-                  { key: "lotCount", header: "Lots" },
-                  { key: "totalStems", header: "Stems" },
-                  { key: "totalTurnover", header: "Turnover" },
-                  { key: "totalCosts", header: "Costs" },
-                  { key: "netResult", header: "Net Result" },
-                ])
+                exportToCSV(
+                  filtered.map((s) => ({
+                    ...s,
+                    statusLabel: t(STATUS_LABEL_KEYS[s.status]),
+                  })),
+                  "shipments-export",
+                  [
+                    { key: "invoiceNumber", header: "Invoice Number" },
+                    { key: "deliveryDate", header: "Delivery Date" },
+                    { key: "statusLabel", header: "Status" },
+                    { key: "lotCount", header: "Lots" },
+                    { key: "totalStems", header: "Stems" },
+                    { key: "soldStems", header: "Sold Stems" },
+                    { key: "totalTurnover", header: "Turnover" },
+                    { key: "totalCosts", header: "Costs" },
+                    { key: "netResult", header: "Net Result" },
+                  ]
+                )
               }
             >
               <RiDownloadLine className="mr-2 h-4 w-4" />
@@ -115,6 +143,28 @@ export function ShipmentsContent({ supplierId }: { supplierId: string | null }) 
             className="pl-10"
           />
         </div>
+        <Select
+          value={statusFilter}
+          onValueChange={(v) => {
+            if (v !== null) setStatusFilter(v as ShipmentStatus | "all");
+          }}
+        >
+          <SelectTrigger className="w-[180px]">
+            <SelectValue>
+              {statusFilter === "all"
+                ? t("shipments.allStatuses")
+                : t(STATUS_LABEL_KEYS[statusFilter])}
+            </SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">{t("shipments.allStatuses")}</SelectItem>
+            {SHIPMENT_STATUSES.map((s) => (
+              <SelectItem key={s} value={s}>
+                {t(STATUS_LABEL_KEYS[s])}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       {/* Mobile card list */}
@@ -126,6 +176,9 @@ export function ShipmentsContent({ supplierId }: { supplierId: string | null }) 
                 <div className="flex items-center justify-between mb-2">
                   <span className="font-medium text-primary">{s.invoiceNumber}</span>
                   <span className="text-xs text-muted-foreground">{formatDate(s.deliveryDate)}</span>
+                </div>
+                <div className="mb-2">
+                  <ShipmentStatusBadge status={s.status} />
                 </div>
                 <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
                   <div className="flex justify-between">
@@ -173,6 +226,7 @@ export function ShipmentsContent({ supplierId }: { supplierId: string | null }) 
               <TableRow>
                 <TableHead>{t("shipments.shipmentNumber")}</TableHead>
                 <TableHead>{t("shipments.deliveryDate")}</TableHead>
+                <TableHead>{t("common.status")}</TableHead>
                 <TableHead className="text-right">{t("shipments.lots")}</TableHead>
                 <TableHead className="text-right">{t("shipments.stems")}</TableHead>
                 <TableHead className="text-right">{t("shipments.turnover")}</TableHead>
@@ -191,6 +245,9 @@ export function ShipmentsContent({ supplierId }: { supplierId: string | null }) 
                     {s.invoiceNumber}
                   </TableCell>
                   <TableCell className="text-muted-foreground">{formatDate(s.deliveryDate)}</TableCell>
+                  <TableCell>
+                    <ShipmentStatusBadge status={s.status} />
+                  </TableCell>
                   <TableCell className="text-right tabular-nums">{s.lotCount}</TableCell>
                   <TableCell className="text-right tabular-nums">{formatNumber(s.totalStems)}</TableCell>
                   <TableCell className="text-right tabular-nums">{formatCurrencyDetailed(s.totalTurnover)}</TableCell>
@@ -202,7 +259,7 @@ export function ShipmentsContent({ supplierId }: { supplierId: string | null }) 
               ))}
               {filtered.length === 0 && !loading && (
                 <TableRow className="hover:bg-transparent">
-                  <TableCell colSpan={7} className="py-0">
+                  <TableCell colSpan={8} className="py-0">
                     <div className="empty-state">
                       <div className="empty-state-icon">
                         <RiShipLine />
