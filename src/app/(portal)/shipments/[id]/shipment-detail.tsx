@@ -13,6 +13,8 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ShipmentStatusBadge } from "@/components/ui/shipment-status-badge";
+import type { ShipmentStatus } from "@/lib/shipment-status";
 import { RiArrowLeftLine, RiArrowDownSLine, RiArrowRightSLine, RiFileDownloadLine } from "@remixicon/react";
 import { useLanguage } from "@/components/providers/language-provider";
 import {
@@ -118,9 +120,10 @@ interface ShipmentDetailProps {
     costs: Cost[];
   };
   correctionReasons?: Record<number, CorrectionReason>;
+  status: ShipmentStatus;
 }
 
-export function ShipmentDetail({ shipment, correctionReasons = {} }: ShipmentDetailProps) {
+export function ShipmentDetail({ shipment, correctionReasons = {}, status }: ShipmentDetailProps) {
   const { t, language } = useLanguage();
   const [expandedLots, setExpandedLots] = useState<Set<string>>(new Set());
 
@@ -250,9 +253,12 @@ export function ShipmentDetail({ shipment, correctionReasons = {} }: ShipmentDet
         </Link>
         <div className="flex-1 space-y-4">
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight">
-              {t("shipments.details")}: {shipment.invoiceNumber}
-            </h1>
+            <div className="flex flex-wrap items-center gap-3">
+              <h1 className="text-2xl font-semibold tracking-tight">
+                {t("shipments.details")}: {shipment.invoiceNumber}
+              </h1>
+              <ShipmentStatusBadge status={status} />
+            </div>
             {/* Labels op een vaste breedte, zodat de waarden een kolom vormen. */}
             <dl className="mt-1 space-y-0.5 text-sm">
               <div className="flex gap-2">

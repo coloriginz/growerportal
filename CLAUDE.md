@@ -400,6 +400,7 @@ The local archive in `private_input/salessheets` is pushed through this same rou
 | `/api/admin/import-batches/[id]/records` | GET | The records one run created or updated, paginated |
 | `/api/admin/import-batches/[id]/skipped` | GET | The relations one run dropped, split into growers and internal bookings |
 | `/api/admin/fabric-relations` | GET, POST | Fabric relation staging data; POST activates one as a Supplier |
+| `/api/admin/shipment-issues` | GET | Settled deliveries that need attention: `missing-pdf` (no sales sheet linked) or `stem-gap` (sold below delivered), paginated |
 | `/api/activate` | POST | Account activation (set password) |
 | `/api/forgot-password` | POST | Request password reset email |
 | `/api/reset-password` | POST | Reset password with token |
@@ -586,6 +587,14 @@ Fabric: Zending -> Levering (parthdr_id) -> Partij (part_id) -> Orderregel (ordr
 Portal: [implicit] -> SalesSheet        -> Lot              -> Transaction
 ```
 
+### Shipment Status
+A delivery is **Selling**, **Finalizing** or **Completed**. The status is derived, never stored: `resolveShipmentStatus()` in `src/lib/shipment-status.ts` reads three numbers that all come from the import and keep moving there — delivered stems (`SUM(Lot.totalStems)`), sold stems (`SUM(Transaction.stems)`) and the number of `SalesSheetCost` lines. A stored column would have to be rewritten on every round and would age silently when that fails once.
+
+- **Cost lines beat the stem gap.** Cost lines present means the settlement ran, so the delivery is Completed even when sold is below delivered. 139 deliveries are in exactly that state because the warehouse fills `vor_aantal` in weeks later; letting the stem gap win parks them on Selling forever.
+- **The PDF does not count.** 3.713 settled deliveries have no linked sales sheet PDF — that is a portal artefact, not a business fact, and requiring it would leave half the archive on Finalizing.
+- **Corrections are not added separately.** `Lot.totalStems` comes from `inkoop_factuur_aantal` and is the final invoiced quantity: over 7.878 deliveries sold lands exactly on delivered 7.715 times, corrections included, and never above it.
+- Both blind spots the rule creates are visible in **Admin -> Import Status -> Data Quality**, served by `/api/admin/shipment-issues`. Covered by `scripts/checks/shipment-status.ts`.
+
 ### Season Calculation
 - Each supplier has a configurable `seasonStartMonth` (default: January)
 - "Season to Date" calculations use this month as the season start
@@ -648,6 +657,7 @@ Supplier accounts are created via admin UI with activation emails.
 - **Tailwind variants beat unprefixed utilities**: the base `DialogContent` carries `sm:max-w-sm`, so a plain `max-w-4xl` never applies on desktop no matter the order. Write `sm:max-w-4xl`. Three dialogs in `features/fust` still have this bug.
 - **Base UI `SelectValue` renders the raw value, not the item label.** Fine when the value is human-readable; pass a function as children when it is an id.
 - **Paginate on a unique sort.** `ORDER BY` on a non-unique key plus `OFFSET` lets Postgres return a row on two pages or on none — measured, not theoretical. Always append `{ id: "asc" }`.
+- **In een API-route: bouw een raw query als `Prisma.Sql`-object en geef dat als argument mee, niet als tagged template.** `prisma.$queryRaw\`... ${fragment} ...\`` met een genest `Prisma.Sql`-fragment erin gaat door de SWC-compilatie van Next stuk: Postgres krijgt een `$1` die er niet staat en antwoordt met `42601 syntax error at or near "$1"`, ook als de query zelf nul parameters heeft. Dezelfde code werkt wél in een `tsx`-script, dus een scriptje dat de query bewijst zegt hier niets — gemeten op `/api/admin/shipment-issues`, waar exact dezelfde SQL faalde als template en slaagde als `prisma.$queryRaw(sqlObject)`. Tagged templates zonder genest fragment (zoals in `/api/admin/fabric-relations`) zijn ongemoeid
 - **Prisma `Json?` fields**: writing `null` does not type-check against the update input — use `Prisma.JsonNull` to store a JSON null, or `undefined` to leave the column alone.
 - **After changing a column's type, expect `cached plan must not change result type`.** Postgres throws it once per pooled connection that still holds a prepared statement with the old result type, so right after a `db push` that alters a type you get scattered 500s until the connections have re-planned. It clears itself; it is not a failed migration. `prisma db push --skip-generate` avoids the Windows EPERM on the query engine DLL and lets the dev server keep running, and widening a decimal (`Decimal(12,2)` -> `Decimal(14,6)`) still asks for `--accept-data-loss` even though nothing is lost — check `migrate diff` first, then pass it.
 

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireAuth, resolveSupplierId, buildSupplierScope } from "@/lib/api-helpers";
+import { resolveShipmentStatus } from "@/lib/shipment-status";
 
 export async function GET(request: NextRequest) {
   const { error, session } = await requireAuth();
@@ -41,18 +42,43 @@ export async function GET(request: NextRequest) {
     take: 200,
   });
 
+  // Verkochte stelen apart optellen in plaats van via de include: de transacties
+  // van 200 leveringen zijn tienduizenden rijen, en er is hier alleen een som nodig.
+  const sheetIds = salesSheets.map((ss) => ss.id);
+  const soldRows = sheetIds.length
+    ? await prisma.$queryRaw<{ salesSheetId: string; sold: number }[]>`
+        SELECT lo."salesSheetId" as "salesSheetId", CAST(SUM(tx.stems) AS INT) as sold
+        FROM "Transaction" tx
+        JOIN "Lot" lo ON lo.id = tx."lotId"
+        -- text[], niet uuid[]: Prisma legt UUID-sleutels als text in Postgres aan.
+        WHERE lo."salesSheetId" = ANY(${sheetIds}::text[])
+        GROUP BY lo."salesSheetId"
+      `
+    : [];
+  const soldBySheet = new Map(soldRows.map((r) => [r.salesSheetId, r.sold]));
+
   return NextResponse.json(
-    salesSheets.map((ss) => ({
-      id: ss.id,
-      invoiceNumber: ss.invoiceNumber,
-      invoiceDate: ss.invoiceDate.toISOString(),
-      deliveryDate: ss.deliveryDate.toISOString(),
-      totalTurnover: Number(ss.totalTurnover),
-      totalCosts: Number(ss.totalCosts),
-      netResult: Number(ss.netResult),
-      lotCount: ss.lots.length,
-      costCount: ss.costs.length,
-      totalStems: ss.lots.reduce((sum, l) => sum + l.totalStems, 0),
-    }))
+    salesSheets.map((ss) => {
+      const totalStems = ss.lots.reduce((sum, l) => sum + l.totalStems, 0);
+      const soldStems = soldBySheet.get(ss.id) ?? 0;
+      return {
+        id: ss.id,
+        invoiceNumber: ss.invoiceNumber,
+        invoiceDate: ss.invoiceDate.toISOString(),
+        deliveryDate: ss.deliveryDate.toISOString(),
+        totalTurnover: Number(ss.totalTurnover),
+        totalCosts: Number(ss.totalCosts),
+        netResult: Number(ss.netResult),
+        lotCount: ss.lots.length,
+        costCount: ss.costs.length,
+        totalStems,
+        soldStems,
+        status: resolveShipmentStatus({
+          deliveredStems: totalStems,
+          soldStems,
+          costCount: ss.costs.length,
+        }),
+      };
+    })
   );
 }

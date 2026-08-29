@@ -226,7 +226,12 @@
     "correction": "Correction",
     "corrections": "Corrections",
     "correctionReason": "Reason",
-    "deleted": "Deleted"
+    "deleted": "Deleted",
+    "soldStems": "Sold Stems",
+    "allStatuses": "All statuses",
+    "statusSelling": "Selling",
+    "statusFinalizing": "Finalizing",
+    "statusCompleted": "Completed"
   },
   "documents": {
     "title": "Documents",
