@@ -85,6 +85,47 @@ export function skippedRelationCount(batch: Pick<ImportBatch, "details">): numbe
   return kwekers.length + interneBoekingen.length;
 }
 
+/**
+ * Wat deze ronde deed met leveringen die Fabric aan een andere relatie geeft.
+ *
+ * Dit stond alleen in `details` en het paneel las uitsluitend `skippedSuppliers`,
+ * dus het viel samen met "misschien een kweker aanmaken" — terwijl het iets heel
+ * anders betekent: er stond een afrekening bij een leverancier die hem volgens de
+ * bron niet heeft. Eén zo'n geval bleek de sales sheet van een derde partij bij
+ * de verkeerde kweker te tonen, dus het verdient een eigen regel.
+ */
+export type ReattributionSummary = {
+  /** Aantal leveringen dat naar een andere relatie is gegaan. */
+  leveringen: number;
+  /** Hoeveel daarvan uit de portal zijn gehaald. */
+  verwijderd: number;
+  /** Waarom er niet is verwijderd, als de bovengrens dat tegenhield. */
+  tegengehouden: string | null;
+  /** De relaties waar ze heen gingen, voor de tooltip. */
+  relaties: string[];
+};
+
+export function reattributionSummary(
+  batch: Pick<ImportBatch, "details">
+): ReattributionSummary | null {
+  const away = batch.details?.reattributedAway as
+    | Record<string, { leveringen?: number; van?: string[] }>
+    | undefined;
+  const verwijderd = Number(batch.details?.reattributedRemoved ?? 0);
+  const tegengehouden = (batch.details?.reattributedKept as string | undefined) ?? null;
+  if (!away && verwijderd === 0 && !tegengehouden) return null;
+
+  const entries = Object.entries(away ?? {});
+  return {
+    leveringen: entries.reduce((n, [, v]) => n + (v.leveringen ?? 0), 0),
+    verwijderd,
+    tegengehouden,
+    relaties: entries.map(([relId, v]) =>
+      v.van?.length ? `${relId} (was ${v.van.join(", ")})` : relId
+    ),
+  };
+}
+
 export function StatusBadge({ status }: { status: ImportBatch["status"] }) {
   switch (status) {
     case "success":

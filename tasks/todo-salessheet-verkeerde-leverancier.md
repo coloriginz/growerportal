@@ -5,7 +5,7 @@
 > afrekening van een concurrent downloaden.
 >
 > **Status:** oorzaak gevonden en in de basisroutes gerepareerd op 29-08-2026; 83 foute koppelingen
-> losgemaakt. Wat nog openstaat staat onderaan. Dit is dezelfde klasse als §5 van
+> losgemaakt op test, waar nu nul koppelingen fout zijn. **Op productie staan er nog 67 fout.** Wat nog openstaat staat onderaan. Dit is dezelfde klasse als §5 van
 > `docs/reconciliatie-pcfup-colbfl.md`, maar nu portalbreed geteld — en die 45 uit de kop zijn
 > alleen de gevallen die je aan de bestandsnaam ziet; de volledige audit vond er 83.
 
@@ -108,9 +108,24 @@ het een storing in onze code was.
       `todo-levering-verkeerde-leverancier.md`. Daarmee is dit punt geen opruimwerk meer maar de
       vraag hoeveel van die 449 hetzelfde probleem dragen; niemand weet dat nu.
 
-      Merk op dat de audit de leverancierscode uit de bestandsnaam helemaal niet vergelijkt — hij
-      leest de PDF zelf uit het archief. Voor de blob-only koppelingen zou dat vergelijk alleen al
-      een goedkope eerste zeef zijn, zonder ook maar één bestand te downloaden.
+      **Opgelost in het script, en toen gemeten — 29-08-2026.** `audit-salessheet-links.ts` heeft
+      nu `--blob` (haalt bestanden op die niet in het archief staan) en draagt de leverancierscode
+      uit de bestandsnaam als aparte aanwijzing in het rapport.
+
+      Uitkomst op **test**: alle 4.024 leesbare koppelingen kloppen op leverdatum. Nul fout. De 35
+      koppelingen waarvan de bestandsnaam een andere leverancier noemt, kloppen dus gewoon — de
+      code in de naam is een aanwijzing en geen bewijs, en alleen daarop losmaken zou 35 goede
+      koppelingen hebben gesloopt. Daarom staat die groep apart in het rapport en wordt hij niet
+      losgemaakt.
+
+      Uitkomst op **productie** (read-only nagerekend, 433 koppelingen, elk bestand uit de blob
+      gehaald en uitgelezen): **67 koppelingen wijzen naar de verkeerde PDF**, geverifieerd op de
+      leverdatum in het document zelf — steevast maanden tot een jaar naast de levering. Bij het
+      merendeel noemt de bestandsnaam óók een andere leverancier (COLXROOD op PCFRUT, COLXBAK op
+      COLXSHA, PCXRONEN op PCFUP, COLBUGL op PCFUP). 365 kloppen, 1 blob onbereikbaar.
+
+      Productie heeft de reparatie van 29-08 dus nog niet gehad: daar is dit lek live. Het losmaken
+      vraagt een expliciete beslissing, want het is een productiewijziging.
 
 ## Waarom dit meer weegt dan een verkeerd bestand
 

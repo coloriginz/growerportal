@@ -48,6 +48,7 @@ import {
   formatDuration,
   formatWindowRange,
   skippedRelationCount,
+  reattributionSummary,
   StatusBadge,
   type ImportBatch,
   type ImportBatchResponse,
@@ -491,6 +492,7 @@ export function DataSyncTab() {
                 ) : (
                   batches.map((batch) => {
                     const skippedRelations = skippedRelationCount(batch);
+                    const reattribution = reattributionSummary(batch);
                     // Een handmatige import of een oude DAX-ronde heeft geen job
                     // en dus geen herkomst op de records: dan valt er niets te
                     // openen en blijft het getal gewoon een getal.
@@ -562,6 +564,29 @@ export function DataSyncTab() {
                           </button>
                         ) : (
                           formatNumber(batch.recordsSkipped)
+                        )}
+                        {/*
+                          Een eigen regel onder het overgeslagen-getal. Herbestemming
+                          vraagt een andere handeling dan een onbekende relatie, en
+                          verdween voorheen in hetzelfde getal.
+                        */}
+                        {reattribution && (
+                          <div
+                            className={`mt-0.5 text-xs ${
+                              reattribution.tegengehouden
+                                ? "text-red-600 dark:text-red-400"
+                                : "text-amber-700 dark:text-amber-400"
+                            }`}
+                            title={
+                              reattribution.tegengehouden
+                                ? `Niet verwijderd: ${reattribution.tegengehouden}`
+                                : `Herbestemd naar ${reattribution.relaties.join("; ")}`
+                            }
+                          >
+                            {reattribution.tegengehouden
+                              ? `${reattribution.leveringen} herbestemd, niet verwijderd`
+                              : `${reattribution.verwijderd || reattribution.leveringen} herbestemd`}
+                          </div>
                         )}
                       </TableCell>
                       <TableCell className="text-right">

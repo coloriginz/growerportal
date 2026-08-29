@@ -479,7 +479,14 @@ async function upsertLots(partijen: Partij[], batchId: string | null) {
           s3: row.S03 || null,
           invoicedColli: row["Inkoopfactuur colli"] ?? null,
           invoicedVolume: row["Inkoopfactuur volume"] ?? null,
-          correctionVolume: row["Inslagcorrectie volume"] ?? null,
+          // Beide namen, net als het correctiepad hieronder. De SQL-query stuurt
+          // `Inslag aantal correctie`; alleen de legacy-naam lezen zette deze
+          // kolom bij elke portal-gestuurde ronde op null, waarna fase 7 hem
+          // alleen herstelde voor partijen met een correctieregel in diezelfde
+          // payload. Vandaag valt dat niet op omdat geen enkele partij een
+          // correctievolume heeft zonder correctieregels, maar het is toeval en
+          // geen ontwerp.
+          correctionVolume: row["Inslag aantal correctie"] ?? row["Inslagcorrectie volume"] ?? null,
         });
         lotUpdated++;
       } else {
@@ -507,7 +514,7 @@ async function upsertLots(partijen: Partij[], batchId: string | null) {
           s3: row.S03 || null,
           invoicedColli: row["Inkoopfactuur colli"] || null,
           invoicedVolume: row["Inkoopfactuur volume"] || null,
-          correctionVolume: row["Inslagcorrectie volume"] || null,
+          correctionVolume: row["Inslag aantal correctie"] ?? row["Inslagcorrectie volume"] ?? null,
         });
         lotCreated++;
       }
@@ -675,7 +682,26 @@ async function upsertLots(partijen: Partij[], batchId: string | null) {
   let correctionsDeleted = 0;
   let correctionsSkipped = 0;
 
-  if (correctionRows.length > 0) {
+  /*
+   * De partijen waarvan deze ronde de correcties mag herschrijven: alles wat de
+   * payload draagt en waarvan we de leverancier kennen — niet alleen de partijen
+   * die tóévallig een correctieregel meebrengen.
+   *
+   * Dat onderscheid was het lek. De opruiming keek naar `corrInsertData`, dus een
+   * partij waarvan de láátste correctie in Fabric verviel, kwam in geen enkele
+   * volgende ronde meer voor en hield zijn dode correctieregel voor altijd —
+   * dezelfde vorm als de ingetrokken orderregels, zie `src/lib/sync/withdrawal.ts`.
+   * Hier is het simpeler op te lossen dan daar: alle 17.056 correcties dragen het
+   * `part_id` van hun moederpartij (gemeten 29-08-2026, nul uitzonderingen), dus
+   * de partijen uit de payload dekken ook de correcties die eraan hingen.
+   */
+  const payloadPartIds = [
+    ...new Set(
+      consignatie.filter((r) => supplierMap.has(r.rel_id_leverancier)).map((r) => r.part_id)
+    ),
+  ];
+
+  if (payloadPartIds.length > 0) {
     // Find parent lots for correction rows by lotNumber + supplier
     const corrLotNumbers = [...new Set(correctionRows.map((r) => String(r.Partijnummer).trim()))];
     const corrSupplierFabricIds = [...new Set(correctionRows.map((r) => r.rel_id_leverancier))];
@@ -727,14 +753,23 @@ async function upsertLots(partijen: Partij[], batchId: string | null) {
       });
     }
 
-    if (corrInsertData.length > 0) {
-      // Delete existing corrections for all part_ids in this batch
-      const corrFabricPartIds = [...new Set(corrInsertData.map((d: { fabricPartId: number }) => d.fabricPartId))];
-      const deleteResult = await prisma.lotCorrection.deleteMany({
-        where: { fabricPartId: { in: corrFabricPartIds } },
-      });
-      correctionsDeleted = deleteResult.count;
+    /*
+     * Eerst opschrijven wélke partijen nu een correctie dragen, want `deleteMany`
+     * geeft alleen een aantal terug. Een partij die er na deze ronde geen meer
+     * heeft moet zijn aggregaat terug naar leeg, en zonder deze lijst weet de
+     * herberekening hieronder niet dat hij bestaat.
+     */
+    const hadCorrecties = await prisma.lotCorrection.findMany({
+      where: { fabricPartId: { in: payloadPartIds } },
+      select: { lotId: true },
+    });
 
+    const deleteResult = await prisma.lotCorrection.deleteMany({
+      where: { fabricPartId: { in: payloadPartIds } },
+    });
+    correctionsDeleted = deleteResult.count;
+
+    if (corrInsertData.length > 0) {
       // Insert all correction rows
       await prisma.$executeRawUnsafe(
         `INSERT INTO "LotCorrection" (
@@ -761,8 +796,24 @@ async function upsertLots(partijen: Partij[], batchId: string | null) {
       correctionsCreated = corrInsertData.length;
     }
 
-    // Update aggregate correctionVolume on parent lots
-    const affectedLotIds = [...new Set(corrInsertData.map((d: { lotId: string }) => d.lotId))];
+    /*
+     * Het aggregaat bijwerken van elke partij die deze ronde een correctie kreeg
+     * óf er een verloor. Die tweede helft ontbrak: de bron was alleen
+     * `corrInsertData`, en de subquery las `LotCorrection` — dus een partij
+     * zonder correcties leverde geen rij op en hield zijn oude `correctionVolume`
+     * staan, ook nadat de laatste correctie was verdwenen.
+     *
+     * De LEFT JOIN zet zo'n partij terug op NULL. Bewust alleen voor partijen die
+     * correcties hadden of kregen: `correctionVolume` wordt óók door de
+     * partijregel zelf geschreven (`Inslag aantal correctie`), en een partij die
+     * nooit een correctie had mag deze ronde niet leegmaken.
+     */
+    const affectedLotIds = [
+      ...new Set([
+        ...corrInsertData.map((d: { lotId: string }) => d.lotId),
+        ...hadCorrecties.map((c) => c.lotId),
+      ]),
+    ];
 
     if (affectedLotIds.length > 0) {
       await prisma.$executeRawUnsafe(
@@ -770,10 +821,10 @@ async function upsertLots(partijen: Partij[], batchId: string | null) {
          SET "correctionVolume" = sub.total_vol,
              "updatedAt" = NOW()
          FROM (
-           SELECT "lotId", SUM("correctionVolume") AS total_vol
-           FROM "LotCorrection"
-           WHERE "lotId" = ANY($1::text[])
-           GROUP BY "lotId"
+           SELECT ids.id AS "lotId", SUM(c."correctionVolume") AS total_vol
+           FROM unnest($1::text[]) AS ids(id)
+           LEFT JOIN "LotCorrection" c ON c."lotId" = ids.id
+           GROUP BY ids.id
          ) AS sub
          WHERE l.id = sub."lotId"`,
         affectedLotIds
