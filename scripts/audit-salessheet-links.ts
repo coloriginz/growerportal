@@ -309,9 +309,18 @@ async function main() {
     });
     const documentIds = [...new Set(betrokken.map((s) => s.pdfDocumentId).filter(Boolean))] as string[];
 
+    /*
+     * Ook `ourInvoiceNumber` wissen. Dat veld wordt alleen geschreven wanneer een
+     * PDF wordt gekoppeld, en komt dus uit de bestandsnaam van precies de PDF die
+     * hier fout blijkt. Laten staan betekent dat de afrekening het factuurnummer
+     * van een andere levering blijft dragen — en `findCandidates()` in
+     * /api/shipments/import-email zoekt daar op, zodat een volgende PDF opnieuw bij
+     * deze levering uitkomt. De leverdatumcontrole houdt dat tegen, dus het maakt
+     * geen foute koppeling, maar het blijft een verkeerd spoor voeden.
+     */
     const losgemaakt = await prisma.salesSheet.updateMany({
       where: { id: { in: losTeMaken } },
-      data: { pdfDocumentId: null },
+      data: { pdfDocumentId: null, ourInvoiceNumber: null },
     });
     console.log(`\nlosgemaakt: ${losgemaakt.count} koppelingen`);
 
