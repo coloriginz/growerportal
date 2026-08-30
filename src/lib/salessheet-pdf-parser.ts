@@ -118,7 +118,14 @@ export function parseSalesSheetAmounts(text: string): {
     // Een levering zonder kosten heeft de regel niet; dat is nul en geen misser,
     // maar het onderscheid tussen "nul" en "niet gevonden" hoort hier bewaard te
     // blijven. De vergelijking verderop beslist wat een ontbrekende waarde betekent.
-    costs: bedragNaLabel(text, KOSTEN_LABELS) ?? bedragVoorLabel(text, KOSTEN_LABELS),
+    //
+    // Geen terugval op `bedragVoorLabel` hier: op de Nederlandse lay-out staat
+    // vóór "Totaal kosten" de subtotaalkolom tussen haakjes, dus negatief —
+    // "(€ 1.734,29) Totaal kosten € 1.734,30" — en de terugval leest dan
+    // -1.734,29 in plaats van 1.734,30. Gemeten met deze functie. Die terugval
+    // dekt nul documenten (alle 257 leveringen zonder kostenlabel zijn all-in
+    // of hebben geen kosten) en kan alleen kwaad, dus is hij weg.
+    costs: bedragNaLabel(text, KOSTEN_LABELS),
     netResult: bedragVoorLabel(text, NETTO_LABELS),
   };
 }
