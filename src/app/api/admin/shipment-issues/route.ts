@@ -31,8 +31,13 @@ type IssueType = (typeof ISSUE_TYPES)[number];
  * en kosten als dat label ontbreekt op de sales sheet. Zelfde afleiding als
  * `derivePdfNetResult` in `salessheet-match.ts`, hier in SQL omdat de vergelijking
  * hier ook in SQL gebeurt (filteren op een aggregatie kan niet in een Prisma-filter).
+ *
+ * Bewust zonder de binnenste COALESCE op `pdfCosts`: ontbrekende kosten tellen
+ * niet als nul maar als "niet gelezen", dus de hele uitdrukking valt dan naar
+ * NULL en de rij valt buiten `IS NOT NULL` hierboven — precies de beslissing die
+ * `derivePdfNetResult` in TypeScript ook neemt.
  */
-const pdfAmountSql = Prisma.sql`COALESCE(ss."pdfNetResult", ss."pdfTurnover" - COALESCE(ss."pdfCosts", 0))`;
+const pdfAmountSql = Prisma.sql`COALESCE(ss."pdfNetResult", ss."pdfTurnover" - ss."pdfCosts")`;
 
 /**
  * Alles hangt aan één afgeleide: verkochte stelen per levering. Dat is een
@@ -46,7 +51,8 @@ function issueBody(type: IssueType, search: string) {
       : type === "stem-gap"
         ? Prisma.sql`COALESCE(t.sold, 0) < COALESCE(l.delivered, 0)`
         : Prisma.sql`
-            ss."pdfParsedAt" IS NOT NULL
+            ss."pdfDocumentId" IS NOT NULL
+            AND ss."pdfParsedAt" IS NOT NULL
             AND ${pdfAmountSql} IS NOT NULL
             AND ABS(${pdfAmountSql} - ss."netResult") > ${SALESSHEET_MATCH_TOLERANCE}
           `;
