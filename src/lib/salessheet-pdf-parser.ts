@@ -47,8 +47,14 @@ function parseDutchDate(value: string | null): string | null {
  * INCL. BTW") staat er met opzet niet bij: binnenlandse leveranciers krijgen btw
  * bovenop het netto, en de portal kent geen btw. Alleen het bedrag vóór de btw is
  * vergelijkbaar.
+ *
+ * Een negatief bedrag staat op twee manieren afgedrukt: tussen haakjes
+ * ("(€ 193,78)") of met een minteken vóór het euroteken ("-€ 157,10", gezien op
+ * COL/2025/11/Salessheet/101967-393445.pdf, COLZFLXC referentie 101967). Het
+ * minteken staat dus niet altijd na het euroteken — vandaar de optionele `-?`
+ * zowel ervoor als erna.
  */
-const BEDRAG = String.raw`\(?€?\s*-?[\d.]+,\d{2}\)?`;
+const BEDRAG = String.raw`\(?-?\s*€?\s*-?[\d.]+,\d{2}\)?`;
 
 const OMZET_LABELS = ["Total nett turnover", "Totale netto omzet"];
 const KOSTEN_LABELS = ["Total costs", "Totale kosten"];
@@ -60,9 +66,9 @@ const NETTO_LABELS = [
   "Nett payable / receivable to/from OZ import",
 ];
 
-/** "1.763,10" en "(€ 193,78)" naar een getal. Haakjes betekenen negatief. */
+/** "1.763,10", "(€ 193,78)" en "-€ 157,10" naar een getal. Haakjes of een minteken betekenen negatief. */
 function leesBedrag(ruw: string): number | null {
-  const negatief = ruw.includes("(");
+  const negatief = ruw.includes("(") || ruw.includes("-");
   const schoon = ruw.replace(/[()€\s]/g, "").replace(/\./g, "").replace(",", ".");
   const n = Number(schoon);
   if (!Number.isFinite(n)) return null;
@@ -155,11 +161,27 @@ export async function parseSalesSheetPdf(pdfBuffer: Buffer): Promise<ParsedSales
         y: Math.round(i.transform![5]),
       }));
 
-    // Dezelfde items als hierboven, nu plat aan elkaar geplakt in documentvolgorde.
-    // Dat is de volgorde waarin pdfjs de tabelcellen uitrolt (bedrag vóór het
-    // label bij de totalen, erna bij de kosten — zie parseSalesSheetAmounts),
-    // en het document wordt er niet nog een keer voor geopend.
-    const tekst = positioned.map((i) => i.text).join(" ");
+    /*
+     * Eigen tekstopbouw voor de bedragen, los van `positioned`.
+     *
+     * Waarom twee tekstopbouwen naast elkaar: `positioned` bewaart coördinaten
+     * en dient om een label op zijn plek terug te vinden (zoals de leverdatum
+     * rechts van zijn label) — dat werkt alleen betrouwbaar op pagina 1, waar
+     * de header staat. `amountsText` bewaart alleen de leesvolgorde waarin het
+     * bedrag vóór zijn label staat (zie parseSalesSheetAmounts), en dat
+     * totaalblok staat bij een meerpagina-afrekening niet per se op pagina 1.
+     * Gemeten op twaalf echte PDF's: het netto kwam er bij 3 van de 12 uit
+     * toen alleen pagina 1 werd gelezen.
+     *
+     * De items komen hier ongetrimd binnen — `positioned` trimt en filtert
+     * lege items, en dat verstoort precies de volgorde waarin een bedrag en
+     * zijn label elkaar direct opvolgen.
+     */
+    let amountsText = "";
+    for (let i = 1; i <= doc.numPages; i++) {
+      const pageContent = await (await doc.getPage(i)).getTextContent();
+      amountsText += pageContent.items.map((it) => ("str" in it ? it.str : "")).join(" ") + "\n";
+    }
 
     const valueRightOf = (label: RegExp): string | null => {
       const labelItem = positioned.find((i) => label.test(i.text));
@@ -236,7 +258,7 @@ export async function parseSalesSheetPdf(pdfBuffer: Buffer): Promise<ParsedSales
       }
     }
 
-    const { turnover, costs, netResult } = parseSalesSheetAmounts(tekst);
+    const { turnover, costs, netResult } = parseSalesSheetAmounts(amountsText);
 
     return { reference, ourInvoiceNumber, deliveryDate, turnover, costs, netResult };
   } finally {

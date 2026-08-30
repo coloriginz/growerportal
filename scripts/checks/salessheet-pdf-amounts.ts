@@ -59,6 +59,28 @@ check("all-in: netto", incl.netResult === 583.46, `kreeg ${incl.netResult}`);
 const neg = parseSalesSheetAmounts(NEGATIEF);
 check("kosten tussen haakjes worden gelezen", neg.costs === 193.78, `kreeg ${neg.costs}`);
 
+/*
+ * Bij COL/2025/11/Salessheet/101967-393445.pdf (COLZFLXC, referentie 101967) staat het
+ * minteken vóór het euroteken in plaats van erna of tussen haakjes: "-€ 157,10". Zonder
+ * deze vorm in de regex viel het teken weg en leverde de parser 157,1 waar de portal
+ * -157,12 berekende.
+ */
+const MIN_VOOR_EUROTEKEN =
+  "Used in production € 252,87 (€ 157,10) Total nett turnover -€ 157,10 To be received " +
+  "by supplier 20-11-2025";
+
+const minVoorEuroteken = parseSalesSheetAmounts(MIN_VOOR_EUROTEKEN);
+check(
+  "minteken vóór het euroteken: omzet is negatief",
+  minVoorEuroteken.turnover === -157.1,
+  `kreeg ${minVoorEuroteken.turnover}`
+);
+check(
+  "minteken vóór het euroteken: netto is negatief",
+  minVoorEuroteken.netResult === -157.1,
+  `kreeg ${minVoorEuroteken.netResult}`
+);
+
 check(
   "lege tekst levert drie keer null",
   (() => {
