@@ -31,11 +31,22 @@ Nederlands, nul onleesbaar.
 | | |
 |---|---|
 | Omzet uit de PDF gehaald | 100% |
-| Nettoresultaat rechtstreeks gelezen | 100% |
+| Nettoresultaat rechtstreeks gelezen | 36,7% (22 van 60 gekoppelde leveringen) — de rest leidt het af uit omzet en kosten |
 | Kostentotaal gelezen | 86,4% — de rest heeft geen kostenregel, en dat *is* nul |
 | Netto exact gelijk aan de portal | 81,1% |
 | Verschil onder EUR 1 | 13,4% |
 | Verschil vanaf EUR 1 | 5,5% |
+
+> **Tijdens de bouw bijgesteld.** De proef op 800 losse PDF's uit het archief mat het
+> netto-label als 100% aanwezig; op de daadwerkelijk gekoppelde leveringen in de database
+> haalt dat maar 36,7% (22 van 60). Twee gevolgen die niet in het ontwerp hieronder
+> stonden: de afleiding uit omzet en kosten (§3) draait alleen als *beide* gelezen zijn —
+> ontbrekende kosten tellen niet als nul, want dat verwarde "geen kostenregel" met
+> "kostenlabel niet herkend" en gaf zo EUR 1.734 schijnverschil op één levering toen het
+> Nederlandse "Totaal kosten" nog ontbrak in de labellijst. En er kwam een zelfcontrole
+> bij (§3): staan alle drie de bedragen er, dan hoort omzet - kosten gelijk te zijn aan
+> het afgedrukte netto; breekt die identiteit, dan is dat onze uitlezing die faalde, dus
+> `unread` in plaats van een oordeel over de levering.
 
 Drie dingen die het ontwerp bepalen:
 
@@ -104,14 +115,32 @@ bedrag is dat vóór de btw — `Te ontvangen door leverancier` — nooit het be
 `src/lib/salessheet-match.ts`:
 
 ```ts
-resolveSalesSheetMatch({ pdfNetResult, pdfParsedAt, hasPdf, computedNetResult })
+resolveSalesSheetMatch({ hasPdf, pdfParsedAt, pdfNetResult, pdfTurnover, pdfCosts, computedNetResult })
   -> "match" | "mismatch" | "unread" | "unlinked"
 ```
 
 - `unlinked` — er hangt geen PDF aan deze levering. Niets te zeggen.
 - `unread` — er hangt er een, hij is gelezen (`pdfParsedAt` gevuld), maar er kwam geen
-  netto uit. Dat is onze storing en hoort als zodanig zichtbaar te zijn.
+  netto uit — rechtstreeks niet, en ook niet af te leiden omdat omzet en/of kosten
+  ontbraken. Dat is onze storing en hoort als zodanig zichtbaar te zijn. Ook wanneer
+  alle drie de bedragen wél gelezen zijn maar omzet - kosten niet uitkomt op het
+  afgedrukte netto (zie de zelfcontrole hieronder), is het resultaat `unread`: dan
+  heeft de parser iets verkeerd gegrepen, niet de levering.
 - `match` / `mismatch` — het verschil ligt onder of boven de drempel.
+
+**De afleiding, en waarom hij niet meer altijd draait.** Ontbreekt `pdfNetResult`, dan
+wordt het netto afgeleid als `pdfTurnover - pdfCosts` — maar alleen als beide bekend
+zijn. Is `pdfCosts` null, dan wordt er niet afgeleid: dat veld staat dan op null omdat
+het kostenlabel niet herkend is, niet omdat de levering geen kosten had, en die twee
+door elkaar halen gaf tijdens de bouw EUR 1.734 schijnverschil op één levering (het
+Nederlandse "Totaal kosten" ontbrak nog in de labellijst). Een all-in-levering bereikt
+deze tak sowieso nooit: die drukt geen kosten af maar wél expliciet het netto.
+
+**Zelfcontrole op onze eigen uitlezing.** Zijn `pdfNetResult`, `pdfTurnover` én
+`pdfCosts` alle drie gelezen, dan hoort `pdfTurnover - pdfCosts` binnen de drempel van
+het afgedrukte `pdfNetResult` te liggen — een sales sheet telt intern kloppend op.
+Gemeten op 3.767 documenten waar alle drie gelezen zijn: klopt 3.767 keer. Breekt de
+identiteit toch, dan is dat een parserfout, dus `unread` in plaats van `mismatch`.
 
 Vier uitkomsten en geen `null`, om dezelfde reden als bij `resolveShipmentStatus()`:
 een afwezig antwoord en een negatief antwoord zijn verschillende dingen en horen niet
@@ -136,8 +165,10 @@ dezelfde route.
 29-08-2026 bleef `ourInvoiceNumber` staan nadat een foute PDF was losgemaakt, waardoor de
 levering het factuurnummer van een andere bleef dragen. Blijft `pdfNetResult` van een
 verkeerde PDF staan, dan levert dat een blijvende valse mismatch op — een signaal dat naar
-zichzelf wijst. De vier velden gaan mee in `scripts/audit-salessheet-links.ts` en in
-`verwijderLeveringen()` in de lots-route.
+zichzelf wijst. De vier velden gaan mee op alle drie de plekken die `pdfDocumentId` op
+null zetten: `scripts/audit-salessheet-links.ts`, `verwijderLeveringen()` in de
+lots-route, en `scripts/fix-salessheet-pdf-links.ts` (dat had ze aanvankelijk gemist —
+de derde plek, en de enige die ook het `Document` zelf verwijdert).
 
 Een mislukte parse zet wél `pdfParsedAt` en laat de bedragen leeg, en houdt de koppeling
 nooit tegen: de leverdatum beslist of er gekoppeld wordt, de bedragen zijn bijvangst.
