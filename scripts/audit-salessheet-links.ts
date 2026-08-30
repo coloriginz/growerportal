@@ -320,7 +320,17 @@ async function main() {
      */
     const losgemaakt = await prisma.salesSheet.updateMany({
       where: { id: { in: losTeMaken } },
-      data: { pdfDocumentId: null, ourInvoiceNumber: null },
+      data: {
+        pdfDocumentId: null,
+        ourInvoiceNumber: null,
+        // Ook de gelezen bedragen. Blijven die van een verkeerde PDF staan, dan
+        // levert dat een blijvende mismatch op die naar zichzelf wijst: de
+        // vergelijking zou een document beoordelen dat er niet meer hangt.
+        pdfTurnover: null,
+        pdfCosts: null,
+        pdfNetResult: null,
+        pdfParsedAt: null,
+      },
     });
     console.log(`\nlosgemaakt: ${losgemaakt.count} koppelingen`);
 
