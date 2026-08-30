@@ -28,13 +28,6 @@ export const SALESSHEET_MATCH_TOLERANCE = 1;
 
 export type SalesSheetMatch = "match" | "mismatch" | "unread" | "unlinked";
 
-export const SALESSHEET_MATCHES: readonly SalesSheetMatch[] = [
-  "match",
-  "mismatch",
-  "unread",
-  "unlinked",
-];
-
 export type SalesSheetMatchInput = {
   /** Hangt er een document aan deze afrekening? */
   hasPdf: boolean;
@@ -53,28 +46,35 @@ export type SalesSheetMatchInput = {
 };
 
 /**
+ * Invoer voor `derivePdfNetResult`: alleen de drie gelezen bedragen, niet de hele
+ * `SalesSheetMatchInput` — het backfillscript heeft geen `hasPdf`/`pdfParsedAt`/
+ * `computedNetResult` bij de hand wanneer het alleen de afleiding wil naslaan voor
+ * zijn samenvatting.
+ */
+type PdfAmounts = Pick<SalesSheetMatchInput, "pdfNetResult" | "pdfTurnover" | "pdfCosts">;
+
+/**
  * Het netto zoals de PDF het zegt — rechtstreeks afgedrukt, of afgeleid uit omzet
  * en kosten als het label ontbreekt.
  *
  * Niet elke sales sheet drukt "To be received by supplier" af: gemeten op 60
- * gekoppelde leveringen komt er bij 22 een netto uit, bij 38 niet. Die 38 vielen
- * allemaal op `unread`, waarmee de hele controle vrijwel niets meet. Omzet en
- * kosten staan wel vrijwel altijd op de sales sheet, en het netto is daaruit af te
- * leiden — een verkennende proef gaf op 800 van 800 documenten een vergelijkbaar
- * netto.
+ * gekoppelde leveringen komt er bij 22 een netto uit, bij 38 niet.
  *
- * Eén formule dekt zowel de gewone als de all-in-levering, en dat is geen
- * toeval: bij een gewone levering is omzet - kosten het netto per definitie. Bij
- * een all-in-levering (`isInclusief`) drukt de sales sheet alleen het netto af als
- * "omzet" en heeft hij geen kostenregels — dus omzet - 0 is daar óók het netto.
- * Ontbrekende kosten tellen daarom als nul, niet als onbekend: een levering zonder
- * kostenregel heeft geen kosten, dat is geen leemte in het document. Wie deze regel
- * later wil "verbeteren" door hem op te splitsen per leveringstype: niet doen, hij
- * is expres één regel.
+ * **Beslissing: alleen afleiden wanneer omzet én kosten allebei gelezen zijn.**
+ * Is `pdfCosts` null, dan telt dat niet als "geen kosten" maar als "kostenlabel
+ * niet herkend" — en die verwarring is tijdens de bouw één keer echt gemaakt: het
+ * Nederlandse "Totaal kosten" ontbrak in de labellijst en dat gaf EUR 1.734
+ * schijnverschil op één levering. Een all-in-levering (`isInclusief`) drukt geen
+ * kosten af maar drukt het netto wél expliciet af, dus die bereikt deze afleiding
+ * toch nooit. Wat overblijft als de kosten ontbreken is een lay-out die we niet
+ * kennen, en dan is "we konden het niet lezen" (`unread`) het eerlijke antwoord in
+ * plaats van een getal dat toevallig klopt. Gemeten 30-08-2026: deze afleiding
+ * wordt vandaag op nul van de 4.024 leveringen gebruikt en bestaat dus vooral voor
+ * een lay-out die het netto niet meer prijsgeeft.
  */
-function derivePdfNetResult(input: SalesSheetMatchInput): number | null {
+export function derivePdfNetResult(input: PdfAmounts): number | null {
   if (input.pdfNetResult !== null) return input.pdfNetResult;
-  if (input.pdfTurnover !== null) return input.pdfTurnover - (input.pdfCosts ?? 0);
+  if (input.pdfTurnover !== null && input.pdfCosts !== null) return input.pdfTurnover - input.pdfCosts;
   return null;
 }
 
@@ -84,12 +84,28 @@ export function resolveSalesSheetMatch(input: SalesSheetMatchInput): SalesSheetM
   // ons en geen bevinding over deze afrekening.
   if (!input.hasPdf || input.pdfParsedAt === null) return "unlinked";
 
+  // Een gratis controle op onze eigen uitlezing: staan alle drie de bedragen in de
+  // PDF, dan hóórt omzet - kosten gelijk te zijn aan het afgedrukte netto — dat is
+  // geen aanname over de levering, dat is hoe een sales sheet optelt. Gemeten: op
+  // 3.767 documenten waar alle drie gelezen zijn, klopt die identiteit 3.767 keer.
+  // Breekt hij, dan hebben wij iets verkeerd gelezen — niet de levering — en dus is
+  // dit `unread` en geen `mismatch`: het zegt iets over onze parser, niets over de
+  // afrekening.
+  if (
+    input.pdfNetResult !== null &&
+    input.pdfTurnover !== null &&
+    input.pdfCosts !== null &&
+    Math.abs(input.pdfTurnover - input.pdfCosts - input.pdfNetResult) > SALESSHEET_MATCH_TOLERANCE
+  ) {
+    return "unread";
+  }
+
   const pdfNetResult = derivePdfNetResult(input);
 
-  // Wel bekeken, geen bedrag gevonden en ook geen omzet om het uit af te leiden.
-  // Dat is onze storing — een lay-out die we niet kennen of een document dat niet
-  // te lezen was — en het hoort apart zichtbaar te zijn in plaats van weg te vallen
-  // tussen de afrekeningen zonder PDF.
+  // Wel bekeken, geen bedrag gevonden en ook geen omzet+kosten om het uit af te
+  // leiden. Dat is onze storing — een lay-out die we niet kennen of een document
+  // dat niet te lezen was — en het hoort apart zichtbaar te zijn in plaats van weg
+  // te vallen tussen de afrekeningen zonder PDF.
   if (pdfNetResult === null) return "unread";
 
   // Een niet-eindig getal (NaN, Infinity) is geen getal dat we gelijk mogen noemen.
@@ -97,7 +113,7 @@ export function resolveSalesSheetMatch(input: SalesSheetMatchInput): SalesSheetM
   // check zou zo'n waarde stil als "match" doorkomen — de slechtst mogelijke
   // uitkomst, want juist een bedrag dat we niet kunnen vergelijken moet iemand laten
   // kijken in plaats van het weg te schrijven als "komt overeen". Dit staat na de
-  // afleiding, want ook `pdfTurnover - (pdfCosts ?? 0)` kan niet-eindig zijn.
+  // afleiding, want ook `pdfTurnover - pdfCosts` kan niet-eindig zijn.
   if (!Number.isFinite(pdfNetResult) || !Number.isFinite(input.computedNetResult)) {
     return "mismatch";
   }

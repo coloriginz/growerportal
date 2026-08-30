@@ -1,5 +1,4 @@
 import {
-  SALESSHEET_MATCHES,
   SALESSHEET_MATCH_TOLERANCE,
   resolveSalesSheetMatch,
 } from "../../src/lib/salessheet-match";
@@ -28,7 +27,7 @@ check(
 );
 
 check(
-  "een PDF die nog niet is gelezen is niet hetzelfde als een die niets opleverde",
+  "een PDF die nog niet gelezen is telt als niet-beoordeelbaar, net als geen PDF",
   resolveSalesSheetMatch({
     hasPdf: true,
     pdfParsedAt: null,
@@ -132,46 +131,6 @@ check(
 );
 
 check(
-  "elke uitkomst staat in SALESSHEET_MATCHES",
-  (
-    [
-      {
-        hasPdf: false,
-        pdfParsedAt: null,
-        pdfNetResult: null,
-        pdfTurnover: null,
-        pdfCosts: null,
-        computedNetResult: 0,
-      },
-      {
-        hasPdf: true,
-        pdfParsedAt: GELEZEN,
-        pdfNetResult: null,
-        pdfTurnover: null,
-        pdfCosts: null,
-        computedNetResult: 0,
-      },
-      {
-        hasPdf: true,
-        pdfParsedAt: GELEZEN,
-        pdfNetResult: 5,
-        pdfTurnover: null,
-        pdfCosts: null,
-        computedNetResult: 5,
-      },
-      {
-        hasPdf: true,
-        pdfParsedAt: GELEZEN,
-        pdfNetResult: 5,
-        pdfTurnover: null,
-        pdfCosts: null,
-        computedNetResult: 500,
-      },
-    ] as const
-  ).every((invoer) => SALESSHEET_MATCHES.includes(resolveSalesSheetMatch(invoer)))
-);
-
-check(
   "netto ontbreekt maar omzet en kosten staan er: afgeleid en gematcht",
   resolveSalesSheetMatch({
     hasPdf: true,
@@ -186,7 +145,7 @@ check(
 );
 
 check(
-  "netto ontbreekt, omzet staat er, kosten ontbreken: all-in-levering",
+  "netto ontbreekt, omzet staat er, kosten ontbreken: unread, geen afleiding",
   resolveSalesSheetMatch({
     hasPdf: true,
     pdfParsedAt: GELEZEN,
@@ -194,9 +153,10 @@ check(
     pdfTurnover: 1234.56,
     pdfCosts: null,
     computedNetResult: 1234.56,
-  }) === "match",
-  "all-in-levering: de sales sheet drukt alleen het netto af als 'omzet' en heeft geen " +
-    "kostenregels, dus ontbrekende kosten tellen als nul — omzet - 0 is het netto"
+  }) === "unread",
+  "ontbrekende kosten tellen niet meer als nul: een all-in-levering drukt het netto " +
+    "juist wél expliciet af en bereikt deze tak dus nooit, dus wat overblijft is een " +
+    "lay-out die we niet kennen — en dan is 'niet gelezen' eerlijker dan een geraden nul"
 );
 
 check(
@@ -227,17 +187,18 @@ check(
 );
 
 check(
-  "pdfNetResult wint van de afleiding, ook als die een ander getal zou geven",
+  "pdfNetResult wint van de afleiding, ook als de kosten niet gelezen zijn",
   resolveSalesSheetMatch({
     hasPdf: true,
     pdfParsedAt: GELEZEN,
     pdfNetResult: 1234.56,
     pdfTurnover: 9999,
-    pdfCosts: 1,
+    pdfCosts: null,
     computedNetResult: 1234.56,
   }) === "match",
   "staat het netto zelf op het document, dan is dat leidend — de afleiding uit omzet " +
-    "en kosten is alleen een noodgreep voor als het label ontbreekt"
+    "en kosten is alleen een noodgreep voor als het label ontbreekt; de zelfcontrole " +
+    "raakt hier niet aan bod omdat pdfCosts ontbreekt, dus 9999 wordt genegeerd"
 );
 
 check(
@@ -252,6 +213,35 @@ check(
   }) === "mismatch",
   "NaN > SALESSHEET_MATCH_TOLERANCE is false in JavaScript, dus zonder expliciete " +
     "check zou een onvergelijkbaar bedrag stil als 'match' doorkomen"
+);
+
+check(
+  "alle drie de bedragen gelezen en ze kloppen intern: gewoon oordeel",
+  resolveSalesSheetMatch({
+    hasPdf: true,
+    pdfParsedAt: GELEZEN,
+    pdfNetResult: 1000,
+    pdfTurnover: 1500,
+    pdfCosts: 500,
+    computedNetResult: 1000,
+  }) === "match",
+  "1500 - 500 = 1000, gelijk aan het afgedrukte netto — de zelfcontrole houdt hier stil " +
+    "en het gewone oordeel volgt"
+);
+
+check(
+  "alle drie de bedragen gelezen maar ze kloppen intern niet: unread, geen mismatch",
+  resolveSalesSheetMatch({
+    hasPdf: true,
+    pdfParsedAt: GELEZEN,
+    pdfNetResult: 1000,
+    pdfTurnover: 1500,
+    pdfCosts: 600,
+    computedNetResult: 1000,
+  }) === "unread",
+  "1500 - 600 = 900, wijkt 100 euro af van het afgedrukte netto 1000 — een sales sheet " +
+    "telt intern altijd kloppend op, dus dit is onze uitlezing die iets verkeerd greep, " +
+    "niet de levering; vandaar unread ook al is computedNetResult gelijk aan het netto"
 );
 
 console.log(failures === 0 ? "\nalle checks geslaagd" : `\n${failures} check(s) gefaald`);
