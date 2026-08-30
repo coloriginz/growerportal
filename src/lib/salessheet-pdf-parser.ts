@@ -57,13 +57,18 @@ function parseDutchDate(value: string | null): string | null {
 const BEDRAG = String.raw`\(?-?\s*€?\s*-?[\d.]+,\d{2}\)?`;
 
 const OMZET_LABELS = ["Total nett turnover", "Totale netto omzet"];
-const KOSTEN_LABELS = ["Total costs", "Totale kosten"];
+const KOSTEN_LABELS = ["Total costs", "Totale kosten", "Totaal kosten"];
 const NETTO_LABELS = [
   "To be received by supplier",
   "To be paid by supplier",
   "Te ontvangen door leverancier",
   "Te betalen door leverancier",
   "Nett payable / receivable to/from OZ import",
+  // "Subtotaal"/"Subtotal" zijn de algemenere termen en staan daarom achteraan:
+  // de lijst wordt op volgorde afgelopen, dus deze twee komen alleen aan bod
+  // als geen van de specifiekere labels hierboven iets opleverde.
+  "Subtotaal",
+  "Subtotal",
 ];
 
 /** "1.763,10", "(€ 193,78)" en "-€ 157,10" naar een getal. Haakjes of een minteken betekenen negatief. */

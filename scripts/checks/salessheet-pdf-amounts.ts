@@ -89,5 +89,49 @@ check(
   })()
 );
 
+/*
+ * Echte tekst van COLXGREE, levering 17806. Deze afrekening schreef "Totaal
+ * kosten" waar de parser alleen "Totale kosten" kende, en droeg het netto op
+ * "Subtotaal" waar dat label helemaal niet in de lijst stond. Kosten en netto
+ * kwamen daardoor op null uit en het verschil (omzet - 0) werd EUR 1.734,29 —
+ * terwijl er niets mis was met de levering.
+ */
+const COLXGREE_17806 =
+  "Kosten Berekening netto resultaat leverancier Directe verkopen € 10.244,66 Omzet veiling " +
+  "€ 2.192,64 € 12.437,30 Totale netto omzet Distributiekosten 168,68 Verwerkingskosten 357,12 " +
+  "Administratie kosten 12,50 Commissie directe verkoop 1.044,96 Transactie heffing 151,04 " +
+  "(€ 1.734,29) Totaal kosten € 1.734,30 € 10.703,01 Subtotaal: (€ 12.437,30) Omzet betaald " +
+  "door Floraholland: Netto te betalen / te ontvangen aan / van OZ import: 19-03-2026 30-3-26 " +
+  "22:04 AWB nummer";
+
+const colxgree = parseSalesSheetAmounts(COLXGREE_17806);
+check("COLXGREE 17806: omzet", colxgree.turnover === 12437.3, `kreeg ${colxgree.turnover}`);
+check(
+  "COLXGREE 17806: kosten via 'Totaal kosten'",
+  colxgree.costs === 1734.3,
+  `kreeg ${colxgree.costs}`
+);
+check(
+  "COLXGREE 17806: netto via 'Subtotaal'",
+  colxgree.netResult === 10703.01,
+  `kreeg ${colxgree.netResult}`
+);
+
+/*
+ * "Subtotaal" is de algemenere term en staat daarom achteraan in NETTO_LABELS.
+ * Deze minimale tekst bevat geen echt document, alleen beide labels naast
+ * elkaar, om te bewijzen dat het specifieke label ("Te ontvangen door
+ * leverancier") wint ook al staat "Subtotaal" er ook in.
+ */
+const SPECIFIEK_NETTOLABEL_WINT =
+  "€ 500,00 Te ontvangen door leverancier € 999,00 Subtotaal:";
+
+const specifiekWint = parseSalesSheetAmounts(SPECIFIEK_NETTOLABEL_WINT);
+check(
+  "specifiek nettolabel wint van 'Subtotaal'",
+  specifiekWint.netResult === 500,
+  `kreeg ${specifiekWint.netResult}`
+);
+
 console.log(failures === 0 ? "\nalle checks geslaagd" : `\n${failures} check(s) gefaald`);
 process.exit(failures === 0 ? 0 : 1);
