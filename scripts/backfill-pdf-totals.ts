@@ -80,6 +80,48 @@ type Uitkomst = {
   status: SalesSheetMatch;
 };
 
+/**
+ * Brokgrootte voor het wegschrijven. Bewust klein: een echte run op test viel
+ * na ~250 documenten om met "Can't reach database server" (Neon-verbinding
+ * onderweg weg), en dit script is juist herstelbaar omdat de werklijst
+ * (`pdfParsedAt IS NULL`) zelf bijhoudt wat nog moet. Eén `update()` per
+ * document maakte dat voordeel onbruikbaar traag; met een brok van 200 kost
+ * een verbroken verbinding hooguit die ene brok, en de rest blijft staan voor
+ * de volgende run.
+ */
+const CHUNK_SIZE = 200;
+
+type PendingWrite = {
+  id: string;
+  turnover: number | null;
+  costs: number | null;
+  netResult: number | null;
+  parsedAt: string;
+};
+
+/**
+ * Schrijft één brok gelezen bedragen in een enkele UPDATE weg — zelfde
+ * patroon als de orders-import (`jsonb_array_elements`, zie
+ * `src/app/api/import/orders/route.ts`). `->>` levert SQL NULL op voor een
+ * JSON-null waarde, dus een bedrag dat de PDF niet gaf landt als NULL en niet
+ * als 0 — dat onderscheid is het hele punt van deze kolommen.
+ */
+async function schrijfBrokWeg(brok: PendingWrite[]): Promise<void> {
+  if (brok.length === 0) return;
+  await prisma.$executeRawUnsafe(
+    `UPDATE "SalesSheet" AS t
+     SET
+       "pdfTurnover" = (v.val->>'turnover')::numeric,
+       "pdfCosts" = (v.val->>'costs')::numeric,
+       "pdfNetResult" = (v.val->>'netResult')::numeric,
+       "pdfParsedAt" = (v.val->>'parsedAt')::timestamp,
+       "updatedAt" = NOW()
+     FROM jsonb_array_elements($1::jsonb) AS v(val)
+     WHERE t.id = v.val->>'id'`,
+    JSON.stringify(brok)
+  );
+}
+
 async function main() {
   if (!fs.existsSync(ARCHIEF)) {
     console.error(`Archief niet gevonden: ${ARCHIEF}`);
@@ -107,10 +149,12 @@ async function main() {
   console.log("");
 
   const uitkomsten: Uitkomst[] = [];
+  const brok: PendingWrite[] = [];
   let gelezen = 0;
   let metNetto = 0;
   let zonderNetto = 0;
   let nietGevonden = 0;
+  let weggeschreven = 0;
 
   for (const [i, sheet] of werklijst.entries()) {
     const naam = sheet.pdfDocument?.fileName ?? "";
@@ -152,9 +196,10 @@ async function main() {
     if (turnover === null && costs === null && netResult === null) zonderNetto++;
     else metNetto++;
 
+    const parsedAt = new Date();
     const status = resolveSalesSheetMatch({
       hasPdf: true,
-      pdfParsedAt: new Date(),
+      pdfParsedAt: parsedAt,
       pdfNetResult: netResult,
       pdfTurnover: turnover,
       pdfCosts: costs,
@@ -173,18 +218,23 @@ async function main() {
     });
 
     if (APPLY) {
-      await prisma.salesSheet.update({
-        where: { id: sheet.id },
-        data: {
-          pdfTurnover: turnover,
-          pdfCosts: costs,
-          pdfNetResult: netResult,
-          pdfParsedAt: new Date(),
-        },
-      });
+      brok.push({ id: sheet.id, turnover, costs, netResult, parsedAt: parsedAt.toISOString() });
+      if (brok.length >= CHUNK_SIZE) {
+        await schrijfBrokWeg(brok);
+        weggeschreven += brok.length;
+        brok.length = 0;
+        console.log(`  weggeschreven: ${weggeschreven}/${werklijst.length}`);
+      }
     }
 
-    if ((i + 1) % 250 === 0) console.log(`  ${i + 1}/${werklijst.length}`);
+    if ((i + 1) % CHUNK_SIZE === 0) console.log(`  gelezen: ${i + 1}/${werklijst.length}`);
+  }
+
+  // Laatste, onvolle brok alsnog wegschrijven.
+  if (APPLY && brok.length > 0) {
+    await schrijfBrokWeg(brok);
+    weggeschreven += brok.length;
+    console.log(`  weggeschreven: ${weggeschreven}/${werklijst.length}`);
   }
 
   const tel = (s: SalesSheetMatch) => uitkomsten.filter((u) => u.status === s).length;
@@ -204,7 +254,7 @@ async function main() {
   console.log(`  met bedrag         : ${metNetto}`);
   console.log(`  zonder bedrag      : ${zonderNetto}`);
   console.log(`bestand niet gevonden: ${nietGevonden}`);
-  if (APPLY) console.log(`weggeschreven        : ${uitkomsten.length}`);
+  if (APPLY) console.log(`weggeschreven        : ${weggeschreven}`);
   console.log("");
   console.log(`match                : ${tel("match")}`);
   console.log(`mismatch             : ${tel("mismatch")}`);
