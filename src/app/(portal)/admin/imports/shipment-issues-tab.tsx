@@ -18,9 +18,9 @@ import { RiRefreshLine, RiSearchLine } from "@remixicon/react";
 import { useFetch } from "@/hooks/use-fetch";
 import { ErrorState } from "@/components/ui/error-state";
 import { useLanguage } from "@/components/providers/language-provider";
-import { formatDate, formatNumber } from "@/lib/format";
+import { formatDate, formatNumber, formatCurrencyDetailed } from "@/lib/format";
 
-type IssueType = "missing-pdf" | "stem-gap";
+type IssueType = "missing-pdf" | "stem-gap" | "pdf-mismatch";
 
 interface IssueRow {
   id: string;
@@ -35,6 +35,9 @@ interface IssueRow {
   missingStems: number;
   costCount: number;
   hasPdf: boolean;
+  pdfAmount: number | null;
+  computedAmount: number | null;
+  difference: number | null;
 }
 
 interface IssueResponse {
@@ -61,6 +64,12 @@ const TABS: { type: IssueType; label: string; explanation: string }[] = [
     label: "Settled with missing stems",
     explanation:
       "Settled deliveries where fewer stems were sold than delivered. Usually an order line the warehouse filled in later — the settlement decides the status, so the gap would otherwise go unnoticed.",
+  },
+  {
+    type: "pdf-mismatch",
+    label: "Sales sheet disagrees",
+    explanation:
+      "Sales sheets whose PDF net result differs from what the portal computes by more than the match tolerance. Two independent sources that should agree — this list does not say which side is wrong.",
   },
 ];
 
@@ -104,6 +113,8 @@ export function ShipmentIssuesTab() {
   const pageEnd = Math.min(currentPage * LIMIT, total);
   const active = TABS.find((tab) => tab.type === type)!;
   const showStems = type === "stem-gap";
+  const showAmounts = type === "pdf-mismatch";
+  const colSpan = showAmounts ? 6 : showStems ? 7 : 5;
 
   return (
     <div className="space-y-6">
@@ -158,28 +169,38 @@ export function ShipmentIssuesTab() {
             <TableHead>{t("shipments.deliveryDate")}</TableHead>
             <TableHead>{t("shipments.shipmentNumber")}</TableHead>
             <TableHead>Supplier</TableHead>
-            <TableHead className="text-right">{t("shipments.costs")}</TableHead>
-            {showStems ? (
+            {showAmounts ? (
               <>
-                <TableHead className="text-right">{t("shipments.stems")}</TableHead>
-                <TableHead className="text-right">{t("shipments.soldStems")}</TableHead>
-                <TableHead className="text-right">Missing</TableHead>
+                <TableHead className="text-right">PDF amount</TableHead>
+                <TableHead className="text-right">Computed amount</TableHead>
+                <TableHead className="text-right">Difference</TableHead>
               </>
             ) : (
-              <TableHead className="text-right">{t("shipments.stems")}</TableHead>
+              <>
+                <TableHead className="text-right">{t("shipments.costs")}</TableHead>
+                {showStems ? (
+                  <>
+                    <TableHead className="text-right">{t("shipments.stems")}</TableHead>
+                    <TableHead className="text-right">{t("shipments.soldStems")}</TableHead>
+                    <TableHead className="text-right">Missing</TableHead>
+                  </>
+                ) : (
+                  <TableHead className="text-right">{t("shipments.stems")}</TableHead>
+                )}
+              </>
             )}
           </TableRow>
         </TableHeader>
         <TableBody>
           {loading && !data ? (
             <TableRow>
-              <TableCell colSpan={showStems ? 7 : 5} className="h-24 text-center text-muted-foreground">
+              <TableCell colSpan={colSpan} className="h-24 text-center text-muted-foreground">
                 {t("common.loading")}
               </TableCell>
             </TableRow>
           ) : items.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={showStems ? 7 : 5} className="h-24 text-center text-muted-foreground">
+              <TableCell colSpan={colSpan} className="h-24 text-center text-muted-foreground">
                 {debouncedSearch ? t("common.noResults") : "Nothing to resolve here"}
               </TableCell>
             </TableRow>
@@ -209,20 +230,36 @@ export function ShipmentIssuesTab() {
                     {row.supplierName}
                   </span>
                 </TableCell>
-                <TableCell className="text-right tabular-nums">
-                  {row.costCount}
-                </TableCell>
-                <TableCell className="text-right tabular-nums">
-                  {formatNumber(row.deliveredStems)}
-                </TableCell>
-                {showStems && (
+                {showAmounts ? (
                   <>
                     <TableCell className="text-right tabular-nums">
-                      {formatNumber(row.soldStems)}
+                      {row.pdfAmount !== null ? formatCurrencyDetailed(row.pdfAmount) : "—"}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {row.computedAmount !== null ? formatCurrencyDetailed(row.computedAmount) : "—"}
                     </TableCell>
                     <TableCell className="text-right tabular-nums font-medium text-amber-600 dark:text-amber-400">
-                      {formatNumber(row.missingStems)}
+                      {row.difference !== null ? formatCurrencyDetailed(row.difference) : "—"}
                     </TableCell>
+                  </>
+                ) : (
+                  <>
+                    <TableCell className="text-right tabular-nums">
+                      {row.costCount}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {formatNumber(row.deliveredStems)}
+                    </TableCell>
+                    {showStems && (
+                      <>
+                        <TableCell className="text-right tabular-nums">
+                          {formatNumber(row.soldStems)}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums font-medium text-amber-600 dark:text-amber-400">
+                          {formatNumber(row.missingStems)}
+                        </TableCell>
+                      </>
+                    )}
                   </>
                 )}
               </TableRow>
