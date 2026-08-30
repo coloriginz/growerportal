@@ -34,7 +34,7 @@ import * as path from "path";
 import "dotenv/config";
 import { prisma } from "../src/lib/db";
 import { parseSalesSheetPdf } from "../src/lib/salessheet-pdf-parser";
-import { resolveSalesSheetMatch, type SalesSheetMatch } from "../src/lib/salessheet-match";
+import { derivePdfNetResult, resolveSalesSheetMatch, type SalesSheetMatch } from "../src/lib/salessheet-match";
 
 function argWaarde(vlag: string): string | undefined {
   const arg = process.argv.slice(2).find((a) => a.startsWith(vlag + "="));
@@ -47,7 +47,14 @@ const APPLY = process.argv.includes("--apply");
  * blijft elke e-mailkoppeling ongelezen — op productie is dat alles.
  */
 const BLOB = process.argv.includes("--blob");
-const LIMIT = Number(argWaarde("--limit") ?? 0) || Infinity;
+/*
+ * Geen vlag meegegeven: onbeperkt. Wel meegegeven, ook `--limit=0`: exact dat
+ * getal. `Number(...) || Infinity` maakte van `--limit=0` per ongeluk hetzelfde
+ * als geen vlag — 0 is falsy, dus die viel terug op Infinity, het tegenovergestelde
+ * van "nul koppelingen lezen".
+ */
+const limitArg = argWaarde("--limit");
+const LIMIT = limitArg === undefined ? Infinity : Number(limitArg);
 const ARCHIEF = argWaarde("--archief") ?? path.join("private_input", "salessheets");
 
 /** Alle PDF's in het archief, op kleine-letter bestandsnaam. */
@@ -151,8 +158,8 @@ async function main() {
   const uitkomsten: Uitkomst[] = [];
   const brok: PendingWrite[] = [];
   let gelezen = 0;
-  let metNetto = 0;
-  let zonderNetto = 0;
+  let metBedrag = 0;
+  let zonderBedrag = 0;
   let nietGevonden = 0;
   let weggeschreven = 0;
 
@@ -193,8 +200,8 @@ async function main() {
     }
 
     gelezen++;
-    if (turnover === null && costs === null && netResult === null) zonderNetto++;
-    else metNetto++;
+    if (turnover === null && costs === null && netResult === null) zonderBedrag++;
+    else metBedrag++;
 
     const parsedAt = new Date();
     const status = resolveSalesSheetMatch({
@@ -238,12 +245,14 @@ async function main() {
   }
 
   const tel = (s: SalesSheetMatch) => uitkomsten.filter((u) => u.status === s).length;
-  // Zelfde afleiding als `resolveSalesSheetMatch`: netto rechtstreeks, of omzet
-  // min kosten wanneer het netto-label ontbrak op de PDF.
-  const pdfNetto = (u: Uitkomst): number | null =>
-    u.netResult !== null ? u.netResult : u.turnover !== null ? u.turnover - (u.costs ?? 0) : null;
   const grootsteVerschillen = uitkomsten
-    .map((u) => ({ u, netto: pdfNetto(u) }))
+    .map((u) => ({
+      u,
+      // Dezelfde afleiding als `resolveSalesSheetMatch`, uit `salessheet-match.ts`
+      // zelf — dit stond hier vroeger nog een derde keer uitgeschreven, met het
+      // risico dat de regel op twee plekken uiteen zou lopen.
+      netto: derivePdfNetResult({ pdfNetResult: u.netResult, pdfTurnover: u.turnover, pdfCosts: u.costs }),
+    }))
     .filter((r): r is { u: Uitkomst; netto: number } => r.netto !== null)
     .map((r) => ({ ...r, verschil: Math.abs(r.netto - r.u.computedNetResult) }))
     .sort((a, b) => b.verschil - a.verschil)
@@ -251,8 +260,8 @@ async function main() {
 
   console.log("");
   console.log(`gelezen              : ${gelezen}`);
-  console.log(`  met bedrag         : ${metNetto}`);
-  console.log(`  zonder bedrag      : ${zonderNetto}`);
+  console.log(`  met bedrag         : ${metBedrag}`);
+  console.log(`  zonder bedrag      : ${zonderBedrag}`);
   console.log(`bestand niet gevonden: ${nietGevonden}`);
   if (APPLY) console.log(`weggeschreven        : ${weggeschreven}`);
   console.log("");
