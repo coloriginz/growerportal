@@ -361,8 +361,6 @@ model CorrectionReasonCode {
   isClaim    Boolean  @default(false)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
-
-  corrections LotCorrection[]
 }
 
 // ─── LOT CORRECTIONS (PARTIJCORRECTIES) ────────────────────
@@ -373,8 +371,12 @@ model LotCorrection {
   lot                Lot      @relation(fields: [lotId], references: [id], onDelete: Cascade)
   fabricPartId       Int?     // part_id of the correction row (unique in Fabric)
   facttypeSub        String   // "correctie" or "productiecorrectie"
-  correctionReasonId Int?     // reden_id_correctie from Fabric
-  correctionReason   CorrectionReasonCode? @relation(fields: [correctionReasonId], references: [id])
+  /// reden_id_correctie from Fabric. Geen FK, net als Transaction.correctionReasonId:
+  /// CorrectionReasonCode wordt door geen enkele importroute gevuld, alleen handmatig
+  /// via scripts/seed-reason-codes.ts uit een CSV. Met een FK erop legt één correctieregel
+  /// met een code die nog niet in die CSV staat de hele INSERT (en daarmee de rest van
+  /// de backfill-run van die leverancier) lam met 23503 foreign_key_violation.
+  correctionReasonId Int?
   correctionVolume   Int?     // Inslagcorrectie volume (this individual correction)
   correctionColli    Int?     // Inslag colli correctie (this individual correction)
   createdAt          DateTime @default(now())

@@ -45,14 +45,6 @@ export default async function ShipmentDetailPage({ params }: Props) {
               correctionReasonId: true,
               correctionVolume: true,
               correctionColli: true,
-              correctionReason: {
-                select: {
-                  code: true,
-                  nameNl: true,
-                  nameEn: true,
-                  typeCode: true,
-                },
-              },
             },
           },
         },
@@ -73,11 +65,13 @@ export default async function ShipmentDetailPage({ params }: Props) {
     return notFound();
   }
 
-  // Fetch correction reason codes for transaction correctionReasonIds (no FK relation)
+  // Fetch correction reason codes for transaction and lot-correction correctionReasonIds
+  // (no FK relation on either — see schema.prisma)
   const reasonIds = [...new Set(
-    salesSheet.lots.flatMap(l =>
-      l.transactions.map(tx => tx.correctionReasonId).filter((id): id is number => id != null)
-    )
+    salesSheet.lots.flatMap(l => [
+      ...l.transactions.map(tx => tx.correctionReasonId),
+      ...l.corrections.map(c => c.correctionReasonId),
+    ]).filter((id): id is number => id != null)
   )];
   const reasons = reasonIds.length > 0
     ? await prisma.correctionReasonCode.findMany({

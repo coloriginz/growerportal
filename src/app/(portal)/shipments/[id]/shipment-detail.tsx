@@ -69,12 +69,6 @@ interface LotCorrection {
   correctionReasonId: number | null;
   correctionVolume: number | null;
   correctionColli: number | null;
-  correctionReason: {
-    code: string;
-    nameNl: string;
-    nameEn: string | null;
-    typeCode: string;
-  } | null;
 }
 
 interface Lot {
@@ -455,23 +449,26 @@ export function ShipmentDetail({ shipment, correctionReasons = {}, status }: Shi
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {allCorrections.map((corr) => (
+                {allCorrections.map((corr) => {
+                  const reason = corr.correctionReasonId ? correctionReasons[corr.correctionReasonId] : null;
+                  return (
                   <TableRow key={corr.id} className="bg-red-50/50 dark:bg-red-950/10">
                     <TableCell className="font-medium">{corr.lotNumber}</TableCell>
                     <TableCell>{corr.productName}</TableCell>
                     <TableCell className="text-red-600 dark:text-red-400">
-                      {corr.correctionReason
-                        ? (language === "en" && corr.correctionReason.nameEn) || corr.correctionReason.nameNl
+                      {reason
+                        ? (language === "en" && reason.nameEn) || reason.nameNl
                         : corr.facttypeSub}
-                      {corr.correctionReason && (
-                        <span className="text-muted-foreground ml-2">({corr.correctionReason.code})</span>
+                      {reason && (
+                        <span className="text-muted-foreground ml-2">({reason.code})</span>
                       )}
                     </TableCell>
                     <TableCell className="text-right tabular-nums text-red-600 dark:text-red-400">
                       {corr.correctionVolume != null ? formatNumber(corr.correctionVolume) : "-"}
                     </TableCell>
                   </TableRow>
-                ))}
+                  );
+                })}
                 <TableRow className="font-semibold bg-red-50 dark:bg-red-950/20">
                   <TableCell colSpan={3}>{t("common.total")}</TableCell>
                   <TableCell className="text-right tabular-nums text-red-600 dark:text-red-400">
