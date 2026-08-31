@@ -62,9 +62,17 @@ const TABS: { type: IssueType; label: string; explanation: string }[] = [
   },
   {
     type: "stem-gap",
-    label: "Settled with missing stems",
+    /*
+     * "Missing stems" dekte de lading niet meer: de controle telt sinds vandaag
+     * het verschil in beide richtingen. Van de 858 leveringen die eruit komen
+     * verkopen er 813 minder dan aangevoerd plus correcties, maar 45 juist méér —
+     * en dat tweede geval is het vreemdere van de twee, want je kunt niet
+     * verkopen wat nooit is binnengekomen. Onder een kop die alleen over
+     * ontbrekende stelen praat, zou niemand daarnaar kijken.
+     */
+    label: "Settled: stems do not add up",
     explanation:
-      "Settled deliveries where delivered plus corrections does not add up to sold, by more than a few stems. Usually an order line the warehouse filled in later — the settlement decides the status, so the gap would otherwise go unnoticed.",
+      "Settled deliveries where delivered plus corrections does not equal sold, by more than a few stems — in either direction. Fewer sold usually means an order line the warehouse filled in later; more sold than came in is the stranger case. The settlement decides the status, so the gap would otherwise go unnoticed.",
   },
   {
     type: "pdf-mismatch",
