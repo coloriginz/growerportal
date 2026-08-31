@@ -30,9 +30,23 @@ SELECT
   -- de portal, wat past bij toegepaste correcties.
   p.inkoop_factuur_aantal    AS "Inkoopfactuur volume",
   p.inslag_aantal_correctie  AS "Inslag aantal correctie",
-  p.facttypesub              AS "Facttype Sub"
+  p.facttypesub              AS "Facttype Sub",
+  c.correctie_datum          AS "Correctie Datum"
 FROM marts.fct_partijen p
 LEFT JOIN marts.dim_artikel a ON a.art_id = p.art_id
+-- dim_partijcorrecties is niet uniek op (part_id, reden_id_correctie): 138.214
+-- rijen over 128.174 paren, gemeten 29-08-2026 — ongeveer 8% van de paren heeft
+-- er meer dan één, sommige partijen tot 39. Een JOIN direct op de tabel zou
+-- partijregels vermenigvuldigen. De subquery aggregeert eerst tot één rij per
+-- paar en neemt de laatste (MAX) correctiedatum; bij meerdere correcties met
+-- dezelfde reden op een partij dragen ze dan allemaal die datum. Voor de vraag
+-- "stond dit al op de afgedrukte afrekening" is dat genoeg, en eerlijker dan
+-- een willekeurige rij kiezen.
+LEFT JOIN (
+  SELECT part_id, reden_id_correctie, MAX(partij_correctie_datum) AS correctie_datum
+  FROM marts.dim_partijcorrecties
+  GROUP BY part_id, reden_id_correctie
+) c ON c.part_id = p.part_id AND c.reden_id_correctie = p.reden_id_correctie
 WHERE p.leverdatum >= '${isoDate(from)}'
   AND p.leverdatum <  '${isoDate(to)}'
   ${supplierClause("p.rel_id_leverancier", supplierFabricId)}
