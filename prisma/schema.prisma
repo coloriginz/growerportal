@@ -204,6 +204,15 @@ model SalesSheet {
   pdfTurnover     Decimal?  @db.Decimal(12, 2)
   pdfCosts        Decimal?  @db.Decimal(12, 2)
   pdfNetResult    Decimal?  @db.Decimal(12, 2)
+  /// De factuurdatum zoals die op de PDF staat.
+  ///
+  /// `invoiceDate` hierboven draagt die niet: de lots-import zet daar sinds de
+  /// allereerste versie de leverdatum in, omdat Fabric de verkoopfactuurdatum
+  /// nergens in `marts` heeft staan (nagelopen op 1 september 2026: dim_levering,
+  /// fct_invoices, dim_partij, dim_zendingen, fct_partijen, fct_salesheets_costs).
+  /// De afrekening zelf is daarmee de enige bron, en zonder deze datum is niet
+  /// vast te stellen wat er ten tijde van het printen bekend was.
+  pdfInvoiceDate  DateTime?
   /// Wanneer de PDF is uitgelezen. Draagt geen bedrag en is toch onmisbaar:
   /// zonder dit veld zijn "nog nooit gelezen" en "gelezen, maar er stond niets"
   /// allebei null, en dan is een parserprobleem niet te onderscheiden van een
@@ -379,6 +388,15 @@ model LotCorrection {
   correctionReasonId Int?
   correctionVolume   Int?     // Inslagcorrectie volume (this individual correction)
   correctionColli    Int?     // Inslag colli correctie (this individual correction)
+  /// Wanneer de correctie is geboekt, uit `marts.dim_partijcorrecties`.
+  ///
+  /// Niet hetzelfde als de vertrekdatum van de zending, en dat verschil is precies
+  /// waar het om gaat: een correctie die na het opmaken van de afrekening is
+  /// ingevoerd staat er niet op, en tot nu toe was dat alleen te schatten. De bron
+  /// is niet uniek op (part_id, reden) — 138.214 rijen over 128.174 paren — dus bij
+  /// meerdere correcties met dezelfde reden op een partij dragen ze allemaal de
+  /// laatste datum. Voor de vraag "stond dit al op het papier" is dat genoeg.
+  correctionDate     DateTime?
   createdAt          DateTime @default(now())
   updatedAt          DateTime @default(now()) @updatedAt
 
