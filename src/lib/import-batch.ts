@@ -4,9 +4,27 @@ import { prisma } from "@/lib/db";
 import { requireImportAuth, normalizeImportKeys, summariseImportError } from "@/lib/import-auth";
 import { completeJobForBatch, failJobForBatch } from "@/lib/sync/runner";
 
+/** Wat de omhulling over de aanroep weet en de handler nodig kan hebben. */
+export type ImportContext = {
+  /**
+   * Hoeveel rijen deze batch al ontving vóór de huidige payload. Nul betekent:
+   * dit is de eerste en enige POST tot nu toe.
+   *
+   * Bestaat voor precies één beslissing, maar wel de duurste. De orders-import
+   * ruimt binnen het venster van een job op wat de payload niet draagt, en dat
+   * mag alleen als de payload dat venster compleet dekt. Eén job is één query is
+   * één POST — dat is hoe de portal de sync bouwt — maar het is een aanname over
+   * gedrag aan de andere kant van een webhook, en er stond niets tussen die
+   * aanname en het wegvallen van omzet. Zou dezelfde batch ooit een tweede
+   * payload krijgen, dan verwijdert die alles wat de eerste net schreef.
+   */
+  priorRows: number;
+};
+
 type Handler<Row> = (
   rows: Row[],
-  batchId: string | null
+  batchId: string | null,
+  context: ImportContext
 ) => Promise<{
   created: number;
   updated: number;
@@ -114,11 +132,22 @@ export async function runImport<Row>(
     return NextResponse.json({ error: JSON.parse(summary) }, { status: 400 });
   }
 
+  /*
+   * De rijen meteen bijtellen, vóór de handler draait, en het aantal van dáárvoor
+   * onthouden. Eén atomaire UPDATE, dus twee gelijktijdige POSTs op dezelfde batch
+   * kunnen elkaar niet allebei als eerste zien.
+   *
+   * `recordsReceived` werd voorheen ná afloop gezet op de lengte van deze payload.
+   * Optellen is niet alleen nodig voor deze controle maar ook eerlijker: een batch
+   * die twee payloads kreeg heeft er ook echt twee ontvangen, en dat hoort in het
+   * importscherm te staan in plaats van overschreven te worden door de laatste.
+   */
+  const priorRows = await claimPayload(batchId, parsed.data.rows.length);
+
   try {
-    const result = await options.handler(parsed.data.rows, batchId);
+    const result = await options.handler(parsed.data.rows, batchId, { priorRows });
     await finish({
       status: "success",
-      recordsReceived: parsed.data.rows.length,
       recordsCreated: result.created,
       recordsUpdated: result.updated,
       recordsSkipped: result.skipped,
@@ -137,6 +166,25 @@ export async function runImport<Row>(
     await finish({ status: "error", errorMessage: message });
     await markJobFailed(batchId, message);
     throw error;
+  }
+}
+
+/**
+ * Telt deze payload bij de batch op en geeft terug hoeveel rijen er al stonden.
+ * Zonder batch (of als de update faalt) is het antwoord 0: dan valt er niets te
+ * bewaken en gedraagt alles zich als voorheen.
+ */
+async function claimPayload(batchId: string | null, rows: number): Promise<number> {
+  if (!batchId) return 0;
+  try {
+    const bijgewerkt = await prisma.importBatch.update({
+      where: { id: batchId },
+      data: { recordsReceived: { increment: rows } },
+      select: { recordsReceived: true },
+    });
+    return Math.max(0, bijgewerkt.recordsReceived - rows);
+  } catch {
+    return 0;
   }
 }
 

@@ -40,10 +40,15 @@ export type WithdrawalInput = {
   supplierId: string | null;
   /** Het aantal rijen dat de payload droeg, vóór alle filtering. */
   payloadRows: number;
+  /**
+   * Hoeveel rijen deze batch al ontving vóór deze payload. Nul hoort het te zijn:
+   * één job is één query is één POST.
+   */
+  priorRows: number;
 };
 
 export function resolveWithdrawalScope(input: WithdrawalInput): WithdrawalScope {
-  const { job, supplierId, payloadRows } = input;
+  const { job, supplierId, payloadRows, priorRows } = input;
 
   // Geen job: dit is een oude DAX-flow of een reparatiescript. Die kennen geen
   // venster, en wat zij niet meesturen is daarom geen bewijs dat het weg mag.
@@ -54,6 +59,23 @@ export function resolveWithdrawalScope(input: WithdrawalInput): WithdrawalScope 
   // gemeten op 26-08-2026, waarna dezelfde query 1.511 rijen gaf. Op zo'n
   // antwoord een heel venster wissen is precies de fout die dan niet opvalt.
   if (payloadRows === 0) return { mode: "pairs", reason: "lege payload" };
+
+  /*
+   * Deze batch kreeg al eerder rijen. Dan is de payload die hier ligt niet het
+   * hele venster maar een deel ervan, en zou vensterbreed opruimen weggooien wat
+   * de vorige POST net schreef — met omzet en al, en zonder een spoor.
+   *
+   * Dit hoort niet voor te komen: de portal knipt zijn eigen vragen zo dat het
+   * antwoord in één post past. Maar dat is een aanname over gedrag aan de andere
+   * kant van een webhook, en dit is de enige plek in het systeem waar zo'n
+   * aanname data kost in plaats van tijd.
+   */
+  if (priorRows > 0) {
+    return {
+      mode: "pairs",
+      reason: `deze batch ontving al ${priorRows} rijen; een tweede payload mag het venster niet opruimen`,
+    };
+  }
 
   // Een job voor één leverancier waarvan de portal de leverancier niet kan
   // thuisbrengen, mag niet stilzwijgend verbreden naar álle leveranciers: dan

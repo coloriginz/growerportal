@@ -236,11 +236,23 @@ async function processAttachment(
    * en het tweede een storing die gerepareerd moet worden.
    */
   let pdfLeeg = false;
+  /*
+   * De drie bedragen van de sales sheet zelf. Ze horen bij dit `try`-blok,
+   * maar `pdfParsed` zelf bestaat alleen daarbinnen — een gefaalde parse
+   * (catch hieronder) laat ze op null staan, en dat is precies wat Stap 7
+   * dan moet wegschrijven: gekeken, niets gevonden.
+   */
+  let pdfTurnover: number | null = null;
+  let pdfCosts: number | null = null;
+  let pdfNetResult: number | null = null;
   try {
     const pdfParsed = await parseSalesSheetPdf(pdfBuffer);
     pdfReference = pdfParsed.reference;
     deliveryDate = pdfParsed.deliveryDate;
     ourInvoiceNumber = ourInvoiceNumber || pdfParsed.ourInvoiceNumber;
+    pdfTurnover = pdfParsed.turnover;
+    pdfCosts = pdfParsed.costs;
+    pdfNetResult = pdfParsed.netResult;
     pdfLeeg =
       pdfParsed.reference === null &&
       pdfParsed.deliveryDate === null &&
@@ -383,6 +395,15 @@ async function processAttachment(
     data: {
       pdfDocumentId: document.id,
       ourInvoiceNumber: ourInvoiceNumber || undefined,
+      /*
+       * Wat er op dit document stond. `pdfParsedAt` wordt altijd gezet, ook als er
+       * geen bedrag uit kwam: dan is zichtbaar dat we gekeken hebben en niets vonden,
+       * en dat is een parserprobleem in plaats van een eigenschap van de levering.
+       */
+      pdfTurnover,
+      pdfCosts,
+      pdfNetResult,
+      pdfParsedAt: new Date(),
     },
   });
 

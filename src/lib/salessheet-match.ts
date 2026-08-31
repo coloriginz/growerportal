@@ -1,0 +1,123 @@
+/*
+ * Klopt wat de kweker op zijn afrekening zag met wat de portal berekent?
+ *
+ * De portal leidt zijn totalen af uit orderregels en kostenregels; de sales sheet
+ * komt uit het factuursysteem. Twee onafhankelijke bronnen die hetzelfde horen te
+ * zeggen. Lopen ze uiteen, dan is er iets mis — en welke van de twee fout is, zegt
+ * deze functie niet. Dat is geen tekortkoming: de signalering hoeft alleen te
+ * wijzen, iemand kijkt daarna.
+ *
+ * Er wordt uitsluitend op het nettoresultaat vergeleken, en dat is een keuze met
+ * een reden. Bij een all-in-levering (`isInclusief`, 241 van 7.878 op 29-08-2026)
+ * drukt de sales sheet alleen het netto af en heeft hij geen kostenregels, terwijl
+ * de portal bruto omzet én kosten apart uit Fabric heeft. Omzet met omzet
+ * vergelijken levert daar duizenden euro's schijnverschil op. Het netto betekent
+ * aan beide kanten hetzelfde, ongeacht de afspraak — dus die vergelijking heeft de
+ * all-in-vlag niet nodig.
+ */
+
+/**
+ * Waarboven een verschil een bevinding is, in euro's.
+ *
+ * Gemeten over 800 afrekeningen: 81% komt exact uit, 13,4% wijkt onder een euro af
+ * en 5,5% erboven. Die 13,4% is afronding — `SalesSheetCost.amount` draagt vijf
+ * decimalen en de sales sheet telt op vóór hij afrondt. Op nul verdrinkt het signaal
+ * in centen; op tien mis je echte kleine fouten.
+ */
+export const SALESSHEET_MATCH_TOLERANCE = 1;
+
+export type SalesSheetMatch = "match" | "mismatch" | "unread" | "unlinked";
+
+export type SalesSheetMatchInput = {
+  /** Hangt er een document aan deze afrekening? */
+  hasPdf: boolean;
+  /** Wanneer dat document is uitgelezen, of null als dat nog niet is gebeurd. */
+  pdfParsedAt: Date | null;
+  /** Het nettoresultaat zoals het op de PDF stond, achter een label als "To be
+   *  received by supplier". Niet elke sales sheet drukt dat label af. */
+  pdfNetResult: number | null;
+  /** De omzet zoals de PDF die afdrukt, of het netto zelf bij een all-in-levering
+   *  (zie de afleiding hieronder). */
+  pdfTurnover: number | null;
+  /** De kosten zoals de PDF die afdrukt, of null als er geen kostenregels op staan. */
+  pdfCosts: number | null;
+  /** Het nettoresultaat zoals de portal het berekent. */
+  computedNetResult: number;
+};
+
+/**
+ * Invoer voor `derivePdfNetResult`: alleen de drie gelezen bedragen, niet de hele
+ * `SalesSheetMatchInput` — het backfillscript heeft geen `hasPdf`/`pdfParsedAt`/
+ * `computedNetResult` bij de hand wanneer het alleen de afleiding wil naslaan voor
+ * zijn samenvatting.
+ */
+type PdfAmounts = Pick<SalesSheetMatchInput, "pdfNetResult" | "pdfTurnover" | "pdfCosts">;
+
+/**
+ * Het netto zoals de PDF het zegt — rechtstreeks afgedrukt, of afgeleid uit omzet
+ * en kosten als het label ontbreekt.
+ *
+ * Niet elke sales sheet drukt "To be received by supplier" af: gemeten op 60
+ * gekoppelde leveringen komt er bij 22 een netto uit, bij 38 niet.
+ *
+ * **Beslissing: alleen afleiden wanneer omzet én kosten allebei gelezen zijn.**
+ * Is `pdfCosts` null, dan telt dat niet als "geen kosten" maar als "kostenlabel
+ * niet herkend" — en die verwarring is tijdens de bouw één keer echt gemaakt: het
+ * Nederlandse "Totaal kosten" ontbrak in de labellijst en dat gaf EUR 1.734
+ * schijnverschil op één levering. Een all-in-levering (`isInclusief`) drukt geen
+ * kosten af maar drukt het netto wél expliciet af, dus die bereikt deze afleiding
+ * toch nooit. Wat overblijft als de kosten ontbreken is een lay-out die we niet
+ * kennen, en dan is "we konden het niet lezen" (`unread`) het eerlijke antwoord in
+ * plaats van een getal dat toevallig klopt. Gemeten 30-08-2026: deze afleiding
+ * wordt vandaag op nul van de 4.024 leveringen gebruikt en bestaat dus vooral voor
+ * een lay-out die het netto niet meer prijsgeeft.
+ */
+export function derivePdfNetResult(input: PdfAmounts): number | null {
+  if (input.pdfNetResult !== null) return input.pdfNetResult;
+  if (input.pdfTurnover !== null && input.pdfCosts !== null) return input.pdfTurnover - input.pdfCosts;
+  return null;
+}
+
+export function resolveSalesSheetMatch(input: SalesSheetMatchInput): SalesSheetMatch {
+  // Geen document, of een document dat nog niet is bekeken: allebei zeggen ze niets
+  // over de levering. Dat de inhaalslag er nog niet langs is, is een achterstand van
+  // ons en geen bevinding over deze afrekening.
+  if (!input.hasPdf || input.pdfParsedAt === null) return "unlinked";
+
+  // Een gratis controle op onze eigen uitlezing: staan alle drie de bedragen in de
+  // PDF, dan hóórt omzet - kosten gelijk te zijn aan het afgedrukte netto — dat is
+  // geen aanname over de levering, dat is hoe een sales sheet optelt. Gemeten: op
+  // 3.767 documenten waar alle drie gelezen zijn, klopt die identiteit 3.767 keer.
+  // Breekt hij, dan hebben wij iets verkeerd gelezen — niet de levering — en dus is
+  // dit `unread` en geen `mismatch`: het zegt iets over onze parser, niets over de
+  // afrekening.
+  if (
+    input.pdfNetResult !== null &&
+    input.pdfTurnover !== null &&
+    input.pdfCosts !== null &&
+    Math.abs(input.pdfTurnover - input.pdfCosts - input.pdfNetResult) > SALESSHEET_MATCH_TOLERANCE
+  ) {
+    return "unread";
+  }
+
+  const pdfNetResult = derivePdfNetResult(input);
+
+  // Wel bekeken, geen bedrag gevonden en ook geen omzet+kosten om het uit af te
+  // leiden. Dat is onze storing — een lay-out die we niet kennen of een document
+  // dat niet te lezen was — en het hoort apart zichtbaar te zijn in plaats van weg
+  // te vallen tussen de afrekeningen zonder PDF.
+  if (pdfNetResult === null) return "unread";
+
+  // Een niet-eindig getal (NaN, Infinity) is geen getal dat we gelijk mogen noemen.
+  // `NaN > SALESSHEET_MATCH_TOLERANCE` is in JavaScript `false`, dus zonder deze
+  // check zou zo'n waarde stil als "match" doorkomen — de slechtst mogelijke
+  // uitkomst, want juist een bedrag dat we niet kunnen vergelijken moet iemand laten
+  // kijken in plaats van het weg te schrijven als "komt overeen". Dit staat na de
+  // afleiding, want ook `pdfTurnover - pdfCosts` kan niet-eindig zijn.
+  if (!Number.isFinite(pdfNetResult) || !Number.isFinite(input.computedNetResult)) {
+    return "mismatch";
+  }
+
+  const verschil = Math.abs(pdfNetResult - input.computedNetResult);
+  return verschil > SALESSHEET_MATCH_TOLERANCE ? "mismatch" : "match";
+}

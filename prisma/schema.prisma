@@ -196,6 +196,19 @@ model SalesSheet {
   lastReceiptDate      DateTime? // Laatste Ontvangstdatum
   lastRegistrationDate DateTime? // Laatste Aanmelddatum
   ourInvoiceNumber    String?  // Our invoice number (e.g. 401546)
+  /// Wat er op de sales sheet-PDF zelf stond, tegenover de berekende totalen
+  /// hierboven. Twee onafhankelijke bronnen: de velden hierboven komen uit
+  /// Fabric via orderregels en kostenregels, deze uit het document dat de
+  /// kweker heeft gekregen. Lopen ze uiteen, dan is er iets mis — welke van de
+  /// twee fout is, zegt dit niet.
+  pdfTurnover     Decimal?  @db.Decimal(12, 2)
+  pdfCosts        Decimal?  @db.Decimal(12, 2)
+  pdfNetResult    Decimal?  @db.Decimal(12, 2)
+  /// Wanneer de PDF is uitgelezen. Draagt geen bedrag en is toch onmisbaar:
+  /// zonder dit veld zijn "nog nooit gelezen" en "gelezen, maar er stond niets"
+  /// allebei null, en dan is een parserprobleem niet te onderscheiden van een
+  /// leeg document.
+  pdfParsedAt     DateTime?
   pdfDocumentId   String?  // Link to Document
   pdfDocument     Document? @relation(fields: [pdfDocumentId], references: [id])
   createdAt       DateTime @default(now())

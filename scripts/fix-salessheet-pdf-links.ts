@@ -200,7 +200,10 @@ type Uitkomst =
         telling.verplaatst++;
         regels.push(`VERPLAATSEN  ${kop}\n             naar ${u.naar.supplierCode} ${u.naar.invoiceNumber} (${u.naar.deliveryDate})`);
         if (APPLY) {
-          await sql`UPDATE "SalesSheet" SET "pdfDocumentId" = NULL, "ourInvoiceNumber" = NULL WHERE id = ${link.sheetId}`;
+          // De vier pdf*-velden gaan mee leeg: blijft `pdfNetResult` staan bij een
+          // document dat hier zo meteen niet meer hangt, dan levert dat een
+          // blijvende valse mismatch op — een signaal dat naar zichzelf wijst.
+          await sql`UPDATE "SalesSheet" SET "pdfDocumentId" = NULL, "ourInvoiceNumber" = NULL, "pdfTurnover" = NULL, "pdfCosts" = NULL, "pdfNetResult" = NULL, "pdfParsedAt" = NULL WHERE id = ${link.sheetId}`;
           await sql`UPDATE "Document" SET "supplierId" = ${u.naar.supplierId}, name = ${"Sales Sheet " + u.naar.invoiceNumber} WHERE id = ${link.documentId}`;
           await sql`UPDATE "SalesSheet" SET "pdfDocumentId" = ${link.documentId} WHERE id = ${u.naar.id}`;
           byId.get(u.naar.id)!.pdfDocumentId = link.documentId;
@@ -212,7 +215,11 @@ type Uitkomst =
           // Het Document zelf moet ook weg. Het hangt via Document.supplierId aan
           // de verkeerde leverancier en blijft anders zichtbaar op diens
           // documentenpagina, ook zonder koppeling aan de salessheet.
-          await sql`UPDATE "SalesSheet" SET "pdfDocumentId" = NULL, "ourInvoiceNumber" = NULL WHERE id = ${link.sheetId}`;
+          //
+          // Ook hier gaan de vier pdf*-velden mee leeg: blijft een gelezen bedrag
+          // achter bij een document dat er niet meer is, dan levert dat een
+          // blijvende valse afwijking op — een signaal dat naar zichzelf wijst.
+          await sql`UPDATE "SalesSheet" SET "pdfDocumentId" = NULL, "ourInvoiceNumber" = NULL, "pdfTurnover" = NULL, "pdfCosts" = NULL, "pdfNetResult" = NULL, "pdfParsedAt" = NULL WHERE id = ${link.sheetId}`;
           await sql`DELETE FROM "Document" WHERE id = ${link.documentId}`;
           try {
             await del(link.fileUrl);

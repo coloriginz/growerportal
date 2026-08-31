@@ -2,9 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireAuth } from "@/lib/api-helpers";
 import { Prisma } from "@/generated/prisma";
+import { SALESSHEET_MATCH_TOLERANCE } from "@/lib/salessheet-match";
 
 /**
- * Twee afwijkingen die de status van een levering niet mag verbergen.
+ * Drie afwijkingen die de status van een levering niet mag verbergen.
  *
  * `missing-pdf` — de afrekening is gedraaid (er zijn kostenregels) maar de sales
  * sheet-PDF is nooit gekoppeld. De levering staat dan terecht op Completed, want
@@ -15,20 +16,46 @@ import { Prisma } from "@/generated/prisma";
  * dan aangevoerd. De afrekening wint bij het bepalen van de status, dus zonder
  * dit overzicht valt zo'n gat stil weg. Vrijwel altijd het gevolg van een
  * orderregel die de warehouse later heeft ingevuld (zie scripts/repair-zero-orders.ts).
+ *
+ * `pdf-mismatch` — de sales sheet-PDF is gelezen en het netto dat erop staat
+ * wijkt meer dan de tolerantie af van wat de portal zelf berekent. Twee
+ * onafhankelijke bronnen (factuursysteem vs. Fabric) die hetzelfde horen te
+ * zeggen; zie `resolveSalesSheetMatch` in `salessheet-match.ts` voor waarom
+ * alleen het netto wordt vergeleken.
  */
-const ISSUE_TYPES = ["missing-pdf", "stem-gap"] as const;
+const ISSUE_TYPES = ["missing-pdf", "stem-gap", "pdf-mismatch"] as const;
 type IssueType = (typeof ISSUE_TYPES)[number];
+
+/**
+ * Het netto zoals de PDF het zegt: rechtstreeks afgedrukt, of afgeleid uit omzet
+ * en kosten als dat label ontbreekt op de sales sheet. Zelfde afleiding als
+ * `derivePdfNetResult` in `salessheet-match.ts`, hier in SQL omdat de vergelijking
+ * hier ook in SQL gebeurt (filteren op een aggregatie kan niet in een Prisma-filter).
+ *
+ * Bewust zonder de binnenste COALESCE op `pdfCosts`: ontbrekende kosten tellen
+ * niet als nul maar als "niet gelezen", dus de hele uitdrukking valt dan naar
+ * NULL en de rij valt buiten `IS NOT NULL` hierboven — precies de beslissing die
+ * `derivePdfNetResult` in TypeScript ook neemt.
+ */
+const pdfAmountSql = Prisma.sql`COALESCE(ss."pdfNetResult", ss."pdfTurnover" - ss."pdfCosts")`;
 
 /**
  * Alles hangt aan één afgeleide: verkochte stelen per levering. Dat is een
  * aggregatie over Transaction, niet uit te drukken in een Prisma-filter, dus
- * hier één romp die beide vragen bedient.
+ * hier één romp die alle drie de vragen bedient.
  */
 function issueBody(type: IssueType, search: string) {
   const condition =
     type === "missing-pdf"
       ? Prisma.sql`ss."pdfDocumentId" IS NULL`
-      : Prisma.sql`COALESCE(t.sold, 0) < COALESCE(l.delivered, 0)`;
+      : type === "stem-gap"
+        ? Prisma.sql`COALESCE(t.sold, 0) < COALESCE(l.delivered, 0)`
+        : Prisma.sql`
+            ss."pdfDocumentId" IS NOT NULL
+            AND ss."pdfParsedAt" IS NOT NULL
+            AND ${pdfAmountSql} IS NOT NULL
+            AND ABS(${pdfAmountSql} - ss."netResult") > ${SALESSHEET_MATCH_TOLERANCE}
+          `;
 
   const searchFilter = search
     ? Prisma.sql`AND (
@@ -71,7 +98,11 @@ const pageSql = (body: Prisma.Sql, limit: number, offset: number) => Prisma.sql`
          CAST(COALESCE(l.delivered, 0) AS INT) AS "deliveredStems",
          CAST(COALESCE(t.sold, 0) AS INT) AS "soldStems",
          CAST((SELECT COUNT(*) FROM "SalesSheetCost" c WHERE c."salesSheetId" = ss.id) AS INT) AS "costCount",
-         (ss."pdfDocumentId" IS NOT NULL) AS "hasPdf"
+         (ss."pdfDocumentId" IS NOT NULL) AS "hasPdf",
+         -- Altijd meegeselecteerd (ook voor de andere twee typen): de kolommen
+         -- staan al op ss, en zo hoeft het scherm geen tweede aanroep te doen.
+         CAST(${pdfAmountSql} AS DOUBLE PRECISION) AS "pdfAmount",
+         CAST(ss."netResult" AS DOUBLE PRECISION) AS "computedAmount"
   ${body}
   -- Sorteren op een unieke sleutel: leverdatum alleen laat Postgres met OFFSET
   -- een rij op twee pagina's of op geen enkele tonen.
@@ -91,6 +122,8 @@ interface IssueRow {
   soldStems: number;
   costCount: number;
   hasPdf: boolean;
+  pdfAmount: number | null;
+  computedAmount: number | null;
 }
 
 export async function GET(request: NextRequest) {
@@ -116,7 +149,7 @@ export async function GET(request: NextRequest) {
   const [items, totalRows, counts] = await Promise.all([
     prisma.$queryRaw<IssueRow[]>(pageSql(body, limit, (page - 1) * limit)),
     prisma.$queryRaw<{ count: number }[]>(countSql(body)),
-    // De aantallen van beide tabbladen, zonder zoekfilter: dat is het totaal
+    // De aantallen van alle drie de tabbladen, zonder zoekfilter: dat is het totaal
     // openstaande werk, niet wat er toevallig gefilterd op het scherm staat.
     Promise.all(
       ISSUE_TYPES.map(async (kind) => {
@@ -145,6 +178,14 @@ export async function GET(request: NextRequest) {
       missingStems: Math.max(0, r.deliveredStems - r.soldStems),
       costCount: r.costCount,
       hasPdf: r.hasPdf,
+      pdfAmount: r.pdfAmount,
+      computedAmount: r.computedAmount,
+      // Alleen te berekenen als beide kanten een bedrag hebben; anders is er
+      // niets om te vergelijken en moet het scherm dat als leeg tonen.
+      difference:
+        r.pdfAmount !== null && r.computedAmount !== null
+          ? r.pdfAmount - r.computedAmount
+          : null,
     })),
     total,
     page,

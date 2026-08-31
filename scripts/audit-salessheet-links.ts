@@ -24,7 +24,8 @@
  *   npx tsx scripts/audit-salessheet-links.ts --limit=200     # proefje
  *
  * Opties:
- *   --apply        maak foute koppelingen los. Zonder deze vlag wordt er niets gewijzigd.
+ *   --apply        maak foute koppelingen los én haal het bijbehorende document uit de
+ *                  documentenbibliotheek. Zonder deze vlag wordt er niets gewijzigd.
  *   --check-urls   controleer ook of het bestand in de blobopslag nog bestaat. Kost een
  *                  netwerkaanroep per koppeling, dus staat standaard uit.
  *   --limit=N      controleer hooguit N koppelingen.
@@ -57,6 +58,35 @@ const LIMIT = Number(argWaarde("--limit") ?? 0) || Infinity;
 const ARCHIEF = argWaarde("--archief") ?? path.join("private_input", "salessheets");
 const REPORT = argWaarde("--report") ?? path.join("tasks", "audit-salessheet-links.md");
 
+/*
+ * De ruwe tekst van de eerste pagina's, om te zien wiens afrekening het is.
+ *
+ * De leverdatum alleen is niet genoeg gebleken. Op productie hing
+ * `PCXOMRI - ... - 564 - 406743.PDF` aan levering 564 van PCXBAR (Tal Baruch) en
+ * de datum klopte tot op de dag — twee leveranciers leverden allebei op
+ * 10-07-2026 en droegen allebei shipment 564. In de PDF staat "Omri Cohen",
+ * "Ein Habesor ISRAEL" en drie keer `PCXOMRI`; "Baruch" komt er niet in voor.
+ * Zonder deze controle blijft zo'n koppeling staan omdat elk ander signaal klopt.
+ */
+async function pdfTekst(buffer: Buffer): Promise<string> {
+  const { getDocument } = await import("pdfjs-dist/legacy/build/pdf.mjs");
+  const doc = await getDocument({
+    data: new Uint8Array(buffer),
+    useSystemFonts: true,
+    verbosity: 0,
+  }).promise;
+  try {
+    let tekst = "";
+    for (let i = 1; i <= Math.min(doc.numPages, 2); i++) {
+      const inhoud = await (await doc.getPage(i)).getTextContent();
+      tekst += inhoud.items.map((it) => ("str" in it ? it.str : "")).join(" ") + "\n";
+    }
+    return tekst;
+  } finally {
+    await doc.destroy();
+  }
+}
+
 /** Alle PDF's in het archief, op kleine-letter bestandsnaam. */
 function indexeerArchief(wortel: string): Map<string, string[]> {
   const perNaam = new Map<string, string[]>();
@@ -87,7 +117,9 @@ type Uitkomst = {
     | "datum wijkt af"
     | "datum onleesbaar"
     | "bestand niet gevonden"
-    | "blob onbereikbaar";
+    | "blob onbereikbaar"
+    /** De PDF noemt zelf de code van een andere leverancier. Zwaarder dan de datum. */
+    | "andere leverancier";
   /*
    * De leverancierscode die de bestandsnaam noemt, als die afwijkt van de
    * leverancier van de afrekening. Bewust een eigen veld en niet in `status`
@@ -128,6 +160,12 @@ async function main() {
   console.log(`gekoppelde afrekeningen: ${gekoppeld.length}${teDoen.length < gekoppeld.length ? ` — beperkt tot ${teDoen.length}` : ""}`);
   console.log(APPLY ? "Foute koppelingen worden losgemaakt" : "DRY RUN — er wordt niets gewijzigd");
   console.log("");
+
+  // Vooraf, want de lus toetst er per koppeling tegen: een code in de
+  // bestandsnaam telt alleen als het een échte andere leverancier is.
+  const bekendeCodes = new Set(
+    (await prisma.supplier.findMany({ select: { code: true } })).map((s) => s.code.toUpperCase())
+  );
 
   const uitkomsten: Uitkomst[] = [];
   const losTeMaken: string[] = [];
@@ -215,7 +253,27 @@ async function main() {
       // Een onleesbare PDF is geen bewijs van een foute koppeling; alleen melden.
     }
 
-    if (!leverdatumPdf) {
+    /*
+     * De zwaarste controle staat vóór de datum: noemt de PDF zelf de code van de
+     * leverancier uit de bestandsnaam, en niet die van de afrekening, dan is het
+     * document van iemand anders — ook als elke datum klopt.
+     */
+    let anderLuidt = false;
+    if (basis.naamCode && bekendeCodes.has(basis.naamCode.toUpperCase())) {
+      try {
+        const tekst = (await pdfTekst(bron)).toUpperCase();
+        anderLuidt =
+          tekst.includes(basis.naamCode.toUpperCase()) &&
+          !tekst.includes(sheet.supplier.code.toUpperCase());
+      } catch {
+        // Onleesbaar: dan beslist de datum hieronder, zoals voorheen.
+      }
+    }
+
+    if (anderLuidt) {
+      uitkomsten.push({ ...basis, leverdatumPdf, status: "andere leverancier" });
+      losTeMaken.push(sheet.id);
+    } else if (!leverdatumPdf) {
       uitkomsten.push({ ...basis, leverdatumPdf: null, status: "datum onleesbaar" });
     } else if (leverdatumPdf === leverdatumPortal) {
       uitkomsten.push({ ...basis, leverdatumPdf, status: "klopt" });
@@ -228,18 +286,110 @@ async function main() {
   }
 
   /*
-   * Alleen de koppeling weghalen, niet het Document. Het bestand blijft in de
-   * blobopslag en in de documentenlijst staan; wat vervalt is de bewering dat
-   * het bij déze afrekening hoort. Zou het document ook verdwijnen, dan is een
-   * verkeerde koppeling niet meer terug te vinden en kan niemand nakijken wat
-   * er stond.
+   * De koppeling weghalen én het document uit de bibliotheek halen.
+   *
+   * Alleen loskoppelen was niet genoeg, en dat was lang niet te zien. De
+   * shipmentpagina toont de PDF via `SalesSheet.pdfDocumentId`, maar de
+   * documentenpagina leest `Document.supplierId` — een heel ander pad. Een
+   * losgekoppelde PDF verdween dus uit het leveringoverzicht en bleef gewoon in
+   * de documentenlijst van de verkeerde leverancier staan, downloadbaar. Bij een
+   * verkeerd gekoppelde afrekening is dat precies het deel dat ertoe doet: de
+   * omzet, kosten en kwekersnamen van een ander.
+   *
+   * Het bestand zelf blijft in de blobopslag en de bestandsnaam staat in het
+   * rapport, dus terugvinden kan nog steeds — alleen niet meer door de verkeerde
+   * leverancier. Een document dat nog aan een ándere afrekening hangt blijft
+   * staan; dan is het daar wél op zijn plek.
    */
+  let documentenVerwijderd = 0;
   if (APPLY && losTeMaken.length > 0) {
+    const betrokken = await prisma.salesSheet.findMany({
+      where: { id: { in: losTeMaken } },
+      select: { pdfDocumentId: true },
+    });
+    const documentIds = [...new Set(betrokken.map((s) => s.pdfDocumentId).filter(Boolean))] as string[];
+
+    /*
+     * Ook `ourInvoiceNumber` wissen. Dat veld wordt alleen geschreven wanneer een
+     * PDF wordt gekoppeld, en komt dus uit de bestandsnaam van precies de PDF die
+     * hier fout blijkt. Laten staan betekent dat de afrekening het factuurnummer
+     * van een andere levering blijft dragen — en `findCandidates()` in
+     * /api/shipments/import-email zoekt daar op, zodat een volgende PDF opnieuw bij
+     * deze levering uitkomt. De leverdatumcontrole houdt dat tegen, dus het maakt
+     * geen foute koppeling, maar het blijft een verkeerd spoor voeden.
+     */
     const losgemaakt = await prisma.salesSheet.updateMany({
       where: { id: { in: losTeMaken } },
-      data: { pdfDocumentId: null },
+      data: {
+        pdfDocumentId: null,
+        ourInvoiceNumber: null,
+        // Ook de gelezen bedragen. Blijven die van een verkeerde PDF staan, dan
+        // levert dat een blijvende mismatch op die naar zichzelf wijst: de
+        // vergelijking zou een document beoordelen dat er niet meer hangt.
+        pdfTurnover: null,
+        pdfCosts: null,
+        pdfNetResult: null,
+        pdfParsedAt: null,
+      },
     });
     console.log(`\nlosgemaakt: ${losgemaakt.count} koppelingen`);
+
+    if (documentIds.length > 0) {
+      // Pas ná het loskoppelen: zolang de afrekening er nog naar wijst, telt hij
+      // zichzelf mee als "nog in gebruik".
+      const nogInGebruik = await prisma.salesSheet.findMany({
+        where: { pdfDocumentId: { in: documentIds } },
+        select: { pdfDocumentId: true },
+      });
+      const bezet = new Set(nogInGebruik.map((s) => s.pdfDocumentId));
+      const vrij = documentIds.filter((id) => !bezet.has(id));
+      if (vrij.length > 0) {
+        documentenVerwijderd = (await prisma.document.deleteMany({ where: { id: { in: vrij } } }))
+          .count;
+        console.log(`uit de documentenbibliotheek gehaald: ${documentenVerwijderd} documenten`);
+      }
+    }
+  }
+
+  /*
+   * De restanten van eerdere rondes.
+   *
+   * Tot vandaag maakte dit script alleen de koppeling los en liet het document
+   * staan. Elke ronde daarvóór liet dus een PDF achter in de bibliotheek van een
+   * leverancier die er niets mee te maken heeft — 83 stuks bij de ronde van
+   * 29-08-2026. Die vind je niet meer via de afrekeningen, want die verwijzing is
+   * juist weg; het enige spoor is de bestandsnaam.
+   *
+   * De regel is streng gehouden: alleen documenten die aan géén enkele afrekening
+   * hangen én waarvan de naam een code draagt die een échte andere leverancier is.
+   * Een naam met een onbekende code kan van alles zijn en bewijst niets.
+   */
+  const losseDocs = await prisma.document.findMany({
+    where: { type: "salessheet", salesSheets: { none: {} } },
+    select: { id: true, fileName: true, supplier: { select: { code: true } } },
+  });
+  const verkeerdGearchiveerd = losseDocs.filter((d) => {
+    const code = parseSalesSheetFilename(d.fileName)?.supplierCode?.toUpperCase();
+    return code && code !== d.supplier.code.toUpperCase() && bekendeCodes.has(code);
+  });
+
+  if (verkeerdGearchiveerd.length > 0) {
+    console.log(
+      `
+losse documenten bij de verkeerde leverancier: ${verkeerdGearchiveerd.length}`
+    );
+    for (const d of verkeerdGearchiveerd) {
+      console.log(`  ${d.supplier.code} draagt ${d.fileName}`);
+    }
+    if (APPLY) {
+      const n = (
+        await prisma.document.deleteMany({
+          where: { id: { in: verkeerdGearchiveerd.map((d) => d.id) } },
+        })
+      ).count;
+      documentenVerwijderd += n;
+      console.log(`  uit de bibliotheek gehaald: ${n}`);
+    }
   }
 
   schrijfRapport(uitkomsten);
@@ -249,8 +399,10 @@ async function main() {
   console.log(`gecontroleerd        : ${uitkomsten.length}`);
   console.log(`klopt                : ${tel("klopt")}`);
   if (CHECK_URLS) console.log(`blob onbereikbaar    : ${tel("blob onbereikbaar")}${APPLY ? " (losgemaakt)" : ""}`);
+  console.log(`andere leverancier   : ${tel("andere leverancier")}${APPLY ? " (losgemaakt)" : ""}`);
   console.log(`datum wijkt af       : ${tel("datum wijkt af")}${APPLY ? " (losgemaakt)" : ""}`);
   console.log(`datum onleesbaar     : ${tel("datum onleesbaar")}`);
+  if (APPLY) console.log(`documenten verwijderd: ${documentenVerwijderd}`);
   console.log(`bestand niet gevonden: ${tel("bestand niet gevonden")}`);
   console.log(`Rapport: ${REPORT}`);
 }

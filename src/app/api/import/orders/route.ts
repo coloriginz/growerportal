@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { runImport } from "@/lib/import-batch";
 import { resolveWithdrawalScope } from "@/lib/sync/withdrawal";
 import { isoDate } from "@/lib/sync/queries/helpers";
+import { findJobForBatch, resolveScopedSupplierId } from "@/lib/sync/job-context";
 
 // Vercel kapt een functie zonder dit af op de standaardlimiet; de lots- en
 // orders-import over een breed venster halen die niet.
@@ -45,14 +46,14 @@ export async function POST(request: NextRequest) {
     rowSchema: orderSchema,
     schemaKeys: orderKeys,
     aliases: orderAliases,
-    handler: async (orders, batchId) => {
+    handler: async (orders, batchId, context) => {
       if (orders.length === 0) return { created: 0, updated: 0, skipped: 0 };
-      return upsertOrders(orders, batchId);
+      return upsertOrders(orders, batchId, context.priorRows);
     },
   });
 }
 
-async function upsertOrders(orders: Order[], batchId: string | null) {
+async function upsertOrders(orders: Order[], batchId: string | null, priorRows: number) {
   // Build supplier lookup
   const supplierFabricIds = [...new Set(orders.map((o) => o.rel_id_leverancier))];
   const suppliers = await prisma.supplier.findMany({
@@ -319,11 +320,12 @@ async function upsertOrders(orders: Order[], batchId: string | null) {
      * dat de verwijderde partijen hieronder alsnog in affectedLotIds komen, zodat
      * fase 5 en 6 hun totalen herrekenen.
      */
-    const job = await findSyncJobWindow(batchId);
+    const job = await findJobForBatch(batchId);
     const scope = resolveWithdrawalScope({
       job,
       supplierId: await resolveScopedSupplierId(job?.supplierFabricId ?? null),
       payloadRows: orders.length,
+      priorRows,
     });
     withdrawalMode = scope.mode;
     if (scope.mode === "pairs") withdrawalReason = scope.reason;
@@ -538,29 +540,4 @@ async function upsertOrders(orders: Order[], batchId: string | null) {
       recalculated: { lots: lotsRecalculated, salesSheets: ssRecalculated },
     },
   };
-}
-
-/**
- * Het venster waarover deze batch is uitgevraagd, of null als de POST niet van
- * de portal-gestuurde sync kwam (oude DAX-flow, reparatiescript). De job staat
- * op `dispatched` zolang de import draait; er wordt bewust niet op status
- * gefilterd, zodat een herstart of een handmatige reset het venster niet
- * verbergt en de opruiming stilletjes terugvalt op het oude gedrag.
- */
-async function findSyncJobWindow(batchId: string | null) {
-  if (!batchId) return null;
-  return prisma.syncJob.findFirst({
-    where: { importBatchId: batchId },
-    select: { windowFrom: true, windowTo: true, supplierFabricId: true },
-  });
-}
-
-/** De portal-leverancier achter een rel_id, los van wat de payload droeg. */
-async function resolveScopedSupplierId(supplierFabricId: number | null) {
-  if (supplierFabricId === null) return null;
-  const supplier = await prisma.supplier.findFirst({
-    where: { fabricId: supplierFabricId },
-    select: { id: true },
-  });
-  return supplier?.id ?? null;
 }
