@@ -189,11 +189,17 @@ export function LotDetail({ lot }: LotDetailProps) {
                   <TableCell className="text-muted-foreground">{tx.s2}</TableCell>
                   <TableCell className="text-muted-foreground">{tx.s3}</TableCell>
                   <TableCell className="text-right tabular-nums">{tx.stems}</TableCell>
+                  {/*
+                    Op ongelijk aan nul toetsen, niet op groter dan nul: een
+                    correctieregel draagt een negatief bedrag, en die verdween hier
+                    achter een streepje. Juist bij een correctie is het bedrag het
+                    enige wat je wilt zien.
+                  */}
                   <TableCell className="text-right tabular-nums">
-                    {parseFloat(tx.pricePerStem) > 0 ? formatPrice(parseFloat(tx.pricePerStem)) : "-"}
+                    {parseFloat(tx.pricePerStem) !== 0 ? formatPrice(parseFloat(tx.pricePerStem)) : "-"}
                   </TableCell>
                   <TableCell className="text-right tabular-nums font-medium">
-                    {parseFloat(tx.amount) > 0 ? formatCurrencyDetailed(parseFloat(tx.amount)) : "-"}
+                    {parseFloat(tx.amount) !== 0 ? formatCurrencyDetailed(parseFloat(tx.amount)) : "-"}
                   </TableCell>
                 </TableRow>
               ))}
