@@ -12,10 +12,13 @@
 > dat na de factuurdatum landde is **EUR 164.766** over 698 leveringen; welk deel
 > daarvan wél op de afrekening stond, is alleen vast te stellen voor de leveringen
 > waarvan we de PDF hebben.
+>
+> Twee partijen zijn helemaal uitgewerkt: **3979999** (het eenvoudigste geval) en
+> **3980666** (waar alle drie de soorten correctieregels naast elkaar staan).
 
 ---
 
-## De aanleiding: één partij
+## De aanleiding: partij 3979999
 
 Partij **3979999** (SCXGOLFW, levering C00003987, Callistephus Matsumoto Lavender).
 
@@ -58,6 +61,68 @@ teruggestuurd maar vernietigd. Dat wordt achteraf verwerkt.
 
 **De portal is hier dus actueler dan het papier, niet fout.** De kweker heeft
 EUR 82,28 op zijn afrekening zien staan; de huidige stand is EUR 62,28.
+
+## Een tweede partij, met alle drie de soorten regels naast elkaar
+
+Partij **3980666** (PCXOMRI, levering 1010, Oxypetalum Tweedia Blue). Deze is
+leerzamer dan de eerste, want hier zijn de drie manieren waarop een aantal kan
+verschuiven in één partij te zien.
+
+Wat de sales sheet drukt:
+
+| datum | | stelen | prijs | bedrag |
+|---|---|---|---|---|
+| 12-08-2026 | Handling: quality | 420 | 0,000 | 0,00 |
+| 13-08-2026 | Direct sales | 2.680 | 0,354 | 948,80 |
+| 14-08-2026 | Direct sales | 880 | 0,350 | 308,00 |
+| 14-08-2026 | FHN | 1.280 | 0,302 | 386,56 |
+| 14-08-2026 | VBA | 640 | 0,410 | 262,40 |
+| 17-08-2026 | Direct sales | 4.000 | 0,327 | 1.308,52 |
+| | **totaal** | **9.900** | **0,325** | **3.214,28** |
+
+Wat de portal toont: 9.040 stelen, EUR 3.060,28.
+
+### De drie soorten regels
+
+| soort | waar het staat | deze partij |
+|---|---|---|
+| verkoop | `Transaction`, `bronFeitExtra = 'origineel'` | 9.480 stelen, **EUR 3.214,28** |
+| orderregelcorrectie | `Transaction`, `bronFeitExtra = 'correcties'` | −440 stelen, −EUR 154,00 (reden 104) |
+| partijcorrectie | `LotCorrection` | −420 stelen (reden 29, *Verwerking: kwaliteit*) |
+
+**Het bedrag van de verkoopregels is exact het afrekeningstotaal**: EUR 3.214,28,
+tot op de cent. Daar is dus niets mis.
+
+De 420 stelen die als *"Handling: quality"* met EUR 0,00 op de afrekening staan zijn
+geen transactie maar een partijcorrectie — een aparte tabel. Vandaar dat 9.900 − 420
+= 9.480 precies op de verkoopregels uitkomt.
+
+Blijft over: −440 stelen en −EUR 154,00. Die zitten op één orderregel:
+
+| ordreg | soort | stelen | prijs | bedrag |
+|---|---|---|---|---|
+| 17099123 | origineel | 1.920 | 0,35 | 672,00 |
+| 17099123 | correcties | −1.920 | 0,35 | −672,00 |
+| 17099123 | correcties | 1.480 | 0,35 | 518,00 |
+| 17099123 | prullenbak-factcor | 0 | — | 0,00 |
+
+De oorspronkelijke verkoop van 1.920 stelen is ingetrokken en opnieuw geboekt op
+1.480 — 440 stelen minder, EUR 154,00 minder. Reden 104, *Niet Retour, Weggooi Klant*.
+
+**En weer de datums:** factuurdatum **11-08-2026**, de correctie vertrok op
+**13-08-2026**. Twee dagen na de afrekening.
+
+### Wat het scherm hiervan maakte
+
+De leveringpagina toonde deze partij als één regel van 2.680 stelen voor EUR 794,80,
+oftewel EUR 0,297 per steel. Die prijs heeft nooit bestaan: er is 2.680 keer voor
+EUR 0,354 verkocht en er is daarna EUR 154,00 afgeboekt. De samenvoeging nam de
+*bruto* stelen van de verkoopregel en het *netto* bedrag van alles bij elkaar, en
+deelde die op elkaar.
+
+Dat is op 1 september gerepareerd: verkoop en correctie staan nu als aparte regels,
+elk met hun eigen prijs, zoals de afrekening ze ook toont. Wie deze lijst naast een
+sales sheet legt, kan de bedragen sindsdien optellen.
 
 ## Wat het níét is
 
