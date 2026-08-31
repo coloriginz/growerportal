@@ -403,7 +403,7 @@ The local archive in `private_input/salessheets` is pushed through this same rou
 | `/api/admin/import-batches/[id]/records` | GET | The records one run created or updated, paginated |
 | `/api/admin/import-batches/[id]/skipped` | GET | The relations one run dropped, split into growers and internal bookings |
 | `/api/admin/fabric-relations` | GET, POST | Fabric relation staging data; POST activates one as a Supplier |
-| `/api/admin/shipment-issues` | GET | Settled deliveries that need attention: `missing-pdf` (no sales sheet linked) or `stem-gap` (sold below delivered), paginated |
+| `/api/admin/shipment-issues` | GET | Settled deliveries that need attention: `missing-pdf` (no sales sheet linked) or `stem-gap` (delivered plus corrections does not add up to sold, beyond a small margin), paginated |
 | `/api/activate` | POST | Account activation (set password) |
 | `/api/forgot-password` | POST | Request password reset email |
 | `/api/reset-password` | POST | Reset password with token |
@@ -591,11 +591,11 @@ Portal: [implicit] -> SalesSheet        -> Lot              -> Transaction
 ```
 
 ### Shipment Status
-A delivery is **Selling**, **Finalizing** or **Completed**. The status is derived, never stored: `resolveShipmentStatus()` in `src/lib/shipment-status.ts` reads three numbers that all come from the import and keep moving there — delivered stems (`SUM(Lot.totalStems)`), sold stems (`SUM(Transaction.stems)`) and the number of `SalesSheetCost` lines. A stored column would have to be rewritten on every round and would age silently when that fails once.
+A delivery is **Selling**, **Finalizing** or **Completed**. The status is derived, never stored: `resolveShipmentStatus()` in `src/lib/shipment-status.ts` reads three numbers that all come from the import and keep moving there — delivered stems (`SUM(Lot.invoicedVolume)`, **not** `Lot.totalStems`: the orders import overwrites `totalStems` with the sold quantity, so on test it equals sold in all 66,888 lots that have transactions and delivered in none), sold stems (`SUM(Transaction.stems)`) and the number of `SalesSheetCost` lines. A stored column would have to be rewritten on every round and would age silently when that fails once.
 
 - **Cost lines beat the stem gap.** Cost lines present means the settlement ran, so the delivery is Completed even when sold is below delivered. 139 deliveries are in exactly that state because the warehouse fills `vor_aantal` in weeks later; letting the stem gap win parks them on Selling forever.
 - **The PDF does not count.** 3.713 settled deliveries have no linked sales sheet PDF — that is a portal artefact, not a business fact, and requiring it would leave half the archive on Finalizing.
-- **Corrections are not added separately.** `Lot.totalStems` comes from `inkoop_factuur_aantal` and is the final invoiced quantity: over 7.878 deliveries sold lands exactly on delivered 7.715 times, corrections included, and never above it.
+- **`resolveShipmentStatus()` itself skips corrections, deliberately** — see the reasoning in `shipment-status.ts`. But delivered and sold only agree once corrections are added back in: `LotCorrection.correctionVolume` is meaningfully signed, and delivered + corrections lands on sold, not delivered alone. Delivery 2700240 (COLXLNFW) measures it exactly: 55,870 delivered, −33,380 in corrections, 22,490 sold — matching the printed sales sheet to the stem. `/api/admin/shipment-issues` (`stem-gap`) does add corrections back in, because there the comparison has to catch a real gap rather than approximate a phase transition; see `STEM_GAP_MARGIN` in that route for the margin and its measurement.
 - Both blind spots the rule creates are visible in **Admin -> Import Status -> Data Quality**, served by `/api/admin/shipment-issues`. Covered by `scripts/checks/shipment-status.ts`.
 
 ### Sales Sheet PDF Match

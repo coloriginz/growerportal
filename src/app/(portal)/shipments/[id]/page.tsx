@@ -81,7 +81,10 @@ export default async function ShipmentDetailPage({ params }: Props) {
     : [];
   const correctionReasons = Object.fromEntries(reasons.map(r => [r.id, r]));
 
-  const deliveredStems = salesSheet.lots.reduce((sum, l) => sum + l.totalStems, 0);
+  // invoicedVolume, niet totalStems: de orders-import overschrijft Lot.totalStems
+  // met de som van de verkochte stelen, dus die kolom draagt hier "verkocht" en
+  // niet "aangevoerd" (zie src/app/api/import/orders/route.ts en shipment-status.ts).
+  const deliveredStems = salesSheet.lots.reduce((sum, l) => sum + (l.invoicedVolume ?? 0), 0);
   const soldStems = salesSheet.lots.reduce(
     (sum, l) => sum + l.transactions.reduce((s, tx) => s + tx.stems, 0),
     0

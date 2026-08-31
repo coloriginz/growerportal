@@ -110,7 +110,7 @@ export async function GET(request: NextRequest) {
         id: true, invoiceNumber: true, invoiceDate: true,
         totalTurnover: true, totalCosts: true, netResult: true,
         _count: { select: { lots: true } },
-        lots: { select: { totalStems: true } },
+        lots: { select: { invoicedVolume: true } },
       },
     }),
   ]);
@@ -166,7 +166,9 @@ export async function GET(request: NextRequest) {
       totalTurnover: Number(s.totalTurnover),
       netResult: Number(s.netResult),
       lotCount: s._count.lots,
-      totalStems: s.lots.reduce((sum, l) => sum + (l.totalStems || 0), 0),
+      // invoicedVolume, niet totalStems: dezelfde reden als shipments/route.ts —
+      // de orders-import overschrijft Lot.totalStems met het verkochte aantal.
+      totalStems: s.lots.reduce((sum, l) => sum + (l.invoicedVolume || 0), 0),
     })),
     seasonStartMonth,
     featureQuality,

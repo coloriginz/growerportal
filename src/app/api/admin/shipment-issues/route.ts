@@ -12,10 +12,11 @@ import { SALESSHEET_MATCH_TOLERANCE } from "@/lib/salessheet-match";
  * de PDF is een portal-artefact en geen bedrijfsfeit, maar de kweker mist wel
  * zijn document. Dit overzicht is de werklijst voor het koppelen.
  *
- * `stem-gap` — de afrekening is gedraaid terwijl er minder stelen verkocht zijn
- * dan aangevoerd. De afrekening wint bij het bepalen van de status, dus zonder
- * dit overzicht valt zo'n gat stil weg. Vrijwel altijd het gevolg van een
+ * `stem-gap` — de afrekening is gedraaid terwijl aangevoerd plus correcties niet
+ * uitkomt op verkocht. De afrekening wint bij het bepalen van de status, dus
+ * zonder dit overzicht valt zo'n gat stil weg. Vrijwel altijd het gevolg van een
  * orderregel die de warehouse later heeft ingevuld (zie scripts/repair-zero-orders.ts).
+ * Zie `STEM_GAP_MARGIN` hieronder voor waarom dit niet op een gat van exact nul test.
  *
  * `pdf-mismatch` — de sales sheet-PDF is gelezen en het netto dat erop staat
  * wijkt meer dan de tolerantie af van wat de portal zelf berekent. Twee
@@ -40,16 +41,29 @@ type IssueType = (typeof ISSUE_TYPES)[number];
 const pdfAmountSql = Prisma.sql`COALESCE(ss."pdfNetResult", ss."pdfTurnover" - ss."pdfCosts")`;
 
 /**
- * Alles hangt aan één afgeleide: verkochte stelen per levering. Dat is een
- * aggregatie over Transaction, niet uit te drukken in een Prisma-filter, dus
- * hier één romp die alle drie de vragen bedient.
+ * De marge voor de stem-gap-controle: aangevoerd + correcties − verkocht mag tot
+ * dit aantal stelen afwijken zonder als gat te tellen. Gemeten op test, 7.690
+ * afgerekende leveringen: bij marge 0 wijken 855 af, bij marge 10 nog 810, bij
+ * marge 100 nog 477 — geen knik die een duidelijke ruisgrens toont, dus de keuze
+ * is een oordeel: onder de tien stelen is het afrondingsruis binnen één doos,
+ * daarboven mist er aantoonbaar iets. Zonder deze marge (dus > 0) meldt de tak
+ * ook leveringen die exact kloppen op de laatste steel na afronding elders in de
+ * keten.
+ */
+const STEM_GAP_MARGIN = 10;
+
+/**
+ * Alles hangt aan drie afgeleiden per levering: aangevoerd (Lot.invoicedVolume),
+ * correcties (LotCorrection.correctionVolume) en verkocht (Transaction.stems).
+ * Geen van drie is uit te drukken in een Prisma-filter, dus hier één romp die
+ * alle drie de vragen bedient.
  */
 function issueBody(type: IssueType, search: string) {
   const condition =
     type === "missing-pdf"
       ? Prisma.sql`ss."pdfDocumentId" IS NULL`
       : type === "stem-gap"
-        ? Prisma.sql`COALESCE(t.sold, 0) < COALESCE(l.delivered, 0)`
+        ? Prisma.sql`ABS(COALESCE(l.delivered, 0) + COALESCE(corr.corrections, 0) - COALESCE(t.sold, 0)) > ${STEM_GAP_MARGIN}`
         : Prisma.sql`
             ss."pdfDocumentId" IS NOT NULL
             AND ss."pdfParsedAt" IS NOT NULL
@@ -69,10 +83,26 @@ function issueBody(type: IssueType, search: string) {
   return Prisma.sql`
     FROM "SalesSheet" ss
     JOIN "Supplier" sup ON sup.id = ss."supplierId"
+    -- "delivered" komt uit invoicedVolume, niet totalStems: de orders-import
+    -- overschrijft Lot.totalStems achteraf met de som van de verkochte stelen
+    -- (zie src/app/api/import/orders/route.ts), dus totalStems draagt hier
+    -- "verkocht" en niet "aangevoerd". COALESCE op de kolom zelf: 207 partijen
+    -- hebben geen invoicedVolume.
     LEFT JOIN (
-      SELECT "salesSheetId", SUM("totalStems") AS delivered
+      SELECT "salesSheetId", SUM(COALESCE("invoicedVolume", 0)) AS delivered
       FROM "Lot" WHERE "salesSheetId" IS NOT NULL GROUP BY "salesSheetId"
     ) l ON l."salesSheetId" = ss.id
+    -- correctionVolume is betekenisvol getekend (12.296 negatief, 4.758 positief
+    -- van 17.056 regels op test) en hoort dus opgeteld, niet op absolute waarde
+    -- genomen: aangevoerd + correcties komt zo op verkocht uit. Aparte subquery
+    -- per salesSheetId, net als bij "l" en "t": in één FROM meejoinen vermenigvuldigt
+    -- de rijen van partijen, correcties en transacties tegen elkaar en klopt geen
+    -- enkel totaal meer.
+    LEFT JOIN (
+      SELECT lo."salesSheetId", SUM(COALESCE(lc."correctionVolume", 0)) AS corrections
+      FROM "LotCorrection" lc JOIN "Lot" lo ON lo.id = lc."lotId"
+      WHERE lo."salesSheetId" IS NOT NULL GROUP BY lo."salesSheetId"
+    ) corr ON corr."salesSheetId" = ss.id
     LEFT JOIN (
       SELECT lo."salesSheetId", SUM(tx.stems) AS sold
       FROM "Transaction" tx JOIN "Lot" lo ON lo.id = tx."lotId"
@@ -96,6 +126,7 @@ const pageSql = (body: Prisma.Sql, limit: number, offset: number) => Prisma.sql`
          sup.code AS "supplierCode",
          sup.name AS "supplierName",
          CAST(COALESCE(l.delivered, 0) AS INT) AS "deliveredStems",
+         CAST(COALESCE(corr.corrections, 0) AS INT) AS "correctionStems",
          CAST(COALESCE(t.sold, 0) AS INT) AS "soldStems",
          CAST((SELECT COUNT(*) FROM "SalesSheetCost" c WHERE c."salesSheetId" = ss.id) AS INT) AS "costCount",
          (ss."pdfDocumentId" IS NOT NULL) AS "hasPdf",
@@ -119,6 +150,7 @@ interface IssueRow {
   supplierCode: string;
   supplierName: string;
   deliveredStems: number;
+  correctionStems: number;
   soldStems: number;
   costCount: number;
   hasPdf: boolean;
@@ -174,8 +206,11 @@ export async function GET(request: NextRequest) {
       supplierCode: r.supplierCode,
       supplierName: r.supplierName,
       deliveredStems: r.deliveredStems,
+      correctionStems: r.correctionStems,
       soldStems: r.soldStems,
-      missingStems: Math.max(0, r.deliveredStems - r.soldStems),
+      // Kan negatief zijn (meer correcties dan het gat) — het scherm toont het
+      // teken, de conditie in issueBody() filtert al op |gap| > STEM_GAP_MARGIN.
+      gapStems: r.deliveredStems + r.correctionStems - r.soldStems,
       costCount: r.costCount,
       hasPdf: r.hasPdf,
       pdfAmount: r.pdfAmount,
