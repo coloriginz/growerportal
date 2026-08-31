@@ -16,6 +16,13 @@ export interface ParsedSalesSheetPdf {
   ourInvoiceNumber: string | null;
   /** Delivery date printed on the PDF, as "YYYY-MM-DD". Null if unreadable. */
   deliveryDate: string | null;
+  /**
+   * Factuurdatum zoals die op de PDF staat, als "YYYY-MM-DD". Null wanneer geen
+   * tijdstempel is gevonden. Deze datum draagt een tijd op de PDF ("22:04") en
+   * een tweecijferig jaar — dat onderscheidt hem van `deliveryDate`, die kaal
+   * "DD-MM-JJJJ" is en geen tijd heeft.
+   */
+  invoiceDate: string | null;
   /** Wat er op de PDF zelf stond. Null betekent: dit label kwam niet voor. */
   turnover: number | null;
   costs: number | null;
@@ -33,6 +40,29 @@ function parseDutchDate(value: string | null): string | null {
   if (year < 100) year += 2000;
   if (month < 1 || month > 12 || day < 1 || day > 31) return null;
   return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+/*
+ * De factuurdatum staat op de PDF vlak achter de leverdatum, in de vorm
+ * "D-M-JJ H:MM" — bijvoorbeeld "30-3-26 22:04" of "15-1-25 22:03". Het
+ * onderscheidende kenmerk is de tijd erachter: de leverdatum ervóór is kaal
+ * ("19-03-2026") en heeft een viercijferig jaar, dus zonder op de tijd te
+ * ankeren zou dit patroon net zo goed de leverdatum kunnen pakken.
+ *
+ * Gecontroleerd tegen 25 echte PDF's uit private_input/salessheets (zie
+ * .superpowers/sdd/datums/pdf-factuurdatum.md voor de telling): elke keer
+ * leverde dit de factuurdatum op, nooit de leverdatum.
+ */
+const FACTUURDATUM = /(\d{1,2}-\d{1,2}-\d{2})\s+\d{1,2}:\d{2}/;
+
+/**
+ * Factuurdatum ("D-M-JJ H:MM") uit de PDF-tekst, als "YYYY-MM-DD". Null als
+ * niet gevonden. Los geëxporteerd zodat de check-fixtures dit patroon apart
+ * van de bedragen kunnen bewijzen.
+ */
+export function parseInvoiceDate(tekst: string): string | null {
+  const m = tekst.match(FACTUURDATUM);
+  return m ? parseDutchDate(m[1]) : null;
 }
 
 /*
@@ -271,8 +301,11 @@ export async function parseSalesSheetPdf(pdfBuffer: Buffer): Promise<ParsedSales
     }
 
     const { turnover, costs, netResult } = parseSalesSheetAmounts(amountsText);
+    // Zelfde tekstopbouw als de bedragen: de factuurdatum staat niet per se op
+    // pagina 1, en amountsText is al over alle pagina's opgebouwd.
+    const invoiceDate = parseInvoiceDate(amountsText);
 
-    return { reference, ourInvoiceNumber, deliveryDate, turnover, costs, netResult };
+    return { reference, ourInvoiceNumber, deliveryDate, invoiceDate, turnover, costs, netResult };
   } finally {
     await doc.destroy();
   }

@@ -329,6 +329,9 @@ async function main() {
         pdfTurnover: null,
         pdfCosts: null,
         pdfNetResult: null,
+        // Ook de factuurdatum: blijft die staan, dan draagt deze levering de
+        // factuurdatum van de PDF die hier net is losgemaakt.
+        pdfInvoiceDate: null,
         pdfParsedAt: null,
       },
     });

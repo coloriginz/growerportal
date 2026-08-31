@@ -1,14 +1,14 @@
 /*
- * Leest de bedragen (omzet, kosten, netto) uit de PDF terug op elke koppeling
- * die vóór dat de vier `pdf*`-kolommen bestonden al aan een document hing.
+ * Leest de bedragen (omzet, kosten, netto) en de factuurdatum uit de PDF terug
+ * op elke koppeling die vóór dat die kolommen bestonden al aan een document hing.
  *
  * De koppelroute (`/api/shipments/import-email`) vult `pdfTurnover`, `pdfCosts`,
- * `pdfNetResult` en `pdfParsedAt` vanzelf bij elke nieuwe koppeling. Bestaande
- * koppelingen — op test ~3.600, op productie 364 — hebben die stap nooit gehad
- * en staan dus op `pdfParsedAt: null`, ononderscheidbaar van "nog nooit
- * gekoppeld". Dit script is de inhaalslag: het pakt precies die achterstand,
- * niet de koppeling zelf (die staat vast, zie `audit-salessheet-links.ts` voor
- * de controle daarop).
+ * `pdfNetResult`, `pdfInvoiceDate` en `pdfParsedAt` vanzelf bij elke nieuwe
+ * koppeling. Bestaande koppelingen — op test ~3.600, op productie 364 — hebben
+ * die stap nooit gehad en staan dus op `pdfParsedAt: null`, ononderscheidbaar
+ * van "nog nooit gekoppeld". Dit script is de inhaalslag: het pakt precies die
+ * achterstand, niet de koppeling zelf (die staat vast, zie
+ * `audit-salessheet-links.ts` voor de controle daarop).
  *
  * `pdfParsedAt` wordt bij `--apply` altijd gezet, ook als er geen enkel bedrag
  * uit de PDF kwam. Dat is het hele punt van dat veld: het onderscheidt "nog
@@ -83,6 +83,8 @@ type Uitkomst = {
   turnover: number | null;
   costs: number | null;
   netResult: number | null;
+  invoiceDate: string | null;
+  deliveryDate: string;
   computedNetResult: number;
   status: SalesSheetMatch;
 };
@@ -103,6 +105,10 @@ type PendingWrite = {
   turnover: number | null;
   costs: number | null;
   netResult: number | null;
+  // "YYYY-MM-DD" of null wanneer de PDF geen tijdstempel droeg (bijv. geen
+  // sales sheet, of een oudere lay-out zonder factuurdatum). `->>` levert dan
+  // SQL NULL op, net als bij de drie bedragen hierboven.
+  invoiceDate: string | null;
   parsedAt: string;
 };
 
@@ -121,6 +127,7 @@ async function schrijfBrokWeg(brok: PendingWrite[]): Promise<void> {
        "pdfTurnover" = (v.val->>'turnover')::numeric,
        "pdfCosts" = (v.val->>'costs')::numeric,
        "pdfNetResult" = (v.val->>'netResult')::numeric,
+       "pdfInvoiceDate" = (v.val->>'invoiceDate')::timestamp,
        "pdfParsedAt" = (v.val->>'parsedAt')::timestamp,
        "updatedAt" = NOW()
      FROM jsonb_array_elements($1::jsonb) AS v(val)
@@ -143,6 +150,7 @@ async function main() {
       id: true,
       invoiceNumber: true,
       netResult: true,
+      deliveryDate: true,
       supplier: { select: { code: true } },
       pdfDocument: { select: { fileName: true, fileUrl: true } },
     },
@@ -162,6 +170,10 @@ async function main() {
   let zonderBedrag = 0;
   let nietGevonden = 0;
   let weggeschreven = 0;
+  let metFactuurdatum = 0;
+  // Som van "factuurdatum - leverdatum" in dagen, alleen over de leveringen
+  // die een factuurdatum opleverden — voor het gemiddelde in de eindmelding.
+  let dagenNaLeverdatumSom = 0;
 
   for (const [i, sheet] of werklijst.entries()) {
     const naam = sheet.pdfDocument?.fileName ?? "";
@@ -189,11 +201,13 @@ async function main() {
     let turnover: number | null = null;
     let costs: number | null = null;
     let netResult: number | null = null;
+    let invoiceDate: string | null = null;
     try {
       const gelezenPdf = await parseSalesSheetPdf(bron);
       turnover = gelezenPdf.turnover;
       costs = gelezenPdf.costs;
       netResult = gelezenPdf.netResult;
+      invoiceDate = gelezenPdf.invoiceDate;
     } catch {
       // Onleesbare PDF: alle drie blijven null, `pdfParsedAt` wordt bij --apply
       // toch gezet — dat is precies het onderscheid dat dit veld moet dragen.
@@ -202,6 +216,15 @@ async function main() {
     gelezen++;
     if (turnover === null && costs === null && netResult === null) zonderBedrag++;
     else metBedrag++;
+
+    const deliveryDate = sheet.deliveryDate.toISOString().slice(0, 10);
+    if (invoiceDate) {
+      metFactuurdatum++;
+      const dagen = Math.round(
+        (new Date(invoiceDate).getTime() - new Date(deliveryDate).getTime()) / 86_400_000
+      );
+      dagenNaLeverdatumSom += dagen;
+    }
 
     const parsedAt = new Date();
     const status = resolveSalesSheetMatch({
@@ -220,12 +243,14 @@ async function main() {
       turnover,
       costs,
       netResult,
+      invoiceDate,
+      deliveryDate,
       computedNetResult,
       status,
     });
 
     if (APPLY) {
-      brok.push({ id: sheet.id, turnover, costs, netResult, parsedAt: parsedAt.toISOString() });
+      brok.push({ id: sheet.id, turnover, costs, netResult, invoiceDate, parsedAt: parsedAt.toISOString() });
       if (brok.length >= CHUNK_SIZE) {
         await schrijfBrokWeg(brok);
         weggeschreven += brok.length;
@@ -262,6 +287,12 @@ async function main() {
   console.log(`gelezen              : ${gelezen}`);
   console.log(`  met bedrag         : ${metBedrag}`);
   console.log(`  zonder bedrag      : ${zonderBedrag}`);
+  console.log(`  met factuurdatum   : ${metFactuurdatum}`);
+  if (metFactuurdatum > 0) {
+    console.log(
+      `    gemiddeld ná leverdatum: ${(dagenNaLeverdatumSom / metFactuurdatum).toFixed(1)} dagen`
+    );
+  }
   console.log(`bestand niet gevonden: ${nietGevonden}`);
   if (APPLY) console.log(`weggeschreven        : ${weggeschreven}`);
   console.log("");
