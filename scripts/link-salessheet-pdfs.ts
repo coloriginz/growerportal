@@ -6,16 +6,17 @@
  * twee waarheden over wat een geldige koppeling is.
  *
  * Draaien:
- *   npx tsx scripts/link-salessheet-pdfs.ts                    # dry run (standaard)
- *   npx tsx scripts/link-salessheet-pdfs.ts --apply            # echt versturen
- *   npx tsx scripts/link-salessheet-pdfs.ts <map> --apply
- *   npx tsx scripts/link-salessheet-pdfs.ts --limit=20 --apply # eerst een proefje
+ *   npx tsx scripts/link-salessheet-pdfs.ts --api-base=<url>                    # dry run (standaard)
+ *   npx tsx scripts/link-salessheet-pdfs.ts --api-base=<url> --apply            # echt versturen
+ *   npx tsx scripts/link-salessheet-pdfs.ts <map> --api-base=<url> --apply
+ *   npx tsx scripts/link-salessheet-pdfs.ts --api-base=<url> --limit=20 --apply # eerst een proefje
  *
  * Opties:
  *   <map>            wortelmap met PDF's, recursief. Standaard private_input/salessheets.
  *   --apply          verstuur echt. Zonder deze vlag wordt er niets geschreven.
  *   --limit=N        stuur hooguit N bestanden (proefrun).
- *   --api-base=URL   doelportal. Standaard $API_BASE, anders de testomgeving.
+ *   --api-base=URL   doelportal. Verplicht — via deze vlag of $API_BASE, geen standaard
+ *                    (zie toelichting bij parseArgs() hieronder).
  *   --batch-bytes=N  maximum aan base64 per verzoek. Standaard 3000000.
  *   --report=PAD     schrijf het rapport hierheen in plaats van de standaardnaam.
  *
@@ -60,7 +61,13 @@ const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 5000;
 
 const DEFAULT_ROOT = path.resolve(__dirname, "../private_input/salessheets");
-const DEFAULT_API_BASE = "https://growerportal.test.apps.coloriginz.com";
+/*
+ * Bewust geen standaardwaarde voor de doelportal. Dit is de laatste stap van een
+ * herbouw: wie --api-base vergeet duwt duizenden PDF's en blob-uploads naar het
+ * verkeerde portal, en dat portal meldt gewoon succes — de fout merk je pas als
+ * je gaat kijken waar de PDF's zijn. Een verkeerde standaard is hier duurder dan
+ * geen standaard.
+ */
 
 // ---------------------------------------------------------------------------
 // Argumenten
@@ -87,11 +94,20 @@ function parseArgs(argv: string[]): Options {
   const limitRaw = value("limit");
   const bytesRaw = value("batch-bytes");
 
+  const apiBaseRaw = value("api-base") ?? process.env.API_BASE;
+  if (!apiBaseRaw) {
+    throw new Error(
+      "Geen doelportal opgegeven. Kies expliciet via --api-base=<url> of de omgevingsvariabele " +
+        "API_BASE — er is bewust geen standaardwaarde, want dit script duwt PDF's en blob-uploads " +
+        "naar productie of test en een verkeerde standaard zou dat stilzwijgend fout laten gaan.",
+    );
+  }
+
   return {
     root: path.resolve(positional[0] ?? DEFAULT_ROOT),
     apply: flags.includes("--apply"),
     limit: limitRaw ? Number(limitRaw) : Infinity,
-    apiBase: (value("api-base") ?? process.env.API_BASE ?? DEFAULT_API_BASE).replace(/\/+$/, ""),
+    apiBase: apiBaseRaw.replace(/\/+$/, ""),
     maxBase64Bytes: bytesRaw ? Number(bytesRaw) : DEFAULT_MAX_BASE64_BYTES,
     reportPath: value("report"),
   };
