@@ -163,6 +163,45 @@ afrekening vast die de portal inmiddels tegenspreekt. Dit is hetzelfde
 verschijnsel als in `docs/correcties-na-de-afrekening.md`, nu per partij
 aanwijsbaar in plaats van als totaal.
 
+## De kosten zijn niet de oorzaak — gemeten, niet beredeneerd
+
+De voor de hand liggende verklaring voor een afwijkend nettoresultaat is dat de
+kostenregels in de portal achterlopen op Fabric. Het warehouse herziet immers
+kostenbedragen en het schuivende syncvenster komt er nooit op terug. Die
+verklaring is op 1 september 2026 getoetst met een volledige backfill.
+
+`scripts/repair-costs.ts --apply` over **alle 58 geactiveerde leveranciers, 244
+kwartaalrondes, 1 januari 2025 tot heden** — de hele historie die de
+testomgeving draagt. Elke ronde haalde de kostenregels opnieuw uit Fabric en
+stuurde ze door `/api/import/costs`, die zowel bijwerkt als intrekt wat niet meer
+in de payload zit.
+
+**Bijgesteld: EUR 0,00. In alle 244 rondes.** De kostenregels in de portal komen
+regel voor regel en cent voor cent overeen met wat Fabric vandaag zegt. Er is aan
+die kant geen achterstand. (Vijf rondes vielen eerst uit op een leeg antwoord van
+Fabric — hetzelfde verschijnsel dat onder *Querying Fabric* in `CLAUDE.md` staat,
+waar een gefilterde query zonder foutmelding niets teruggeeft. De guard weigerde
+terecht; na herhaling gaven ze gewoon hun 247, 658, 779, 992 en 362 regels.)
+
+Daarmee verschuift de vraag. Het verschil zit niet tussen Fabric en de portal maar
+tussen Fabric en het gedrukte document. Van de 219 afwijkende leveringen:
+
+| | Leveringen |
+|---|---:|
+| verschil zit puur op de omzet | 152 |
+| verschil zit puur op de kosten | 60 |
+| beide, of geen kosten uit de PDF gelezen | 7 |
+
+Van die 60 zijn er 30 van de laatste twee maanden — de afrekening is gedrukt, de
+kostenregels staan nog niet in Fabric, en dat lost zichzelf op. Van de andere 30
+is er precies één die groot en verklaarbaar is: **COLOZFL C656** draagt in de
+portal (en in Fabric) een regel *Vrachtkosten Herkomstland* van EUR 899,42 die
+niet op de afrekening staat, en het hele gat is EUR 894,87. De rest loopt van
+EUR 4 tot EUR 70 en is per stuk niet aan één kostenregel toe te wijzen.
+
+De 152 aan de omzetkant zijn het verhaal van de partijen en orderregels hierboven.
+Geen enkele kostenronde raakt die.
+
 ## Wat er nog niet klopt in de portal
 
 ### Kosten die er nog niet zijn, maken het nettoresultaat te hoog
