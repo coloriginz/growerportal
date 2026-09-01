@@ -8,10 +8,19 @@
 > **Kern:** de sales sheet die een kweker krijgt, is een momentopname. Correcties die
 > daarna in het bronsysteem worden geboekt, verlagen de omzet in Fabric en dus in de
 > portal — maar staan niet op het papier dat de kweker al heeft. Bewezen bedrag waar
-> die twee uiteenlopen: **EUR 7.894** over 108 leveringen. Het totaal aan correcties
-> dat na de factuurdatum landde is **EUR 164.766** over 698 leveringen; welk deel
-> daarvan wél op de afrekening stond, is alleen vast te stellen voor de leveringen
-> waarvan we de PDF hebben.
+> die twee uiteenlopen: **EUR 7.894** over 108 leveringen, gemeten tegen het gedrukte
+> document zelf.
+>
+> **Herzien op 1 september 2026.** Dit stuk noemde eerder een blootstelling van
+> EUR 164.766 over 698 leveringen. Dat getal is ingetrokken. Het leunde op
+> `SalesSheet.invoiceDate`, en die kolom bleek de léverdatum te bevatten: de import
+> schreef er `invoiceDate: deliveryDate`, al sinds de eerste importcommit. Inmiddels
+> wordt de echte factuurdatum uit de PDF gelezen en apart bewaard
+> (`pdfInvoiceDate`, gevuld voor alle 4.041 gekoppelde afrekeningen). Die ligt
+> gemiddeld **13,9 dagen** na de leverdatum en nooit ervóór, en daarmee vallen bijna
+> alle correcties binnen het venster tussen leveren en drukken. Zie *Omvang*
+> hieronder voor wat er overblijft. De EUR 7.894 staat, want die is nooit op een
+> datum gebaseerd geweest maar op het verschil met het document.
 >
 > Twee partijen zijn helemaal uitgewerkt: **3979999** (het eenvoudigste geval) en
 > **3980666** (waar alle drie de soorten correctieregels naast elkaar staan).
@@ -141,31 +150,36 @@ kloppen. De optelling in de portal klopt; deze partij is een echte uitzondering.
 
 ## Omvang
 
-### Correcties die na de factuurdatum vertrokken
+### Correcties die na de factuurdatum zijn geboekt
+
+Met de echte factuurdatum uit de PDF, en met de boekdatum die inmiddels uit
+`marts.dim_partijcorrecties` wordt meegenomen (`LotCorrection.correctionDate`,
+gevuld voor alle 17.492 partijcorrecties):
 
 | | |
 |---|---|
-| correctieregels | 2.559 |
-| leveringen | 698 |
-| stelen | −454.402 |
-| bedrag | **−EUR 164.766** |
+| partijcorrecties na de factuurdatum | 28 |
+| leveringen | 21 |
+| volume | 24.625 stelen |
+| som van (PDF − portal) op die leveringen | **+EUR 378** |
 
-Bijna alles landt binnen tien dagen na de factuurdatum (2.503 van de 2.559 regels,
-EUR 161.112); een kleine staart loopt door tot ruim vijftig dagen.
+Eenentwintig leveringen dus, niet 698, en het saldo wisselt van teken: sommige
+staan hoger op het papier, andere lager. Als blootstelling stelt dit niets voor.
 
-### Naar correctiereden
+De eerdere tabel telde correcties die na de **leverdatum** vertrokken — dat zijn er
+2.559 voor EUR 164.766, maar de afrekening wordt gemiddeld pas veertien dagen ná
+levering gedrukt, dus die stonden er in de regel gewoon op. Dat verklaart ook de
+puzzel die hieronder stond: dat bij 401 van de 509 gecontroleerde leveringen de
+correctie wél in de PDF zat. Precies zoals verwacht.
 
-| reden | omschrijving | regels | bedrag |
-|---|---|---|---|
-| 54 | Retour van klant door inferieure kwaliteit | 498 | −84.273,68 |
-| 104 | Niet Retour, Weggooi Klant | 918 | −60.765,28 |
-| 56 | Niet geleverd | 116 | −5.585,22 |
-| 93 | Retour: Terugkoop van klant | 50 | −3.167,70 |
-| 112 | Retour Pick Pickopdrachten | 54 | −3.124,82 |
-| 65 | Te weinig geleverd aan klant | 178 | −2.748,00 |
-| 55 | Retour: Te laat geleverd | 18 | −2.707,40 |
-| 106 | Te veel geleverd aan klant | 44 | −2.339,81 |
-| 34 | Prijscorrectie | 82 | −54,00 |
+### Wat we nog steeds niet kunnen zien
+
+De boekdatum bestaat alleen voor **partij**correcties. Een tegenboeking op een
+orderregel — herkomst `correcties` of `prullenbak-factcor` — draagt de datum van
+de oorspronkelijke verkoop, niet van het moment waarop hij is geboekt. Voor die
+regels is dus niet vast te stellen wanneer ze zijn gemaakt, en juist die dragen de
+bedragen. Vandaar dat de EUR 7.894 hieronder is vastgesteld door het gedrukte
+document ernaast te leggen, en niet met een datum.
 
 ### Wat hiervan aantoonbaar niet op de afrekening stond
 
@@ -195,17 +209,16 @@ voorbehoud bij dit hele stuk.
 
 ### Hoeveel is er weggegeven?
 
-- **Bewezen: EUR 7.894**, over 108 leveringen waarvan we het gedrukte document hebben.
-- **Blootstelling: EUR 164.766** aan correcties na de factuurdatum, waarvan we voor
-  590 leveringen niet kunnen nakijken of ze op het papier stonden.
-- Naar waarde gemeten stond **12,9%** van de correcties op PDF-gecontroleerde
-  leveringen níét op de afrekening (7.894 van 59.933). Houdt dat aandeel stand over
-  het geheel, dan gaat het om de orde van **EUR 21.700**. Dat is een schatting met
-  één zwakke aanname: de leveringen mét een gekoppelde PDF zijn geen willekeurige
-  steekproef.
+- **Bewezen: EUR 7.894**, over 108 leveringen waarvan we het gedrukte document
+  hebben en waar het verschil tussen PDF en portal exact gelijk is aan de
+  tegenboekingen.
+- Een schatting voor het geheel staat hier niet meer. De vorige versie
+  extrapoleerde naar EUR 21.700 op basis van een aandeel dat met de leverdatum was
+  berekend; met de echte factuurdatum houdt die berekening geen stand. Wat er wél
+  te zeggen valt: van de 4.041 leveringen met een gelezen afrekening wijkt het
+  nettoresultaat bij **219** af — bij 131 toont de portal minder dan het papier
+  (samen EUR 20.670) en bij 88 meer (samen EUR 49.753).
 
-Om dat hard te maken zijn de gedrukte afrekeningen van de overige 590 leveringen
-nodig.
 
 ## De cijfers bewegen, en dat hoort zo
 
@@ -255,11 +268,17 @@ blijft de actuelere bron.
 ## Bijlage: de 108 leveringen, regel voor regel
 
 De leveringen waarvan bewezen is dat de correctie niet op de afgedrukte afrekening
-stond: het verschil tussen PDF en portal is daar gelijk aan de som van de correcties
-die na de factuurdatum vertrokken. Gesorteerd op verschil, groot naar klein.
+stond: het verschil tussen PDF en portal is daar gelijk aan de som van de
+correcties. Gesorteerd op verschil, groot naar klein.
 
 `verschil` is PDF minus portal: wat de kweker op papier zag, minus wat de portal nu zegt.
-`dagen` is hoeveel dagen na de factuurdatum de laatste correctie vertrok.
+
+> **Let op bij de kolommen `factuurdatum` en `dagen`.** Die zijn berekend met
+> `SalesSheet.invoiceDate`, en dat veld bevat de léverdatum — zie de herziening
+> bovenaan. De echte factuurdatum ligt gemiddeld veertien dagen later, dus `dagen`
+> staat er stelselmatig te hoog in en zegt niets over het moment van drukken. De
+> selectie van deze 108 leveringen rust daar niet op: die komt uit de vergelijking
+> met het document zelf, en dat verschil staat los van welke datum dan ook.
 
 | # | leverancier | levering | factuurdatum | laatste correctie | dagen | corr. regels | corr. stelen | netto portal | netto PDF | verschil |
 |---:|---|---|---|---|---:|---:|---:|---:|---:|---:|
