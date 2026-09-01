@@ -104,5 +104,40 @@ check(
 );
 check("duizendtallen met een punt", twee[1]?.lines[1]?.stems === 5700 && twee[1]?.deliveredStems === 5600);
 
+/* Letterlijke tekst uit `102115-396161.pdf`. Partij 3858159 draait verlies: haar
+ * gemiddelde prijs is negatief en het bedrag staat tussen haakjes. Zonder dat
+ * minteken in de kop schuift de parser door naar de prijs van 3858160 en versmelten
+ * de twee partijen tot één. */
+const NEGATIEVE_PRIJS =
+  "Lot   3858159   1 X   1200   Aster Casarosa   60   15   -0,022 1.200 RUNDOG   12  " +
+  "75 26-01-2026   Handling: less in box   0,000   0,00 " +
+  "1.125 28-01-2026   Direct sales   0,000   (26,85)  (26,85) 1.200   -0,022 " +
+  "Lot   3858160   4 X   600   Aster Casarosa   70   30   0,072 2.400 RUNDOG   12  " +
+  "800 02-02-2026   FHN   0,078   62,35 800 02-02-2026   FHR   0,045   35,86 " +
+  "800 02-02-2026   VBA   0,095   75,71  173,91 2.400   0,072";
+const verlies = parseSalesSheetLots(NEGATIEVE_PRIJS);
+check("een partij met een negatieve gemiddelde prijs blijft een eigen partij", verlies.length === 2, `kreeg ${verlies.length}`);
+check(
+  "die partij houdt haar eigen aangevoerde aantal",
+  verlies[0]?.deliveredStems === 1200 && verlies[0]?.averagePrice === -0.022,
+  `kreeg ${verlies[0]?.deliveredStems} / ${verlies[0]?.averagePrice}`
+);
+check("en haar eigen regels", verlies[0]?.lines.length === 2 && verlies[1]?.lines.length === 3);
+check("een bedrag tussen haakjes is negatief", verlies[0]?.lines[1]?.amount === -26.85);
+
+/* Een levering over meerdere bladen herhaalt de factuurkop boven aan elk blad. Die
+ * kop draagt een datum en staat vol nummers; hij mag geen regel opleveren en mag
+ * de eerste échte regel eronder niet opslokken. */
+const MET_PAGINAKOP = `Lot 3894278 5 X 500 Rosa Athena 60 0,015 2.500 ZIMFLX 23 2.525 25-03-2026 Direct sales 0,021 53,21
+20-03-2026  1-4-26 22:03 AWB number P.O.Box 170 Zimflex - CONS 07159587183 Supplier OZ Import BV The Netherlands 102258 400169 Harare Airport ZIMBABWE VAT# NL 0080.50.831.B01
+1.000 26-03-2026 FHN 0,060 60,26`;
+const kop = parseSalesSheetLots(MET_PAGINAKOP);
+check("de paginakop levert zelf geen regel op", kop[0]?.lines.length === 2, `kreeg ${kop[0]?.lines.length}`);
+check(
+  "en slokt de regel eronder niet op",
+  kop[0]?.lines[1]?.stems === 1000 && kop[0]?.lines[1]?.channel === "FHN",
+  `kreeg ${kop[0]?.lines[1]?.stems} ${kop[0]?.lines[1]?.channel}`
+);
+
 console.log(failures === 0 ? "\nalle checks geslaagd" : `\n${failures} check(s) gefaald`);
 process.exit(failures === 0 ? 0 : 1);

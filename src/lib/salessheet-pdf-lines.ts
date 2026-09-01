@@ -73,9 +73,17 @@ function leesDatum(ruw: string): string | null {
  * gokken hoeveel het er zijn. Ze blijven daarom staan zoals afgedrukt: voor het
  * terugvinden van een partij is de omschrijving genoeg, en het partijnummer is de
  * echte sleutel.
+ *
+ * De gemiddelde prijs mag negatief zijn, en dat minteken is niet optioneel om te
+ * herkennen: een partij waarvan de veilingkosten de opbrengst overtreffen drukt
+ * "-0,022" af. Zonder het teken slaat de kop over naar het volgende getal met drie
+ * decimalen — de prijs van de vólgende partij — waarmee twee partijen tot één blok
+ * versmelten en er eentje uit de uitkomst verdwijnt. Gemeten op 102115-396161.pdf:
+ * partij 3858159 kreeg zo het aangevoerde aantal en de regels van 3858160, en
+ * 3858160 zelf kwam er niet uit.
  */
 const KOP = new RegExp(
-  String.raw`Lot\s+(\d+)\s+(\d+)\s*[Xx]\s*([\d.]+)\s+(.+?)\s+([\d.]*,\d{3})\s+([\d.]+)\s+([A-Z][A-Z0-9]{2,})\b`,
+  String.raw`Lot\s+(\d+)\s+(\d+)\s*[Xx]\s*([\d.]+)\s+(.+?)\s+(-?[\d.]*,\d{3})\s+([\d.]+)\s+([A-Z][A-Z0-9]{2,})\b`,
   "g"
 );
 
@@ -86,9 +94,18 @@ const KOP = new RegExp(
  *
  * Het aantal staat vóór de datum en het kanaal ertussenin. Drie decimalen voor de
  * prijs, twee voor het bedrag — dat onderscheid draagt de hele herkenning.
+ *
+ * Het kanaal mag geen cijfer bevatten. Dat is geen kosmetische eis: bij een levering
+ * over meerdere bladen staat de factuurkop boven aan elk blad, met daarin de
+ * leverdatum. Zonder die eis begint een match in die kop en rekt hij door tot de
+ * prijs van de eerste échte regel eronder — waarmee die regel wordt opgeslokt en
+ * stelen verdwijnen. De kop staat vol nummers (AWB, VAT, factuurnummer), de kanalen
+ * dragen er geen enkele: "Direct sales", "VBA", "Handling: less in box",
+ * "z: Less than invoice". Dat verschil is de scheiding.
  */
 const REGEL = new RegExp(
-  String.raw`(-?[\d.]+)\s+(\d{1,2}-\d{1,2}-\d{4})\s+(.+?)\s+(-?[\d.]*,\d{3})\s+(\(?-?[\d.]*,\d{2}\)?)`,
+  String.raw`(-?[\d.]+)\s+(\d{1,2}-\d{1,2}-\d{4})\s+([^\d
+]{1,45}?)\s+(-?[\d.]*,\d{3})\s+(\(?-?[\d.]*,\d{2}\)?)`,
   "g"
 );
 
