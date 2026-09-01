@@ -23,6 +23,9 @@ import {
 } from "@/lib/format";
 import { translateQualityCode } from "@/lib/quality-codes";
 
+/** De reden achter een correctie, in beide talen zoals Fabric hem levert. */
+type Reason = { nl: string | null; en: string | null };
+
 interface LotDetailProps {
   lot: {
     id: string;
@@ -41,6 +44,15 @@ interface LotDetailProps {
     correctionVolume: number | null;
     supplier: { id: string; code: string; name: string };
     salesSheet: { id: string; invoiceNumber: string; pdfDocumentId: string | null } | null;
+    /*
+     * Deze velden komen rechtstreeks uit Prisma. Hier stonden eerder `isCorrection`,
+     * `correctionType`, `qualityCode`, `qualityNote` en `s1`/`s2`/`s3` bij, en geen
+     * daarvan bestaat op `Transaction` — de pagina geeft het model ongewijzigd door.
+     * Ze waren dus altijd `undefined`, waardoor een tegenboeking als gewone verkoop
+     * werd getoond: partij 3695766 laat 1.260, -1.260 en 900 stelen zien, alle drie
+     * als "Persoonlijk", zonder dat iets verraadt dat de eerste twee tegen elkaar
+     * wegvallen.
+     */
     transactions: {
       id: string;
       date: string;
@@ -48,13 +60,8 @@ interface LotDetailProps {
       stems: number;
       pricePerStem: string;
       amount: string;
-      qualityCode: string | null;
-      qualityNote: string | null;
-      s1: string | null;
-      s2: string | null;
-      s3: string | null;
-      isCorrection: boolean;
-      correctionType: string | null;
+      bronFeitExtra: string;
+      correctionReasonId: number | null;
     }[];
     qualityIssues: {
       id: string;
@@ -71,10 +78,18 @@ interface LotDetailProps {
       correctionColli: number | null;
     }[];
   };
+  /** Reden-id naar naam, opgezocht op de server. */
+  reasons: Record<number, Reason>;
 }
 
-export function LotDetail({ lot }: LotDetailProps) {
-  const { t } = useLanguage();
+export function LotDetail({ lot, reasons }: LotDetailProps) {
+  const { t, language } = useLanguage();
+  const reasonName = (id: number | null) => {
+    if (id === null) return null;
+    const r = reasons[id];
+    if (!r) return String(id);
+    return (language === "nl" ? r.nl ?? r.en : r.en ?? r.nl) ?? String(id);
+  };
   const searchParams = useSearchParams();
   const supplierId = searchParams.get("supplierId");
   const backHref = supplierId ? `/lots?supplierId=${supplierId}` : "/lots";
@@ -157,38 +172,34 @@ export function LotDetail({ lot }: LotDetailProps) {
               <TableRow>
                 <TableHead>{t("common.date")}</TableHead>
                 <TableHead>{t("sales.salesType")}</TableHead>
-                <TableHead>S1</TableHead>
-                <TableHead>S2</TableHead>
-                <TableHead>S3</TableHead>
                 <TableHead className="text-right">{t("sales.stems")}</TableHead>
                 <TableHead className="text-right">{t("sales.price")}</TableHead>
                 <TableHead className="text-right">{t("lots.totalAmount")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {lot.transactions.map((tx) => (
+              {lot.transactions.map((tx) => {
+                const isCorrectie = tx.bronFeitExtra !== "origineel";
+                return (
                 <TableRow
                   key={tx.id}
-                  className={tx.isCorrection ? "text-muted-foreground italic" : ""}
+                  className={isCorrectie ? "text-muted-foreground italic" : ""}
                 >
                   <TableCell className="text-muted-foreground">{formatDate(tx.date)}</TableCell>
                   <TableCell>
-                    <span className="font-medium">{tx.isCorrection ? tx.correctionType : tx.salesType}</span>
-                    {tx.qualityCode && (
+                    <span className="font-medium">{tx.salesType}</span>
+                    {isCorrectie && (
                       <Badge variant="outline" className="ml-2 text-xs">
-                        {tx.qualityCode}
+                        {t("lots.correctionBooking")}
                       </Badge>
                     )}
-                    {tx.qualityNote && (
-                      <span className="text-muted-foreground ml-1 text-xs">
-                        {tx.qualityNote}
+                    {reasonName(tx.correctionReasonId) && (
+                      <span className="text-muted-foreground ml-2 text-xs">
+                        {reasonName(tx.correctionReasonId)}
                       </span>
                     )}
                   </TableCell>
-                  <TableCell className="text-muted-foreground">{tx.s1}</TableCell>
-                  <TableCell className="text-muted-foreground">{tx.s2}</TableCell>
-                  <TableCell className="text-muted-foreground">{tx.s3}</TableCell>
-                  <TableCell className="text-right tabular-nums">{tx.stems}</TableCell>
+                  <TableCell className="text-right tabular-nums">{formatNumber(tx.stems)}</TableCell>
                   {/*
                     Op ongelijk aan nul toetsen, niet op groter dan nul: een
                     correctieregel draagt een negatief bedrag, en die verdween hier
@@ -202,7 +213,8 @@ export function LotDetail({ lot }: LotDetailProps) {
                     {parseFloat(tx.amount) !== 0 ? formatCurrencyDetailed(parseFloat(tx.amount)) : "-"}
                   </TableCell>
                 </TableRow>
-              ))}
+                );
+              })}
             </TableBody>
           </Table>
         </CardContent>
@@ -273,7 +285,7 @@ export function LotDetail({ lot }: LotDetailProps) {
                       </Badge>
                     </TableCell>
                     <TableCell className="text-muted-foreground">
-                      {corr.correctionReasonId ?? "-"}
+                      {reasonName(corr.correctionReasonId) ?? "-"}
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
                       {corr.correctionVolume != null ? formatNumber(corr.correctionVolume) : "-"}

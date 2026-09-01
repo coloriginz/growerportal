@@ -203,10 +203,11 @@
     "corrections": "Correcties",
     "correctionVolume": "Volume",
     "correctionColli": "Colli",
-    "correctionReason": "Reden ID",
+    "correctionReason": "Reden",
     "correctionType": "Type",
     "noCorrections": "Geen correcties",
-    "totalCorrectionVolume": "Totaal Correctie Volume"
+    "totalCorrectionVolume": "Totaal Correctie Volume",
+    "correctionBooking": "Correctie"
   },
   "shipments": {
     "title": "Leveringen",
