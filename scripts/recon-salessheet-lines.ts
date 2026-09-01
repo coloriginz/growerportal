@@ -423,8 +423,15 @@ async function main() {
       const portalBedrag = rond(portal.transactions.reduce((s, t) => s + Number(t.amount), 0));
 
       const dStelen = portalStelen - pdfStelen;
-      // Op een netto-opmaak zijn de bedragen niet vergelijkbaar; alleen de stelen.
-      const bedragTelt = opmaak !== "netto";
+      /*
+       * Bedragen tellen alleen mee bij een opmaak die we hebben kunnen vaststellen.
+       * Op een netto-opmaak zijn ze niet vergelijkbaar, en bij "onbekend" weten we
+       * niet welke van de twee het is — dat gebeurt als de kop-parser geen enkel
+       * totaal uit het blad haalt. Levering 102941 (COLZFLXC) is zo'n geval en
+       * leverde acht partijen op die alleen op de bedragen leken af te wijken,
+       * terwijl deze leverancier juist de netto-opmaak krijgt.
+       */
+      const bedragTelt = opmaak === "bruto";
       const dBedrag = rond(portalBedrag - pdfBedrag);
 
       if (Math.abs(dStelen) <= STELEN_MARGE && (!bedragTelt || Math.abs(dBedrag) <= BEDRAG_MARGE)) {
@@ -546,9 +553,11 @@ async function main() {
               .join(" | ")}`) +
           (bedragTelt
             ? ""
-            : ` — Let op: deze afrekening verrekent de kosten al per regel (levering: afrekening EUR ${
-                pdfOmzet?.toFixed(2) ?? "?"
-              }, portal EUR ${basis.leveringPortalOmzet?.toFixed(2) ?? "?"} bruto), dus alleen het steelverschil telt hier.`),
+            : opmaak === "netto"
+              ? ` — Let op: deze afrekening verrekent de kosten al per regel (levering: afrekening EUR ${
+                  pdfOmzet?.toFixed(2) ?? "?"
+                }, portal EUR ${basis.leveringPortalOmzet?.toFixed(2) ?? "?"} bruto), dus alleen het steelverschil telt hier.`
+              : " — Let op: uit dit blad kwamen geen totalen, dus of de bedragen bruto of netto zijn afgedrukt is niet vast te stellen. Alleen het steelverschil telt hier."),
       });
     }
 
