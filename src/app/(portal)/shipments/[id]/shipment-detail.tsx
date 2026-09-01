@@ -103,8 +103,15 @@ interface ShipmentDetailProps {
     id: string;
     invoiceNumber: string;
     ourInvoiceNumber: string | null;
+    /**
+     * Draagt de léverdatum, niet de factuurdatum. De lots-import zet daar sinds de
+     * eerste versie `deliveryDate` in omdat Fabric de verkoopfactuurdatum nergens
+     * in `marts` heeft staan. Niet tonen; `pdfInvoiceDate` is de echte.
+     */
     invoiceDate: string;
     deliveryDate: string;
+    /** De factuurdatum zoals die op de afrekening staat, als de PDF gelezen is. */
+    pdfInvoiceDate: string | null;
     totalTurnover: string;
     totalCosts: string;
     netResult: string;
@@ -313,10 +320,17 @@ export function ShipmentDetail({ shipment, correctionReasons = {}, status }: Shi
                   <dd className="tabular-nums">{shipment.ourInvoiceNumber}</dd>
                 </div>
               )}
-              <div className="flex gap-2">
-                <dt className="min-w-32 text-muted-foreground">{t("shipments.invoiceDate")}</dt>
-                <dd className="tabular-nums">{formatDate(shipment.invoiceDate)}</dd>
-              </div>
+              {/*
+                Alleen tonen als hij van de afrekening is gelezen. Hier stond
+                `invoiceDate`, en dat veld draagt de leverdatum — de kweker zag
+                dezelfde datum twee keer, één keer onder de verkeerde naam.
+              */}
+              {shipment.pdfInvoiceDate && (
+                <div className="flex gap-2">
+                  <dt className="min-w-32 text-muted-foreground">{t("shipments.invoiceDate")}</dt>
+                  <dd className="tabular-nums">{formatDate(shipment.pdfInvoiceDate)}</dd>
+                </div>
+              )}
             </dl>
           </div>
           {shipment.pdfDocument && (
