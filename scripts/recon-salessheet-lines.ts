@@ -197,6 +197,50 @@ function indexeerArchief(wortel: string): Map<string, string> {
   return uit;
 }
 
+/*
+ * Twee partijen van dezelfde levering die elkaar precies opheffen.
+ *
+ * De ene mist wat de andere te veel heeft, op de steel en op de cent: de portal
+ * heeft de verkoop onder de buurpartij gehangen. Gemeten op levering "cons 6"
+ * (PCFFARCO): partij 3595811 komt 45.280 stelen en EUR 13.984,60 tekort en
+ * 3595812 heeft precies dat te veel. Op leveringniveau valt het weg, dus de toets
+ * op nettoresultaat ziet het nooit — maar een kweker die naar één partij kijkt,
+ * ziet de verkeerde cijfers.
+ *
+ * Alleen tegen elkaar wegstrepen als het aan beide kanten exact klopt; een paar
+ * dat alleen op de stelen sluit kan toeval zijn.
+ */
+function koppelVerwisselingen(bevindingen: Bevinding[]): void {
+  const open = bevindingen.filter(
+    (b) => b.reden === "onverklaard" && b.verschilStelen !== null && b.verschilBedrag !== null
+  );
+  const gepakt = new Set<Bevinding>();
+  for (const a of open) {
+    if (gepakt.has(a)) continue;
+    const tegen = open.find(
+      (b) =>
+        b !== a &&
+        !gepakt.has(b) &&
+        Math.abs(a.verschilStelen! + b.verschilStelen!) <= STELEN_MARGE &&
+        Math.abs(a.verschilBedrag! + b.verschilBedrag!) <= BEDRAG_MARGE &&
+        Math.abs(a.verschilStelen!) > STELEN_MARGE
+    );
+    if (!tegen) continue;
+    gepakt.add(a);
+    gepakt.add(tegen);
+    for (const [x, y] of [
+      [a, tegen],
+      [tegen, a],
+    ] as const) {
+      x.reden = "verkoop staat onder een andere partij van dezelfde levering";
+      x.toelichting =
+        `Partij ${y.partij} van dezelfde levering wijkt precies andersom af ` +
+        `(${y.verschilStelen} stelen, EUR ${y.verschilBedrag!.toFixed(2)}). ` +
+        `Samen komen de twee uit op nul, dus de levering als geheel klopt en alleen de verdeling over de partijen niet.`;
+    }
+  }
+}
+
 const datum = (d: Date | null | undefined) => (d ? d.toISOString().slice(0, 10) : "");
 const rond = (n: number) => Number(n.toFixed(2));
 
@@ -250,9 +294,20 @@ async function main() {
     partijenVergeleken = 0,
     partijenGelijk = 0;
 
-  const noteer = (b: Bevinding) => {
-    perReden.set(b.reden, (perReden.get(b.reden) ?? 0) + 1);
-    bevindingen.push(b);
+  /*
+   * De bevindingen van één afrekening blijven eerst bij elkaar. Een verschil op de
+   * ene partij wordt soms verklaard door de partij ernaast, en dat is alleen te
+   * zien als het hele blad er is; zie `koppelVerwisselingen`.
+   */
+  let vanDitBlad: Bevinding[] = [];
+  const noteer = (b: Bevinding) => vanDitBlad.push(b);
+  const sluitBlad = () => {
+    koppelVerwisselingen(vanDitBlad);
+    for (const b of vanDitBlad) {
+      perReden.set(b.reden, (perReden.get(b.reden) ?? 0) + 1);
+      bevindingen.push(b);
+    }
+    vanDitBlad = [];
   };
 
   for (const [i, ss] of teDoen.entries()) {
@@ -497,6 +552,7 @@ async function main() {
       });
     }
 
+    sluitBlad();
     if ((i + 1) % 250 === 0) console.log(`  ${i + 1}/${teDoen.length}`);
   }
 
