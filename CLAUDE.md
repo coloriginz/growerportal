@@ -403,7 +403,7 @@ The local archive in `private_input/salessheets` is pushed through this same rou
 | `/api/admin/import-batches/[id]/records` | GET | The records one run created or updated, paginated |
 | `/api/admin/import-batches/[id]/skipped` | GET | The relations one run dropped, split into growers and internal bookings |
 | `/api/admin/fabric-relations` | GET, POST | Fabric relation staging data; POST activates one as a Supplier |
-| `/api/admin/shipment-issues` | GET | Settled deliveries that need attention: `missing-pdf` (no sales sheet linked) or `stem-gap` (delivered plus corrections does not add up to sold, beyond a small margin), paginated |
+| `/api/admin/shipment-issues` | GET | Deliveries that need attention: `missing-pdf` (no sales sheet linked), `stem-gap` (delivered plus corrections does not add up to sold, beyond a small margin) or `pdf-mismatch` (the printed net differs from the computed one), paginated. The first two require cost lines — that is what "settled" means for them; `pdf-mismatch` does not, because a sales sheet PDF we have read is stronger proof that a settlement ran than the cost lines are, and requiring them switched the check off on exactly the 33 deliveries where the portal is most wrong (EUR 45.021, all of them a printed settlement whose cost lines have not arrived yet) |
 | `/api/activate` | POST | Account activation (set password) |
 | `/api/forgot-password` | POST | Request password reset email |
 | `/api/reset-password` | POST | Reset password with token |

@@ -71,6 +71,26 @@ function issueBody(type: IssueType, search: string) {
             AND ABS(${pdfAmountSql} - ss."netResult") > ${SALESSHEET_MATCH_TOLERANCE}
           `;
 
+  /*
+   * "De afrekening is gedraaid" is voor twee van de drie takken de voorwaarde, en
+   * kostenregels zijn daar het bewijs van. Voor `pdf-mismatch` niet: daar is een
+   * uitgelezen sales sheet-PDF een sterker bewijs dat er is afgerekend — het
+   * document bestáát — en de kostenregels erbij eisen zet de controle uit op precies
+   * de leveringen waar de portal het meest misstaat.
+   *
+   * Gemeten 1 september 2026: 219 leveringen waar het gedrukte netto meer dan een
+   * euro afwijkt, waarvan 33 zonder kostenregels. Die 33 dragen samen EUR 45.021 en
+   * zijn stuk voor stuk hetzelfde geval — de afrekening is gedrukt, de kostenregels
+   * zijn nog niet uit Fabric gekomen, en het scherm toont de kweker een netto dat
+   * duizenden euro's te hoog is. PCFUSA 10555: portal EUR 12.505,67, afrekening
+   * EUR 4.284,80. Dat is de meest actiegerichte bevinding van de drie takken, en
+   * hij was onzichtbaar.
+   */
+  const settledFilter =
+    type === "pdf-mismatch"
+      ? Prisma.empty
+      : Prisma.sql`EXISTS (SELECT 1 FROM "SalesSheetCost" c WHERE c."salesSheetId" = ss.id) AND`;
+
   const searchFilter = search
     ? Prisma.sql`AND (
         ss."invoiceNumber" ILIKE ${"%" + search + "%"}
@@ -108,8 +128,8 @@ function issueBody(type: IssueType, search: string) {
       FROM "Transaction" tx JOIN "Lot" lo ON lo.id = tx."lotId"
       WHERE lo."salesSheetId" IS NOT NULL GROUP BY lo."salesSheetId"
     ) t ON t."salesSheetId" = ss.id
-    WHERE EXISTS (SELECT 1 FROM "SalesSheetCost" c WHERE c."salesSheetId" = ss.id)
-      AND ${condition}
+    WHERE ${settledFilter}
+      ${condition}
       ${searchFilter}
   `;
 }
