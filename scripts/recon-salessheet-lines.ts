@@ -64,7 +64,19 @@ const BEDRAG_MARGE = 0.02;
  * kant van de correcties, en komt het verschil naar boven als steelverschil in
  * plaats van als vervuiling in de bedragen.
  */
-const VERKOOPKANALEN = new Set(["direct sales", "vba", "fhn", "fhr", "production", "vpl"]);
+const VERKOOPKANALEN = new Set([
+  "direct sales",
+  "vba",
+  "fhn",
+  "fhr",
+  "production",
+  "vpl",
+  // De Nederlandse opmaak, met dezelfde scheiding: over 3.086 regels dragen
+  // "Directe verkopen", VBA, FHR, FHN, VPL en "Productie" een bedrag, en de
+  // tweeëntwintig correctieomschrijvingen eronder geen enkele.
+  "directe verkopen",
+  "productie",
+]);
 function isCorrectieregel(kanaal: string): boolean {
   return !VERKOOPKANALEN.has(kanaal.trim().toLowerCase());
 }

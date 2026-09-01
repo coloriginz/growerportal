@@ -139,5 +139,21 @@ check(
   `kreeg ${kop[0]?.lines[1]?.stems} ${kop[0]?.lines[1]?.channel}`
 );
 
+/* Nederlandse leveranciers krijgen hetzelfde blad in het Nederlands: "Partij" waar
+ * het Engelse "Lot" staat. Letterlijke tekst uit `18240-401990.pdf`. */
+const NEDERLANDS =
+  "Transactiedetails   Stelen   Prijs S1   S3 S2   Bedrag  " +
+  "Partij 3916941   95 X   40   Ranunculus Butterfly Ariadne   70   50   0,799 3.800 MONARNL   23  " +
+  "800 01-05-2026   Directe verkopen   0,839   671,44 " +
+  "2.280 04-05-2026   Directe verkopen   0,778   1.773,56 " +
+  "720 05-05-2026   Directe verkopen   0,820   590,40  3.035,40 3.800   0,799";
+const nl = parseSalesSheetLots(NEDERLANDS);
+check("de Nederlandse opmaak levert een partij op", nl.length === 1, `kreeg ${nl.length}`);
+check("met partijnummer, kweker en aangevoerd aantal",
+  nl[0]?.lotNumber === "3916941" && nl[0]?.growerCode === "MONARNL" && nl[0]?.deliveredStems === 3800);
+check("en drie regels die optellen tot het aangevoerde aantal",
+  nl[0]?.lines.length === 3 && nl[0]!.lines.reduce((s, l) => s + l.stems, 0) === 3800,
+  `kreeg ${nl[0]?.lines.length}`);
+
 console.log(failures === 0 ? "\nalle checks geslaagd" : `\n${failures} check(s) gefaald`);
 process.exit(failures === 0 ? 0 : 1);

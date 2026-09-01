@@ -68,6 +68,11 @@ function leesDatum(ruw: string): string | null {
  *
  *   Lot 3582078 2 X 400 Dianthus Br Amazon Neon Purple 55 0,154 800 COLANTAL 23
  *
+ * Nederlandse leveranciers krijgen hetzelfde blad in het Nederlands, met "Partij"
+ * waar het Engelse "Lot" staat. Verder is de opbouw gelijk. Zonder dat woord erbij
+ * bleven 398 van de 4.041 afrekeningen ongelezen, vrijwel allemaal van COLXGREE
+ * en COLXTOG2.
+ *
  * De omschrijving draagt de sorteringen als losse getallen ("... Purple 55",
  * "... Glory 70 20"), dus die zijn niet van de omschrijving te scheiden zonder te
  * gokken hoeveel het er zijn. Ze blijven daarom staan zoals afgedrukt: voor het
@@ -83,7 +88,7 @@ function leesDatum(ruw: string): string | null {
  * 3858160 zelf kwam er niet uit.
  */
 const KOP = new RegExp(
-  String.raw`Lot\s+(\d+)\s+(\d+)\s*[Xx]\s*([\d.]+)\s+(.+?)\s+(-?[\d.]*,\d{3})\s+([\d.]+)\s+([A-Z][A-Z0-9]{2,})\b`,
+  String.raw`(?:Lot|Partij)\s+(\d+)\s+(\d+)\s*[Xx]\s*([\d.]+)\s+(.+?)\s+(-?[\d.]*,\d{3})\s+([\d.]+)\s+([A-Z][A-Z0-9]{2,})\b`,
   "g"
 );
 
