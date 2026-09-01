@@ -210,10 +210,10 @@ Role switching, supplier switching, and transporter switching are only available
 ### Core Sales Entities
 - **Supplier** — Login entity (leverancier). Has code, name, fabricId, feature toggles, season config, fust settings.
 - **Grower** — Farm sub-entity under Supplier (kweker). Has fabricId, name, code, country, city. Linked to Lots.
-- **SalesSheet** — Invoice/shipment grouping (levering). Maps to `parthdr_id` in Fabric. Has totalTurnover, totalCosts, netResult, optional PDF link. `pdfTurnover`, `pdfCosts` and `pdfNetResult` are the same three amounts as printed on that PDF — read from the document, not derived from Fabric — kept alongside the computed totals so the two independent sources can be compared. `pdfParsedAt` carries no amount and is still load-bearing: without it "never read" and "read, nothing found" are both `null`, and a parser regression becomes indistinguishable from a document that simply has no PDF.
+- **SalesSheet** — Invoice/shipment grouping (levering). Maps to `parthdr_id` in Fabric. Has totalTurnover, totalCosts, netResult, optional PDF link. `pdfTurnover`, `pdfCosts` and `pdfNetResult` are the same three amounts as printed on that PDF — read from the document, not derived from Fabric — kept alongside the computed totals so the two independent sources can be compared. `pdfParsedAt` carries no amount and is still load-bearing: without it "never read" and "read, nothing found" are both `null`, and a parser regression becomes indistinguishable from a document that simply has no PDF. **`invoiceDate` holds the delivery date, not the invoice date** — the lots import writes `invoiceDate: deliveryDate` and has since its first commit, because Fabric carries no settlement invoice date anywhere in `marts` (checked 1 September 2026 against `dim_levering`, `fct_invoices`, `dim_partij`, `dim_zendingen`, `fct_partijen`, `fct_salesheets_costs`). The real one is `pdfInvoiceDate`, read from the document: on average 13,9 days after delivery and never before. Do not present `invoiceDate` to a supplier, and do not use it to reason about when a settlement was printed — a measurement that did produced a phantom EUR 164.766 of "corrections booked after settlement" that turned out to be corrections booked after *delivery*, nearly all of them on the sheet.
 - **SalesSheetCost** — Individual cost line on a salessheet. Maps to `shkost_id` in Fabric. Has description, amount, costTypeCode, `costCode` (the stable code behind the name), `salesSheetType` (`IN` = inkoopzijde: freight, handling, distribution, crate rent; `VE` = verkoopzijde: commission, transaction levy, receivables insurance) and `isInclusief` (the delivery runs on an all-in arrangement; every cost line of such a delivery carries it, and it changes no amount). `laatste_ontvangstdatum` and `laatste_aanmelddatum` come in on the cost rows but belong to the delivery: the import takes the latest per salessheet and writes them to `SalesSheet.lastReceiptDate` and `lastRegistrationDate`, which is why you will not find them on the cost model. `amount` is `Decimal(14,6)` and is stored **unrounded**: Fabric delivers five decimals (10.01952, 555.35736) and the sales sheet adds those up before it rounds. Rounding each line on import made the total a cent higher than the printed one — round-then-sum against sum-then-round. `SalesSheet.totalCosts` is `ROUND(SUM(amount), 2)` and the screens round per line, so the extra decimals never surface.
 - **Lot** — Batch of flowers (partij). Maps to `part_id` in Fabric. Has productName, articleGroup, stemLength, totalStems, quality codes (s1/s2/s3), correction fields.
-- **LotCorrection** — Volume/colli correction on a lot. Links to CorrectionReasonCode. Has facttypeSub ("correctie"/"productiecorrectie").
+- **LotCorrection** — Volume/colli correction on a lot. Has facttypeSub ("correctie"/"productiecorrectie") and `correctionReasonId`, which points at `CorrectionReasonCode.id` **without a foreign key** — that key would break a clean rebuild on a code that has not loaded yet, so the lookup is a separate query. `correctionDate` is the booking date from `marts.dim_partijcorrecties`; a counter-booking on an order line has no such date (it carries the original sale's date), so for those it is not possible to tell when they were made.
 - **CorrectionReasonCode** — Lookup table for correction reasons from Fabric. Has code, Dutch/English names, type.
 - **Transaction** — Individual sale (orderregel). Maps to `ordreg_id` in Fabric. Has salesType (VMP/Aurora/Veilen/Persoonlijk), stems, pricePerStem, amount.
 
@@ -610,6 +610,37 @@ A delivery is **Selling**, **Finalizing** or **Completed**. The status is derive
 - The VAT line on Dutch sales sheets ("NETTO RESULTAAT INCL. BTW") is deliberately not read: domestic suppliers get VAT on top of the net and the portal has no concept of VAT, so only the amount before it is comparable.
 - `scripts/backfill-pdf-totals.ts` is the catch-up round for links made before this change (dry-run by default, `--blob` pulls files from storage, writes in batches of 200 so a dropped connection costs at most one batch). Without that round the check covers almost nothing on production, where only 4,6% of deliveries carry a linked PDF.
 - **Every place that clears `pdfDocumentId` must also clear the four `pdf*` columns.** A stale `pdfNetResult` left behind after a document is unlinked or deleted produces a permanent phantom mismatch — a signal pointing at itself. There are two such places: `scripts/audit-salessheet-links.ts` (which, with `--apply`, also deletes the orphaned `Document` itself) and `verwijderLeveringen()` in the lots import route. A third place, `scripts/fix-salessheet-pdf-links.ts`, fully overlapped `audit-salessheet-links.ts` and was removed.
+
+### Line-Level Reconciliation Against the Sales Sheet
+
+`scripts/recon-salessheet-lines.ts` reads the lot table of every linked sales
+sheet PDF (`src/lib/salessheet-pdf-lines.ts`, covered by
+`scripts/checks/salessheet-pdf-lines.ts`), lays it beside the portal's lots and
+bookings, names each difference and writes a workbook. Full findings in
+`docs/verzoening-afrekening-portal.md`. Measured on test: 45.793 of 46.151 lots
+agree to the stem and the cent, 42 differences have no explanation.
+
+Four things it establishes that any later analysis has to respect:
+
+- **Count every booking on a lot, not only `bronFeitExtra = "origineel"`.** Fabric
+  does not overwrite a corrected order line, it reverses it and books it again —
+  lot 3695766 carries 1.260, −1.260 and +900. The sheet prints the balance.
+- **Six channels ever carry money** — Direct sales, VBA, FHN, FHR, Production,
+  VPL, plus their Dutch names on the Dutch layout. The other twenty-four
+  descriptions appear 27.483 times across the archive and carry EUR 1,24 between
+  them, so the split is a whitelist: an unknown description lands on the
+  correction side and surfaces as a stem difference rather than polluting amounts.
+- **Two layouts, and one of them nets the costs per line.** 229 of 4.041
+  deliveries print no cost block at all, so the header parser reads turnover and
+  net as one number while the portal holds them apart. Recognise it by three
+  things together: no cost block on the sheet, turnover equals net, and the portal
+  does have costs for that delivery. There, only stems compare — as also when the
+  totals could not be read at all and the layout is simply unknown.
+- **A settled delivery whose cost lines have not arrived shows a net result far
+  too high.** 32 deliveries carry EUR 44.991 of costs on the PDF and EUR 0,00 in
+  the portal; only 4 (EUR 103 together) are older than sixty days, so it is
+  settlement lag rather than lost data. PCFUSA delivery 10555 shows EUR 12.505,67
+  where the supplier will receive EUR 4.284,80.
 
 ### Season Calculation
 - Each supplier has a configurable `seasonStartMonth` (default: January)
