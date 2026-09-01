@@ -1,0 +1,475 @@
+Structuur van het Fabric-warehouse — 62 tabellen, 1.134 kolommen, 3 schema's.
+Uitgelezen op 1 september 2026 met sys.tables / sys.columns / sys.types via
+scripts/fabric-query.js. INFORMATION_SCHEMA werkt niet over deze connector (502);
+sys.* wel.
+
+Notatie: kolomnaam:type, en een "!" erachter betekent NOT NULL.
+
+fct_orders__dbt_tmp en fct_partijkosten_verkoop__dbt_tmp zijn restanten van een
+dbt-run, met dezelfde vorm als de tabel zonder achtervoegsel. Niet bevragen.
+
+Opnieuw ophalen:
+  node scripts/fabric-query.js --file <query> --out uit.json
+met de query uit de kop van deze regel:
+  SELECT s.name, t.name, c.column_id, c.name, ty.name, c.max_length, c.precision,
+         c.scale, c.is_nullable
+  FROM sys.columns c
+  JOIN sys.tables t ON t.object_id = c.object_id
+  JOIN sys.schemas s ON s.schema_id = t.schema_id
+  JOIN sys.types ty ON ty.user_type_id = c.user_type_id
+  ORDER BY s.name, t.name, c.column_id
+
+==============================================================================
+SCHEMA intermediate
+==============================================================================
+
+int_order_correctie  (113)
+  afleveradres_id:int  agrp_id:int  art_id:int  bu_key:varchar(30)  consreg_id:int  fust_id:int
+  locatie_id:smallint  mede_id_verdeler:int  mede_id_verkoper:int  ordhdr_id:int  ordreg_id:int  part_id:int
+  parthdr_id:int  reden_id:int  rel_id_debiteur:int  bdrf_id:int  rel_id_kweker:int  rel_id_leverancier:int
+  verd_id:int  verwerk_id_productie:int  verwerk_id_verkoop:int  vertrekdatum:date  s01:varchar(8000)
+  s02:varchar(8000)  s03:varchar(8000)  s04:varchar(8000)  s05:varchar(3)  s06:varchar(3)  mps:varchar(8000)
+  order_type:varchar(3)  afrekenprijs_per_steel:dec(38,23)  is_afrekenprijs:bit  algemeen_fraction:dec(11,7)
+  awb_num:varchar(8000)  barcode:varchar(8000)  comm_handel:bit  factuurnummer:varchar(10)
+  inkoop_factuur_prijs_eur:dec(31,16)  inkoopfactuurnummer:varchar(20)  inkooptype_code:varchar(8000)
+  is_promo:bit  korting_fraction:dec(11,7)  partijnummer:bigint  product_merk:varchar(8000)
+  referentie:varchar(30)  som_fraction:dec(15,7)  toegepastestaffelinhoud:int  transport:varchar(8000)
+  verkoop_lijst:varchar(8000)  vor_aantal:float  keurmerk:varchar(8000)  aanbiedingsprijs:varchar(3)!
+  verkoopprijs:dec(38,23)  transportkosten:float  inslag_aantal:bigint  verwerking_per_steel:dec(18,3)
+  aanmelddatum:date  ontvangstdatum:datetime2(3)  veilcommissie:dec(23,10)  verkoopcommissie:dec(23,10)
+  veilingkarheffing:dec(12,3)  veilingprovisie:dec(12,3)  veilingpartijheffing:dec(12,3)  apk:int
+  orderregel_aantal:int  order_aantal:int  kostprijs:dec(12,3)  herkomst:smallint  verwerkingsopslag:dec(38,6)
+  cons_verwerkings_opslag:dec(38,19)  inhoud:int  klokprijs:dec(12,3)  opslag_per_steel:dec(38,19)
+  inkoopwaarde_per_steel:dec(12,3)  adviesprijs_per_steel:dec(12,3)  staffelprijs_per_steel:dec(12,3)
+  aantal_per_bos:int  is_prijzen_per_bos:bit  sortwaarde_fairtrade_part:varchar(8000)
+  sortwaarde_fairtrade_verd:varchar(8000)  keurmerk_neg1_id:int  keurmerk_neg2_id:int  rel_id_agent:int
+  rel_id_expediteur:int  briefnummer:varchar(8000)  cons_kosten_opslagen:dec(38,19)  inkoopfust_id:int
+  inslag_colli:bigint  inkoopfust_volume:dec(38,6)  vor_inkoop_ape:float  vor_inkoopwaarde:float
+  verkooptype:varchar(16)!  product_age:int  is_edidag:int!  x_kwekers:int!  veilheffing:float
+  partijheffing:float  karheffing:float  bruto_prijs_salesheets:float  vor_omzet:float  vor_colli:float
+  vor_omzet_bonificatie:float  vor_voorziening_p13:float  vor_kostprijs:float  verkoopkosten:float
+  veilheffingen:float  verwerkingskosten:float  verwerkingskostenopslagen:float  verkoopreservering:float
+  verwerkingskosten_verkoop:float  vor_kostprijsverkoop:float  vor_dekkingsbijdrage:float
+  vor_bruto_winst:float
+
+int_order_totaal  (122)
+  afleveradres_id:int  agrp_id:int  art_id:int  bdrf_id:int  bu_key:varchar(30)  consreg_id:int
+  _datum_key_vertrek:date  fust_id:int  mede_id_verdeler:int  mede_id_verkoper:int  ordhdr_id:int
+  ordreg_id:int  part_id:int  parthdr_id:int  rel_id_debiteur:int  rel_id_kweker:int  rel_id_leverancier:int
+  locatie_id:smallint  verd_id:int  verwerk_id_verkoop:int  verwerk_id_levering:int  verwerk_id_productie:int
+  vor_aantal:dec(38,6)  productie_input_aantal:int  aanbiedingsprijs:varchar(3)!  s01:varchar(8000)
+  s02:varchar(8000)  s03:varchar(8000)  s04:varchar(8000)  s05:varchar(3)  s06:varchar(3)  mps:varchar(8000)
+  order_type:varchar(3)  afrekenprijs_per_steel:dec(38,23)  adviesprijs_per_steel:dec(12,3)
+  staffelprijs_per_steel:dec(12,3)  is_afrekenprijs:bit  inkooptype_code:varchar(8000)  partijnummer:bigint
+  barcode:varchar(8000)  inkoopfactuurnr:varchar(20)  toegepastestaffelinhoud:int  verkooplijst:varchar(8000)
+  transport:varchar(8000)  commhandel:bit  som_fraction:dec(15,7)  algemeen_fraction:dec(11,7)
+  korting_fraction:dec(11,7)  sortwaarde_fairtrade_verd:varchar(8000)  sortwaarde_fairtrade_part:varchar(8000)
+  awbnum:varchar(8000)  keurmerk:varchar(8000)  productmerk:varchar(8000)  is_promo:bit
+  veilkwaliteit:varchar(8000)  inkoopfactuurprijseur:dec(31,16)  verkoopprijs:dec(38,23)
+  transportkosten:dec(38,6)  ink_inslag_ape:bigint  verwerking_per_steel:dec(18,3)  aanmelddatum:date
+  leverdatum:date  vertrekdatum:date  veilcommissie:dec(23,10)  verkoopcommissie:dec(23,10)
+  veilingkarheffing:dec(12,3)  veilingprovisie:dec(12,3)  veilingpartijheffing:dec(12,3)  aantal_per_kar:int
+  orderregel_aantal:int  order_stelen:int  kostprijs:dec(12,3)  herkomst_key:smallint
+  verwerkingsopslag:dec(38,6)  salesheetverwerkingsopslag:dec(38,6)  consverwerkingsopslag:dec(38,19)
+  totaalsalesheetkostenpersteel:dec(38,6)  inhoud:int  klokprijs:dec(12,3)  opslagpersteel:dec(38,19)
+  inkoopwaarde_per_steel:dec(12,3)  aantal_per_bos:int  is_prijzen_per_bos:bit  referentie:varchar(30)
+  keurmerkneg1_id:int  keurmerkneg2_id:int  rel_id_agent:int  rel_id_expediteur:int
+  ektbriefnummer:varchar(8000)  cons_kostenopslagen:dec(38,19)  inkoopfust_id:int  ink_inslag_colli:bigint
+  inkoopfustvolume:dec(19,6)  ss_agency:dec(23,10)  ss_service_charge:dec(23,10)  ss_reservering:dec(23,10)
+  vor_inkoop_ape:dec(38,6)  vor_inkoopwaarde:dec(38,6)  verkooptype:varchar(16)!  product_age:int
+  is_edidag:int!  veilheffing:dec(38,6)  partijheffing:dec(38,6)  karheffing:dec(38,6)  x_kwekers:int!
+  brutoprijssalesheets:dec(38,6)  vor_omzet:dec(38,6)  vor_colli:dec(38,6)  vor_omzetbonificatie:dec(38,6)
+  vor_voorzieningp13:dec(38,6)  vor_kostprijs:dec(38,6)  verkoopkosten:dec(38,6)  veilheffingen:dec(38,6)
+  verwerkingskosten:dec(38,6)  verwerkingskostenopslagen:dec(38,6)  verkoopreservering:dec(38,6)
+  verkoopverwerkingskosten:dec(38,6)  nettoprijssalesheets:dec(38,6)  totaalsalesheetskosten:dec(38,6)
+  vor_dekkingsbijdrage:dec(38,6)  vor_brutowinst:dec(38,6)  vor_kostprijsverkoop:dec(38,6)
+
+int_partijopslag  (19)
+  part_id:int  bdrf_id:int  rel_id_leverancier:int  rel_id_kweker:int  art_id:int  kost_id:int
+  inkooptype_id:int  _datum:date  ink_partijopslag:dec(38,6)  ink_partijopslag_correcties:dec(38,6)
+  ink_partijopslag_teverkopenstelen:dec(38,6)  ink_aantal_stelen:bigint  ink_aantal_stelen_correcties:bigint
+  ink_aantalteverkopenstelen:bigint  opslagpersteel:dec(31,19)  inkoopfactuurnummer:varchar(20)
+  partijnummer:bigint  inkooptype_code:varchar(8000)  s01:varchar(3)
+
+int_productieverdeelregels  (34)
+  ordhdr_id:int  ordhdr_id_productie:int  verd_id:int  part_id:int  vor_aantal:int
+  verwerkingsopslag_1:dec(38,6)  ordhdr_id_productie_2:int  verd_id_2:int  part_id_2:int  vor_aantal_2:int
+  verwerkingsopslag_2:dec(38,6)  vor_aantal_totaal:int  vor_aantal_nieuw:dec(38,11)  ordhdr_id_productie_3:int
+  verd_id_3:int  part_id_3:int  vor_aantal_3:int  verwerkingsopslag_3:dec(38,6)  vor_aantal_totaal_2:int
+  vor_aantal_nieuw_2:dec(38,6)  ordhdr_id_productie_4:int  verd_id_4:int  part_id_4:int  vor_aantal_4:int
+  verwerkingsopslag_4:dec(38,6)  vor_aantal_totaal_3:int  vor_aantal_nieuw_3:dec(38,6)
+  ordhdr_id_productie_5:int  verd_id_5:int  part_id_5:int  vor_aantal_5:int  verwerkingsopslag_5:dec(38,6)
+  vor_aantal_totaal_4:int  vor_aantal_nieuw_4:dec(38,6)
+
+int_salesheetkosten_verkoop  (18)
+  kost_id:int  shkost_id:int  grondslag_id:int  part_id:int  verd_id:int  parthdr_id:int  is_doorboek:bit
+  aanmelddatum:date  ontvangstdatum:date  verkoop_aantal:dec(38,6)  omzet:dec(38,6)
+  salesheet_kosten_per_steel:dec(38,6)  bedrag:dec(38,6)  perc:dec(38,6)  ssk_verkoopaantalperpartij:dec(38,6)
+  salesheet_amount:dec(38,6)  is_inclusief:bit  salesheet_type:varchar(8000)
+
+int_verkooporders  (117)
+  ordhdr_id:int  afleveradres_id:int  mede_id_verkoper:int  rel_id_debiteur:int  vertrekdatum:date
+  weekdagnummer:int  order_type:char(2)  referentie:varchar(30)  order_stelen:int  transportkarhoogte:dec(5,3)
+  transportbeladingsgraad:dec(6,3)  transportkarlengte:dec(19,3)  transportkarbreedte:dec(19,3)
+  brfveilkwal_id:int  bbrel_id:int  is_bb:bit  veilkwaliteit:varchar(8000)  ordreg_id:int
+  afrekenprijs_per_steel:dec(12,3)  adviesprijs_per_steel:dec(12,3)  staffelprijs_per_steel:dec(12,3)
+  verkoopprijs:dec(12,3)  afrekenprijsok_orderregel:bit  verwerking_per_steel:dec(18,3)  bdrf_id:int
+  herkomst_key:smallint  orderregel_aantal:int  verwerk_id_verkoop:int  aantal_per_bos:int
+  is_prijzen_per_bos:bit  aanreg_id:int  is_promo:bit  inkoopwaarde_per_steel:dec(12,3)
+  toegepastestaffelinhoud:int  aantal_per_kar:int  keurmerkneg1_id:int  keurmerkneg2_id:int
+  keurmerk2:varchar(8000)  keurmerk3:varchar(8000)  veilingkarheffing:dec(12,3)  veilingprovisie:dec(12,3)
+  veilingpartijheffing:dec(12,3)  som_fraction:dec(15,7)  korting_fraction:dec(11,7)
+  algemeen_fraction:dec(11,7)  valutakoers:dec(12,6)  part_id:int  locatie_id:smallint  fust_id:int
+  inhoud:int  mede_id_verdeler:int  verd_id:int  sortwaarde_fairtrade_verd:varchar(8000)
+  afrekenprijs_verdeelregel:dec(12,3)  afrekenprijsok_verdeelregel:bit  art_id:int  ordhdr_id_productie:int
+  kostprijs:dec(12,3)  klokprijs:dec(12,3)  parthdr_koers:dec(12,6)  inkooptype_code:varchar(8000)
+  agrp_id:int  _locatie_id:int  transportprijs_per_kar:dec(12,3)  fusttype_id:int  fustlengte:dec(19,3)
+  fustbreedte:dec(19,3)  fusthoogte:dec(19,3)  s01:varchar(8000)  s02:varchar(8000)  s03:varchar(8000)
+  s04:varchar(8000)  barcode:varchar(8000)  consreg_id:int  verkooplijst:varchar(8000)  keurmerk:varchar(8000)
+  productmerk:varchar(8000)  opslagpersteel:dec(38,19)  productieverdeling_key:varchar(400)
+  verwerkingsopslag:dec(38,6)  vor_aantal:dec(38,6)  productie_input_aantal:int  aanmelddatum:date
+  awbnum:varchar(8000)  ektbriefnummer:varchar(8000)  commhandel:bit  inkoopfust_id:int
+  inkoopfactuurnr:varchar(20)  inkoopfustvolume:dec(19,6)  ink_inslag_ape:bigint  ink_inslag_colli:bigint
+  leverdatum:date  mps:varchar(8000)  parthdr_id:int  partijnummer:bigint  rel_id_agent:int
+  rel_id_expediteur:int  rel_id_kweker:int  rel_id_leverancier:int  s05:varchar(3)  s06:varchar(3)
+  sortwaarde_fairtrade_part:varchar(8000)  transport:varchar(8000)  verwerk_id_levering:int
+  ss_verkoopcommissie_1:dec(23,10)  ss_veilcommissie_1:dec(23,10)  ss_agency_1:dec(23,10)
+  ss_service_charge_1:dec(23,10)  ss_reservering_1:dec(23,10)  ss_verkoopcommissie_2:dec(23,10)
+  ss_veilcommissie_2:dec(23,10)  ss_agency_2:dec(23,10)  ss_service_charge_2:dec(23,10)
+  ss_reservering_2:dec(23,10)  inkoopfactuurprijseur:dec(31,16)  afrekenprijs_orderregel:dec(12,3)
+  verwerk_id_productie:int
+
+int_verkooporders_correcties  (12)
+  kor_id:int  vor_aantal:int  afrekenprijs_orderregel:dec(38,6)  verd_id:int  part_id:int  fust_id:int
+  ordreg_id:int  inhoud:int  partijnummer:bigint  parthdr_id:int  valutakoers:dec(12,6)
+  inkooptype_code:varchar(8000)
+
+==============================================================================
+SCHEMA marts
+==============================================================================
+
+dim_aanvoerinfo  (3)
+  ordhdr_id:int  aanvoerder_naam:varchar(8000)  aanvoer_nummer:bigint
+
+dim_artikel  (23)
+  art_id:int  artikel_heeft_foto:bit  artikel_gtin:bigint  artikel_code:varchar(8000)
+  artikel_naam:varchar(8000)  artikel_vbn:bigint  artikel_kleur_naam:varchar(8000)
+  artikel_maxconsolidatiedagen:smallint  artikel_maxvoorraaddagen:bigint  artikel_productcluster:varchar(8000)
+  artikel_productieartikel:bit  artikel_s01_code:varchar(8000)  artikel_s01_naam:varchar(8000)
+  artikel_s02_code:varchar(8000)  artikel_s02_naam:varchar(8000)  artikel_s03_code:varchar(8000)
+  artikel_s03_naam:varchar(8000)  artikel_s04_code:varchar(8000)  artikel_s04_naam:varchar(8000)
+  artikel_s05_code:varchar(8000)  artikel_s05_naam:varchar(8000)  artikel_s06_code:varchar(8000)
+  artikel_s06_naam:varchar(8000)
+
+dim_artikelgroep  (23)
+  agrp_id:int  artikelgroep_naam:varchar(8000)  artikelgroep_code:varchar(8000)
+  artikelgroep_hoofdartikelgroep_code:varchar(100)  artikelgroep_hoofdartikelgroep_naam:varchar(100)
+  artikelgroep_inkoopgroep_code:varchar(8000)  artikelgroep_inkoopgroep_naam:varchar(8000)
+  artikelgroep_inkoper_code:varchar(8000)  artikelgroep_inkoper_naam:varchar(8000)
+  artikelgroep_max_consolidatie_dagen:smallint  artikelgroep_max_voorraad_dagen:bigint
+  artikelgroep_s01_code:varchar(8000)  artikelgroep_s01_naam:varchar(8000)
+  artikelgroep_s02_code:varchar(8000)  artikelgroep_s02_naam:varchar(8000)
+  artikelgroep_s03_code:varchar(8000)  artikelgroep_s03_naam:varchar(8000)
+  artikelgroep_s04_code:varchar(8000)  artikelgroep_s04_naam:varchar(8000)
+  artikelgroep_s05_code:varchar(8000)  artikelgroep_s05_naam:varchar(8000)
+  artikelgroep_s06_code:varchar(8000)  artikelgroep_s06_naam:varchar(8000)
+
+dim_bedrijf  (4)
+  bdrf_id:int  bedrijf_ean:varchar(13)  bedrijf_code:varchar(8000)  bedrijf_naam:varchar(8000)
+
+dim_business_unit  (2)
+  bu_key:varchar(30)  business_unit:varchar(50)
+
+dim_calendar  (23)
+  date_key:date  date:date  day_of_month:smallint  day_of_week_code:varchar(72)  day_of_week_nl:varchar(9)
+  day_of_week:int  day_of_year:int  month_index:int  month_nl:varchar(9)  month:smallint
+  quarter_code:varchar(2)  quarter:smallint  week_index:int  week:int  week_iso:int  week_nl:varchar(7)
+  year_index:int  year_iso:int  year_month_sort:int  year_month:varchar(79)!  year_week_sort:int
+  year_week:varchar(26)!  year:smallint
+
+dim_certificaten  (2)
+  part_id:int  certificaat:varchar(8000)
+
+dim_ffs__business_units  (4)
+  _business_unit_key:varchar(10)  bedrijf:varchar(30)  business_unit:varchar(19)  ffs_env:varchar(10)
+
+dim_ffs__countries  (4)
+  _country_key:varchar(400)  country_code:varchar(5)  country_name:varchar(100)  ffs_env:varchar(8)!
+
+dim_ffs__customers  (13)
+  _customer_key:varchar(400)  customer_city:varchar(70)  customer_code:varchar(20)
+  customer_country_code:varchar(5)  customer_country_name:varchar(100)  customer_group_name:varchar(8000)
+  customer_segment_name:varchar(5)!  customer_financial_export_scheme_daybook:int
+  customer_financial_export_scheme_name:varchar(8000)  customer_gln_code:varchar(50)
+  customer_name:varchar(100)  customer_number:varchar(50)  ffs_env:varchar(8)!
+
+dim_ffs__invoices  (21)
+  _invoice_key:varchar(400)  _business_unit_key:varchar(100)  _collective_invoice_key:varchar(400)
+  _customer_key:varchar(400)  _date_key_invoice:date  airway_bill_flight_number:varchar(100)
+  airway_bill_total_weight:varchar(100)  airway_bill1:varchar(100)  airway_bill2:varchar(100)
+  collective_invoice_number:varchar(8000)  delivery_time:datetime2(6)  dispatch_date:date
+  has_invoice_source:int!  house_airway_bill1:varchar(100)  house_airway_bill2:varchar(100)
+  invoice_number:varchar(8000)  invoice_type:varchar(100)  is_internal:bit  is_printed:bit  rate:float
+  ffs_env:varchar(100)
+
+dim_ffs__manufacturers  (7)
+  _manufacturer_key:varchar(400)  manufacturer_code:int  manufacturer_country_code:varchar(5)
+  manufacturer_country_name:varchar(100)  manufacturer_gln_code:bigint  manufacturer_name:varchar(50)
+  ffs_env:varchar(8)!
+
+dim_ffs__products  (7)
+  _product_key:varchar(400)  product_application_name:varchar(100)  product_group_name:varchar(8000)
+  product_name:varchar(8000)  product_number:varchar(8000)  product_vbn_number:bigint  ffs_env:varchar(8)!
+
+dim_ffs__suppliers  (7)
+  _supplier_key:varchar(400)  supplier_code:varchar(20)  supplier_country_code:varchar(5)
+  supplier_country_name:varchar(100)  supplier_gln_code:bigint  supplier_name:varchar(50)  ffs_env:varchar(8)!
+
+dim_fust  (14)
+  fust_id:int  fust_breedte:dec(19,3)  fust_kode:varchar(8000)  fust_gewicht:dec(19,6)  fust_hoogte:dec(19,3)
+  fust_actief:bit  fust_lengte:dec(19,3)  fust_naam:varchar(8000)  fust_soort:char(1)  fust_vbn:bigint
+  fust_volume:dec(19,6)  fust_volume_kg:dec(19,6)  fusttype_code:varchar(8000)  fusttype_naam:varchar(8000)
+
+dim_inkoopbedrijf  (4)
+  bdrf_id_inkoop:int  inkoopbedrijf_ean:varchar(13)  inkoopbedrijf_code:varchar(8000)
+  inkoopbedrijf_naam:varchar(8000)
+
+dim_inkooptype  (3)
+  inkooptype_id:int  inkooptype_code:varchar(8000)  inkooptype_naam:varchar(8000)
+
+dim_invoice_customer  (8)
+  rel_id_debiteur:int  facturatieklant_code:varchar(8000)  facturatieklant_naam:varchar(8000)
+  facturatieklant_landcode:varchar(8000)  facturatieklant_landnaam:varchar(8000)
+  facturatieklant_segmentcode:varchar(8000)  facturatieklant_segmentnaam:varchar(8000)
+  facturatieklant_segmentgroep:varchar(28)
+
+dim_klant  (36)
+  afleveradres_id:int  klant_adres_aflevering:varchar(8000)  klant_land_aflevering:varchar(8000)
+  klant_plaats_aflevering:varchar(8000)  klant_postcode_aflevering:varchar(8000)
+  klant_accountmanager_kbt:varchar(8000)  klant_accountmanager_code_kbt:varchar(8000)
+  klant_verkoper_kbt:varchar(8000)  klant_verkoper_code_kbt:varchar(8000)  klant_is_actief:bit
+  klant_is_debiteur:bit  klant_beschikbaarheidsprofiel_code:varchar(8000)
+  klant_beschikbaarheidsprofiel_oms:varchar(8000)  klant_btw_nummer:varchar(8000)
+  klant_fustgroep:varchar(8000)  klant_fustgroep_code:varchar(8000)  klant_code:varchar(8000)
+  klant_naam_exact:varchar(8000)  klant_logistieke_debiteur_code:varchar(8000)
+  klant_logistieke_debiteur_naam:varchar(8000)  klant_land_code:varchar(8000)  klant_land_naam:varchar(8000)
+  klant_naam_kbt:varchar(8000)  klant_prijsartikelgroep:varchar(8000)
+  klant_prijsartikelgroep_code:varchar(8000)  klant_relatiecomponent:varchar(8000)
+  klant_relatiecomponent_code:varchar(8000)  klant_reservering_code:varchar(8000)
+  klant_reservering:varchar(8000)  klant_segment_groep:varchar(28)  klant_segment_code:varchar(8000)
+  klant_segment:varchar(8000)  klant_servicelevel_code:varchar(8000)  klant_servicelevel:varchar(8000)
+  klant_verkoopgroep:varchar(8000)  klant_verkoopgroep_code:varchar(8000)
+
+dim_kost  (5)
+  kost_id:int  kost_code:varchar(8000)  kost_naam:varchar(8000)  kosttype_code:varchar(8000)
+  kosttype_naam:varchar(8000)
+
+dim_kweker  (14)
+  rel_id_kweker:int  kweker_adres:varchar(8000)  kweker_code:varchar(8000)  kweker_ean:bigint
+  kweker_flo_id_nummer:bigint  kweker_globalgap_nummer:bigint  kweker_is_kweker:bit
+  kweker_veilingaanvoernummer:int  kweker_land_code:varchar(8000)  kweker_land_naam:varchar(8000)
+  kweker_mps_nummer:int  kweker_naam:varchar(8000)  kweker_plaats:varchar(8000)  kweker_postcode:varchar(8000)
+
+dim_leverancier  (11)
+  rel_id_leverancier:int  leverancier_verantwoordelijke_code:varchar(8000)
+  leverancier_verantwoordelijke:varchar(8000)  leverancier_code:varchar(8000)
+  leverancier_contact_inkoper_code:varchar(8000)  leverancier_contact_inkoper:varchar(8000)
+  leverancier_ean:bigint  leverancier_is_leverancier:bit  leverancier_land_code:varchar(8000)
+  leverancier_land_naam:varchar(8000)  leverancier_naam:varchar(8000)
+
+dim_levering  (5)
+  parthdr_id:int  leveringvolgnummer:int  leveringsgewicht:dec(12,6)  levering_referentienummer:varchar(20)
+  is_doorboek:bit
+
+dim_locatie  (3)
+  locatie_id:int  locatie_code:varchar(8000)  locatie_naam:varchar(8000)
+
+dim_orderinfo  (2)
+  ordreg_id:int  koperproductreferentie:varchar(8000)
+
+dim_partij  (28)
+  part_id:int  partij_aanmeldtijd:datetime2(3)  partij_comm_handel:bit  partij_datum:date
+  partij_fairtrade_prijs:dec(12,3)  partij_fairtrade_sorteringwaarde:varchar(8000)
+  partij_inkoop_factuurprijs_eur:dec(31,16)  partij_inkoop_type:varchar(8000)  partij_kanclaimok:bit
+  partij_klokprijs:dec(12,3)  partij_klokprijs_origineel:dec(12,3)  partij_kostprijs:dec(32,3)
+  partij_levering_barcode:varchar(8000)  partij_levering_datum:date  partij_levering_datumtijd:datetime2(3)
+  partij_mps:varchar(8000)  partij_nummer:bigint  partij_s01:varchar(3)  partij_s02:varchar(3)
+  partij_s03:varchar(3)  partij_s04:varchar(3)  partij_s05:varchar(3)  partij_s06:varchar(3)  partij_tijd:time
+  partij_transport:varchar(8000)  partij_verkoopzichtbaarvanafdatumtijd:datetime2(3)
+  partij_zending_aankomstdatum:date  partij_zending_verwachteaankomstdatum:date
+
+dim_partijcorrecties  (13)
+  part_id:int  reden_id_correctie:int  klokprijs:dec(12,3)  partij_correctie_datum:date
+  partij_correctie_tijd:time  partij_inkoopfactuurnummer:varchar(20)  partij_mps:varchar(8000)
+  partij_s01:varchar(3)  partij_s02:varchar(3)  partij_s03:varchar(3)  partij_s04:varchar(3)
+  partij_partijnummer:bigint  partij_transport:varchar(8000)
+
+dim_protime_medewerkers  (17)
+  volgnummer:int  afdeling:varchar(8000)  beheersgroep:varchar(8000)  datum_in_dienst:date
+  datum_uit_dienst:date  functie:varchar(8000)  ingangsdatum_afdeling:date  ingangsdatum_functie:date
+  ingangsdatum_kostverdeling:date  ingangsdatum_werklocatie:date  kostverdeling:varchar(8000)
+  medewerker_naam:varchar(8000)  medewerker_voornaam:varchar(8000)  werkgever_externe_code:varchar(8000)
+  werkgever:varchar(8000)  werklocatie:varchar(8000)  werknemernummer:varchar(8000)
+
+dim_reden  (13)
+  reden_id:int  reden_is_actief:bit  reden_is_claim:bit  reden_dagprijstype:smallint
+  reden_is_eigengrootboek:bit  reden_code:varchar(8000)  reden_kostenfm:dec(12,3)  reden_naam:varchar(8000)
+  reden_is_opnamefm:bit  reden_is_opss:bit  redentype_is_actief:bit  redentype_code:varchar(8000)
+  redentype_naam:varchar(8000)
+
+dim_verkopers  (4)
+  mede_id_verkoper:int  verkoper_afdeling:varchar(8000)  verkoper_code:varchar(8000)
+  verkoper_naam:varchar(8000)
+
+dim_zendingen  (10)
+  zendhdr_id:int  zending_aankomstdatum:date  zending_gewicht:dec(12,3)  zending_info:varchar(8000)
+  zending_agent:varchar(8000)  zending_expediteur:varchar(8000)  zending_transporttype_naam:varchar(8000)
+  zending_transporttype_code:int  zending_rel_id_agent:int  zending_verwachteaankomstdatum:date
+
+fct_ffs__customer_stock_items  (41)
+  _customer_stock_item_key:varchar(400)  _business_unit_key:varchar(8)!  _customer_key:varchar(400)
+  _date_key_invoice:date  _invoice_key:varchar(400)  _manufacturer_key:varchar(400)  _product_key:varchar(400)
+  _supplier_key:varchar(400)  _original_customer_stock_item_key:varchar(400)  agent_fee:float  buy_price:float
+  buy_price_plus:float  commission:float  contribution_margin:float  credit_method:varchar(7)
+  description:varchar(100)  dipping:float  document:float  fairtrade_fee:float  handling:float
+  handling_nl:float  import_duty:float  invoice_is_internal:bit  invoice_is_printed:bit
+  invoice_number:varchar(8000)  original_invoice_number:varchar(8000)  invoice_rate:float  kickback:float
+  localoffice_expenses:float  ffs_env:varchar(8)!  other_expenses:float  purchase_commission:float
+  purchase_price:float  purchase_reservation:float  quantity:int  quantity_per_pack:int  retail_price:float
+  stems:int  total_commission:float  transport:float  turnover:float
+
+fct_ffs__invoices  (33)
+  _invoice_key:varchar(400)  _business_unit_key:varchar(8)!  _customer_key:varchar(400)
+  _date_key_invoice:date  agent_fee:dec(38,6)  airway_bill1:varchar(100)  airway_bill2:varchar(100)
+  airway_bill_flight_number:varchar(100)  airway_bill_total_weight:varchar(100)  charged_commission:dec(38,6)
+  commission:dec(38,6)  delivery_time:time  dipping:dec(38,6)  dispatch_date:date  document:dec(38,6)
+  fairtrade_fee:dec(38,6)  handling:dec(38,6)  handling_nl:dec(38,6)  house_airway_bill1:varchar(100)
+  house_airway_bill2:varchar(100)  import_duty:dec(38,6)  invoice_number:varchar(8000)
+  invoice_type:varchar(15)  is_internal:bit  is_printed:bit  kickback:dec(38,6)
+  localoffice_expenses:dec(38,6)  other_expenses:dec(38,6)  rate:float  total_commission:dec(38,6)
+  total_price:float  transport:dec(38,6)  ffs_env:varchar(8)!
+
+fct_ffs__invoices_fust  (9)
+  _invoice_fust_key:varchar(400)  _business_unit_key:varchar(8)!  _invoice_key:varchar(400)
+  fust_code:varchar(8000)  fust_name:varchar(8000)  fust_price:float  fust_rent:float  quantity:float
+  ffs_env:varchar(8)!
+
+fct_ffs__opslagen_nto  (8)
+  _invoice_commission_key:varchar(400)  _business_unit_key:varchar(8)!  _invoice_key:varchar(400)
+  commission_description:varchar(20)  currency_amount:dec(38,12)  commission_value:dec(20,6)
+  valuta_code:varchar(8000)  ffs_env:varchar(8)!
+
+fct_ffs__order_lines  (18)
+  _order_line_key:varchar(400)  _business_unit_key:varchar(8)!  _invoice_key:varchar(400)
+  _product_key:varchar(400)  _supplier_key:varchar(400)  cutstage:varchar(8000)  description:varchar(8000)
+  divided_total:int  invoice_delivery_time:time  invoice_dispatch_date:date  length:varchar(8000)
+  quantity:int  quantity_per_pack:int  stems:int  store_price:float  turnover:float  weight:varchar(8000)
+  ffs_env:varchar(8)!
+
+fct_ffs__stock_entries  (17)
+  _stock_entry_key:varchar(400)  _batch_purchase_date:date  _business_unit_key:varchar(8)!
+  _manufacturer_key:varchar(400)  _product_key:varchar(400)  _supplier_key:varchar(400)
+  batch_code:varchar(8000)  batch_delivery_date:date  is_verified:bit  price:float  price_plus:float
+  purchase_reservation:float  quantity:int  quantity_per_pack:int  retail_price:float  stems:int
+  ffs_env:varchar(8)!
+
+fct_invoices  (17)
+  factreg_id:int  art_id:int  bdrf_id_inkoop:int  bdrf_id_verkoop:smallint  datum_key_factuur:date
+  fust_id:int  kost_id:int  rel_id_debiteur:int  rel_id_leverancier:int  art_naam:varchar(50)
+  fact_aantal_colli:int  fact_aantal_stelen:int  fact_afrekenomzet:dec(38,6)  fact_omzet:dec(38,16)
+  factregtype:varchar(3)  factuur_nummer:varchar(10)  ordhdr_ordertype:char(2)
+
+fct_orders  (38)
+  vor_aantal:float  vor_colli:float  vor_dekkingsbijdrage:float  vor_colli_inkoop:float
+  vor_inkoopwaarde:float  vor_kostprijsverkoop:float  vor_omzet:float  afleveradres_id:int  art_id:int
+  agrp_id:int  bdrf_id:int  bu_key:varchar(30)  _datum_key_vertrek:date  fust_id:int  rel_id_debiteur:int
+  rel_id_kweker:int  rel_id_leverancier:int  locatie_id:int  ordhdr_id:int  ordreg_id:int  reden_id:int
+  part_id:int  parthdr_id:int  mede_id_verdeler:int  mede_id_verkoper:int  verwerk_id_productie:int
+  verwerk_id_verkoop:int  afrekenprijs_per_steel:dec(38,23)  adviesprijs_per_steel:dec(12,3)
+  staffelprijs_per_steel:dec(12,3)  bronfeit:varchar(6)!  bronfeit_extra:varchar(18)!
+  inkooptype_code:varchar(8000)  order_type:varchar(3)  verkoopkosten:float  verkooptype:varchar(16)!
+  verwerkingskosten:float  verwerkingskostenopslagen:float
+
+fct_partij_nto  (13)
+  _partij_nto_key:varchar(400)  kost_id:int  rel_id:int  zendhdr_id:int  bedrag_na:dec(18,3)  bedrag:dec(18,3)
+  is_nacalculatie_ok:bit  is_perc_ok:bit  is_vervolgfactuur_ok:bit  kost_code:varchar(8000)
+  kost_omschrijving:varchar(8000)  relatie_code:varchar(8000)  relatie_naam:varchar(8000)
+
+fct_partijen  (69)
+  part_id:int  facttype:varchar(6)!  facttypesub:varchar(18)!  bu_key:varchar(30)  _datum_key:date
+  parthdr_id:int  art_id:int  fust_id:int  reden_id_correctie:int  rel_id_kweker:int  verwerk_id:int
+  ordhdr_id:int  agrp_id:int  bdrf_id:int  rel_id_leverancier:int  locatie_id:int  zendhdr_id:int
+  _datum_key_aankomst:date  _datum_key_verwachteaankomst:date  rel_id_agent:int  transport:varchar(8000)
+  inkoopfust_volume:dec(19,6)  briefnummer:varchar(8000)  claim_bedrag:dec(33,3)  inkoop_factuur_aantal:bigint
+  inkoop_factuur_colli:bigint  inkooptype_code:varchar(8000)  inkooptype_naam:varchar(8000)
+  inslag_aantal:bigint  inslag_aantal_per_eenheid:bigint  inslag_colli:bigint
+  partij_inkoop_factuurprijs_eur:dec(31,16)  partij_fairtrade_prijs:dec(12,3)
+  sortwaarde_fairtrade:varchar(8000)  inkoop_kostprijs:dec(32,3)  inkoop_originele_colli:int
+  inkoop_origineel_aantal_per_eenheid:int  inkoopprijs_per_steel:dec(12,3)  inslag_aantal_correctie:bigint
+  inslag_colli_correctie:bigint  is_aangemeld:bit  is_logistiekevoorraad:bit  kanclaimok:bit
+  klokprijs:dec(12,3)  klokprijs_origineel:dec(12,3)  partij_levering_barcode:varchar(8000)  mps:varchar(8000)
+  partijnummer:bigint  partij_tijd:time  s01:varchar(3)  s02:varchar(3)  s03:varchar(3)  s04:varchar(3)
+  s05:varchar(3)  s06:varchar(3)  verdeelregel_aantal:bigint  inkoopfactuurnummer:varchar(20)  koers:dec(12,6)
+  leverdatum:date  leverdatumtijd:datetime2(3)  verkoopzichtbaarvanafdatumtijd:datetime2(3)  aanmelddatum:date
+  aanmeldtijd:datetime2(3)  verkoopcommissie_1:dec(23,10)  verkoopcommissie_2:dec(23,10)
+  veilcommissie_1:dec(23,10)  veilcommissie_2:dec(23,10)  awb_nummer:varchar(8000)  fyto_nummer:varchar(8000)
+
+fct_partijkosten_verkoop  (11)
+  _datum_key_vertrek:date  bdrf_id_verkoop:int  kost_id:int  part_id:int  rel_id_kweker:int
+  rel_id_leverancier:int  ontvangstdatum:date  salesheet_kosten_per_steel:dec(38,6)  vor_aantal:dec(38,6)
+  vor_partijopslag:dec(38,6)  salesheet_type:varchar(8000)
+
+fct_partijopslag  (19)
+  art_id:int  bdrf_id:int  _datum:date  inkooptype_id:int  kost_id:int  part_id:int  rel_id_kweker:int
+  rel_id_leverancier:int  ink_aantal_stelen_correcties:bigint  ink_aantal_stelen:bigint
+  ink_aantalteverkopenstelen:bigint  ink_partijopslag_correcties:dec(38,6)
+  ink_partijopslag_teverkopenstelen:dec(38,6)  ink_partijopslag:dec(38,6)  inkoopfactuurnummer:varchar(20)
+  inkooptype_code:varchar(8000)  opslagpersteel:dec(31,19)  partijnummer:bigint  s01:varchar(3)
+
+fct_protime_dagelijkse_info  (27)
+  datum:date  volgnummer:int  afdeling:varchar(8000)  beheersgroep:varchar(8000)
+  dagprogramma_code:varchar(8000)  dagprogramma_naam:varchar(8000)  eerste_boeking:varchar(8000)
+  functie:varchar(8000)  kostverdeling:varchar(8000)  laatste_boeking:varchar(8000)  normtijd:float
+  pauzeduur:float  reele_prestatie_rp:float  rooster:varchar(8000)  saldo_glijtijd:float  tijd_aanwezig:float
+  tvt_pol:float  tvt:float  uurloon:float  vak_pol:float  vakantie:float  weekprogramma:varchar(8000)
+  werkelijke_prestatie_wp:float  werkgever_externe_code:varchar(8000)  werkgever:varchar(8000)
+  werklocatie:varchar(8000)  werknemernummer:varchar(8000)
+
+fct_protime_kostduur  (5)
+  dwh_id:bigint  volgnummer:int  datum:date  duur_in_uren:float  kostenplaats_naam:varchar(50)
+
+fct_salesheets_costs  (13)
+  parthdr_id:int  _datum_key_levering:date  kost_id:int  shkost_id:int  eerste_aanmelddatum:date
+  eerste_ontvangstdatum:date  laatste_aanmelddatum:date  laatste_ontvangstdatum:date
+  salesheet_amount:dec(38,6)  salesheet_type:varchar(8000)  is_inclusief:bit  totaal_omzet:dec(38,6)
+  totaal_verkoop_aantal:dec(38,6)
+
+fct_voorraadwaardelijst  (8)
+  _voorraadstand_key:varchar(400)  art_id:int  bdrf_id:int  _datum_key:date  inkooptype_id:int
+  inkoopprijs:dec(12,3)  kostprijs:dec(12,3)  stelen:int
+
+sup_metadata  (1)
+  last_refresh_dt_nl:datetime2(0)
+
+==============================================================================
+SCHEMA seeds
+==============================================================================
+
+seed_ffs__business_units  (3)
+  environment:varchar(10)  company:varchar(30)  business_unit:varchar(19)
+
+seed_ffs__commission_groups  (3)
+  environment:varchar(8)  commission_group_id:smallint  commission_description:varchar(20)
+
+seed_kbtpro__business_units_agrp  (8)
+  leverancier_id:int  leverancier_naam:varchar(50)  artikelgroep_id:int  artikelgroep_naam:varchar(50)
+  huidige_business_unit:varchar(50)  verkoop_volume:float  business_unit:varchar(50)  bu_key:varchar(30)
+
+seed_kbtpro__herkomst  (3)
+  herkomst_key:int  herkomst_naam:varchar(15)  herkomst_medium:varchar(8)
+
+seed_kbtpro__klant_hoofdnaam  (2)
+  afleveradres_key:int  naam:varchar(100)
+
+
+! = NOT NULL
