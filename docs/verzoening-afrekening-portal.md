@@ -202,6 +202,17 @@ EUR 4 tot EUR 70 en is per stuk niet aan één kostenregel toe te wijzen.
 De 152 aan de omzetkant zijn het verhaal van de partijen en orderregels hierboven.
 Geen enkele kostenronde raakt die.
 
+`scripts/export-turnover-differences.ts` doet hetzelfde voor de omzet
+(`private_input/omzetverschillen.xlsx`): 250 leveringen boven een cent, samen
+EUR 28.441, met elke partij van die leveringen op een tweede tabblad. De 229
+leveringen met de netto-opmaak worden overgeslagen — die drukken geen bruto-omzet
+af, dus daar valt niets te vergelijken. Elk verschil krijgt een klasse uit de
+database, zonder de PDF te lezen: **84 leveringen (EUR 9.586) waar de tegenboekingen
+het gat precies dekken** — het retourmechanisme hierboven, en de grootste
+samenhangende groep — 15 met een partij zonder enkele verkoop, 3 waar het gat precies
+één partij groot is, 39 met tegenboekingen die het gat niet dekken, en 109 die aan
+niets zijn toe te wijzen, waarvan er 30 boven een euro uitkomen.
+
 `scripts/export-cost-differences.ts` zet alle leveringen met een kostenverschil in
 een werkboek (`private_input/kostenverschillen.xlsx`), met een drempel van één cent
 in plaats van de euro van de nettocontrole: 348 leveringen, samen EUR 49.292, met de
