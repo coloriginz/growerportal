@@ -202,6 +202,17 @@ EUR 4 tot EUR 70 en is per stuk niet aan één kostenregel toe te wijzen.
 De 152 aan de omzetkant zijn het verhaal van de partijen en orderregels hierboven.
 Geen enkele kostenronde raakt die.
 
+`scripts/export-cost-differences.ts` zet alle leveringen met een kostenverschil in
+een werkboek (`private_input/kostenverschillen.xlsx`), met een drempel van één cent
+in plaats van de euro van de nettocontrole: 348 leveringen, samen EUR 49.292, met de
+kostenregels van elke levering op een tweede tabblad. Daarvan zijn er 280 centenwerk,
+35 boven een euro, 29 nog wachtend op hun kostenregels en 4 zonder regels. Twee
+patronen springen eruit: leveringen waar precies één regel het hele gat is — COLOZFL
+C656 met *Vrachtkosten Herkomstland* EUR 899,42 en COLXLNFW 2600377 en 2600419 met
+*Verwerkingskosten* — en acht leveringen van COLXLNFB waar de afrekening stelselmatig
+EUR 23 tot EUR 108 méér kosten afdrukt dan de portal berekent, telkens met twee
+`VERW_INK`-regels en zonder dat het gat aan één ervan gelijk is.
+
 ## Wat er nog niet klopt in de portal
 
 ### Kosten die er nog niet zijn, maken het nettoresultaat te hoog
