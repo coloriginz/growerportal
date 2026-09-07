@@ -33,7 +33,13 @@
     "preferredLanguage": "Communication Language",
     "preferredLanguageDescription": "Language used for emails sent to this supplier.",
     "showMore": "Show more",
-    "showLess": "Show less"
+    "showLess": "Show less",
+    "showingRange": "Showing {from}-{to} of {total}",
+    "pageOf": "Page {page} of {total}",
+    "previousPage": "Previous page",
+    "nextPage": "Next page",
+    "goToPage": "Go to page",
+    "exportFailed": "Export failed"
   },
   "auth": {
     "login": "Sign In",

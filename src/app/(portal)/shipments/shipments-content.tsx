@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
+import { toast } from "sonner";
 import { SelectSupplierPrompt } from "@/components/ui/select-supplier-prompt";
 import { useRouter } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
@@ -23,9 +24,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ShipmentStatusBadge } from "@/components/ui/shipment-status-badge";
+import { ListPagination } from "@/components/list-pagination";
 import { SHIPMENT_STATUSES, type ShipmentStatus } from "@/lib/shipment-status";
 import { RiSearchLine, RiShipLine, RiDownloadLine, RiRefreshLine } from "@remixicon/react";
 import { exportToCSV } from "@/lib/export-csv";
+import { fetchAllPages, type PagedResponse } from "@/lib/fetch-all-pages";
 import { useFetch } from "@/hooks/use-fetch";
 import { ErrorState } from "@/components/ui/error-state";
 import { formatTime } from "@/lib/format";
@@ -57,18 +60,82 @@ const STATUS_LABEL_KEYS = {
   completed: "shipments.statusCompleted",
 } as const;
 
+const PAGE_SIZE = 50;
+
 export function ShipmentsContent({ supplierId }: { supplierId: string | null }) {
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<ShipmentStatus | "all">("all");
+  const [page, setPage] = useState(1);
+  const [exporting, setExporting] = useState(false);
   const { t } = useLanguage();
   const router = useRouter();
 
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+      setPage(1);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  // De filters zonder paginanummer. Dat is ook precies wat de CSV-export vraagt,
+  // maar dan over alle pagina's.
+  const params = useMemo(() => {
+    const p = new URLSearchParams();
+    if (supplierId) p.set("supplierId", supplierId);
+    if (debouncedSearch) p.set("search", debouncedSearch);
+    if (statusFilter !== "all") p.set("status", statusFilter);
+    return p.toString();
+  }, [supplierId, debouncedSearch, statusFilter]);
+
+  // Zonder leverancier toont dit scherm de leverancierskiezer, dus dan ook niet
+  // ophalen: de route zou anders over alle leveranciers aggregeren voor een
+  // antwoord dat nergens terechtkomt.
   const url = useMemo(() => {
-    const params = new URLSearchParams();
-    if (supplierId) params.set("supplierId", supplierId);
-    return `/api/shipments?${params}`;
-  }, [supplierId]);
-  const { data: shipments, loading, error, lastUpdated, refetch } = useFetch<ShipmentRow[]>(url);
+    if (!supplierId) return null;
+    const p = new URLSearchParams(params);
+    p.set("page", String(page));
+    p.set("limit", String(PAGE_SIZE));
+    return "/api/shipments?" + p.toString();
+  }, [supplierId, params, page]);
+
+  const { data, loading, error, lastUpdated, refetch } =
+    useFetch<PagedResponse<ShipmentRow>>(url);
+
+  const shipments = data?.items ?? [];
+  const total = data?.total ?? 0;
+  const totalPages = data?.totalPages ?? 0;
+  // Het paginanummer uit het antwoord en niet uit de lokale state: de route
+  // knipt een te hoog nummer terug naar de laatste pagina, en dan hoort de
+  // kiezer die laatste pagina te tonen en geen nummer dat er niet meer is.
+  const currentPage = data?.page ?? page;
+
+  async function handleExport() {
+    setExporting(true);
+    try {
+      const rows = await fetchAllPages<ShipmentRow>("/api/shipments?" + params);
+      exportToCSV(
+        rows.map((s) => ({ ...s, statusLabel: t(STATUS_LABEL_KEYS[s.status]) })),
+        "shipments-export",
+        [
+          { key: "invoiceNumber", header: "Invoice Number" },
+          { key: "deliveryDate", header: "Delivery Date" },
+          { key: "statusLabel", header: "Status" },
+          { key: "lotCount", header: "Lots" },
+          { key: "totalStems", header: "Stems" },
+          { key: "soldStems", header: "Sold Stems" },
+          { key: "totalTurnover", header: "Turnover" },
+          { key: "totalCosts", header: "Costs" },
+          { key: "netResult", header: "Net Result" },
+        ]
+      );
+    } catch {
+      toast.error(t("common.exportFailed"));
+    } finally {
+      setExporting(false);
+    }
+  }
 
   if (!supplierId) return <SelectSupplierPrompt />;
 
@@ -80,43 +147,13 @@ export function ShipmentsContent({ supplierId }: { supplierId: string | null }) 
     );
   }
 
-  const filtered = (shipments || []).filter((s) => {
-    if (statusFilter !== "all" && s.status !== statusFilter) return false;
-    if (!search) return true;
-    const q = search.toLowerCase();
-    return s.invoiceNumber.toLowerCase().includes(q);
-  });
-
   const shipmentsView = (
     <>
       <div className="page-header">
         <h1>{t("shipments.title")}</h1>
         <div className="flex items-center gap-2">
-          {filtered.length > 0 && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() =>
-                exportToCSV(
-                  filtered.map((s) => ({
-                    ...s,
-                    statusLabel: t(STATUS_LABEL_KEYS[s.status]),
-                  })),
-                  "shipments-export",
-                  [
-                    { key: "invoiceNumber", header: "Invoice Number" },
-                    { key: "deliveryDate", header: "Delivery Date" },
-                    { key: "statusLabel", header: "Status" },
-                    { key: "lotCount", header: "Lots" },
-                    { key: "totalStems", header: "Stems" },
-                    { key: "soldStems", header: "Sold Stems" },
-                    { key: "totalTurnover", header: "Turnover" },
-                    { key: "totalCosts", header: "Costs" },
-                    { key: "netResult", header: "Net Result" },
-                  ]
-                )
-              }
-            >
+          {total > 0 && (
+            <Button variant="outline" size="sm" disabled={exporting} onClick={handleExport}>
               <RiDownloadLine className="mr-2 h-4 w-4" />
               {t("common.exportCSV")}
             </Button>
@@ -146,7 +183,10 @@ export function ShipmentsContent({ supplierId }: { supplierId: string | null }) 
         <Select
           value={statusFilter}
           onValueChange={(v) => {
-            if (v !== null) setStatusFilter(v as ShipmentStatus | "all");
+            if (v !== null) {
+              setStatusFilter(v as ShipmentStatus | "all");
+              setPage(1);
+            }
           }}
         >
           <SelectTrigger className="w-[180px]">
@@ -169,7 +209,7 @@ export function ShipmentsContent({ supplierId }: { supplierId: string | null }) 
 
       {/* Mobile card list */}
       <div className="space-y-3 md:hidden">
-        {filtered.map((s) => (
+        {shipments.map((s) => (
           <Link key={s.id} href={`/shipments/${s.id}${supplierId ? `?supplierId=${supplierId}` : ""}`} className="block">
             <Card className="transition-colors hover:bg-accent/50">
               <CardContent className="p-4">
@@ -208,7 +248,7 @@ export function ShipmentsContent({ supplierId }: { supplierId: string | null }) 
             </Card>
           </Link>
         ))}
-        {filtered.length === 0 && !loading && (
+        {shipments.length === 0 && !loading && (
           <div className="empty-state">
             <div className="empty-state-icon">
               <RiShipLine />
@@ -235,7 +275,7 @@ export function ShipmentsContent({ supplierId }: { supplierId: string | null }) 
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.map((s) => (
+              {shipments.map((s) => (
                 <TableRow
                   key={s.id}
                   className="cursor-pointer"
@@ -257,7 +297,7 @@ export function ShipmentsContent({ supplierId }: { supplierId: string | null }) 
                   </TableCell>
                 </TableRow>
               ))}
-              {filtered.length === 0 && !loading && (
+              {shipments.length === 0 && !loading && (
                 <TableRow className="hover:bg-transparent">
                   <TableCell colSpan={8} className="py-0">
                     <div className="empty-state">
@@ -273,6 +313,15 @@ export function ShipmentsContent({ supplierId }: { supplierId: string | null }) 
           </Table>
         </CardContent>
       </Card>
+
+      <ListPagination
+        page={currentPage}
+        totalPages={totalPages}
+        total={total}
+        pageSize={PAGE_SIZE}
+        onPageChange={setPage}
+        disabled={loading}
+      />
     </>
   );
 

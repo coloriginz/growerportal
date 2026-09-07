@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { del } from "@vercel/blob";
+import { deleteOwnBlob } from "@/lib/blob-paths";
 import { prisma } from "@/lib/db";
 import { requireAuth } from "@/lib/api-helpers";
 
@@ -48,13 +48,13 @@ export async function DELETE(
     return NextResponse.json({ error: "Document not found" }, { status: 404 });
   }
 
-  try {
-    // Delete from Vercel Blob
-    await del(document.fileUrl);
-  } catch (err) {
-    // Log but continue - file may already be deleted
-    console.error("Failed to delete blob:", err);
-  }
+  /*
+   * Het bestand gaat alleen weg als deze omgeving het zelf heeft geüpload.
+   * Test en productie delen één blobopslag: een bestand van vóór die scheiding
+   * kan door de andere omgeving in gebruik zijn, en dat is hier niet te zien.
+   * De databaserij verdwijnt hoe dan ook — die is wel van ons.
+   */
+  await deleteOwnBlob(document.fileUrl);
 
   // Delete from database
   await prisma.document.delete({

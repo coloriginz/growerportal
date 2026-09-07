@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireAuth } from "@/lib/api-helpers";
 import { put } from "@vercel/blob";
+import { blobKey } from "@/lib/blob-paths";
 import {
   parseIssuanceVoucherPdf,
   parseRfhDate,
@@ -99,7 +100,7 @@ export async function POST(request: NextRequest) {
 
   // Store in Vercel Blob
   const blob = await put(
-    `fust-vouchers/${Date.now()}-${file.name}`,
+    blobKey(`fust-vouchers/${Date.now()}-${file.name}`),
     buffer,
     { access: "public", contentType: file.type }
   );

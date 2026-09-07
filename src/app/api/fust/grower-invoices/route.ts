@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { requireAuth, resolveSupplierId } from "@/lib/api-helpers";
 import { logFustEvent } from "@/lib/fust-audit";
 import { put } from "@vercel/blob";
+import { blobKey } from "@/lib/blob-paths";
 import { generateInvoicePdf } from "@/features/fust/lib/invoice-pdf";
 import { generateExactXml } from "@/features/fust/lib/invoice-xml";
 import { getSupplierEmailBranding } from "@/lib/company-helpers";
@@ -326,14 +327,20 @@ export async function POST(request: NextRequest) {
 
   // 7. Upload PDF and XML to Vercel Blob
   const pdfBlob = await put(
-    `fust-grower-invoices/${invoiceNumber}.pdf`,
+    blobKey(`fust-grower-invoices/${invoiceNumber}.pdf`),
     pdfBuffer,
-    { access: "public", contentType: "application/pdf" }
+    // Een vast pad zonder suffix laat dezelfde naam twee keer landen: het factuur-
+    // nummer telt per omgeving door, dus test en productie komen op hetzelfde pad
+    // uit en zouden elkaars bestand geruisloos overschrijven.
+    { access: "public", contentType: "application/pdf", addRandomSuffix: true }
   );
   const xmlBlob = await put(
-    `fust-grower-invoices/${invoiceNumber}.xml`,
+    blobKey(`fust-grower-invoices/${invoiceNumber}.xml`),
     xmlContent,
-    { access: "public", contentType: "application/xml" }
+    // Een vast pad zonder suffix laat dezelfde naam twee keer landen: het factuur-
+    // nummer telt per omgeving door, dus test en productie komen op hetzelfde pad
+    // uit en zouden elkaars bestand geruisloos overschrijven.
+    { access: "public", contentType: "application/xml", addRandomSuffix: true }
   );
 
   // 8. NOW commit to DB — invoice + mark orders as invoiced — only after PDF+XML are ready
@@ -637,14 +644,20 @@ async function handleCreateFromRfh(body: unknown, session: any) {
 
   // 7. Upload PDF and XML to Vercel Blob
   const pdfBlob = await put(
-    `fust-grower-invoices/${invoiceNumber}.pdf`,
+    blobKey(`fust-grower-invoices/${invoiceNumber}.pdf`),
     pdfBuffer,
-    { access: "public", contentType: "application/pdf" }
+    // Een vast pad zonder suffix laat dezelfde naam twee keer landen: het factuur-
+    // nummer telt per omgeving door, dus test en productie komen op hetzelfde pad
+    // uit en zouden elkaars bestand geruisloos overschrijven.
+    { access: "public", contentType: "application/pdf", addRandomSuffix: true }
   );
   const xmlBlob = await put(
-    `fust-grower-invoices/${invoiceNumber}.xml`,
+    blobKey(`fust-grower-invoices/${invoiceNumber}.xml`),
     xmlContent,
-    { access: "public", contentType: "application/xml" }
+    // Een vast pad zonder suffix laat dezelfde naam twee keer landen: het factuur-
+    // nummer telt per omgeving door, dus test en productie komen op hetzelfde pad
+    // uit en zouden elkaars bestand geruisloos overschrijven.
+    { access: "public", contentType: "application/xml", addRandomSuffix: true }
   );
 
   // 8. Commit to DB
