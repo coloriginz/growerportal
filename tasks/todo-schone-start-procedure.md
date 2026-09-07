@@ -42,61 +42,87 @@ herbouwbaar; de rest bestaat alleen hier en is weg als je hem weggooit.
 
 | herbouwbaar uit Fabric | alleen in de portal (blijft ongemoeid) |
 |---|---|
-| `Transaction`, `Lot`, `SalesSheet`, `SalesSheetCost`, `LotCorrection`, `Grower` | `User`, `Supplier`, `Document`, `ShipmentForecast`, `QualityIssue`, `Certificate`, `ChangeRequest`, alle fust-tabellen, `FustAuditLog`, `ImportBatch` |
+| `Transaction`, `Lot`, `SalesSheet`, `SalesSheetCost`, `LotCorrection`, `Grower` | `User`, `Supplier`, `ShipmentForecast`, `QualityIssue`, `Certificate`, `ChangeRequest`, alle fust-tabellen, `FustAuditLog`, `ImportBatch` |
 
 In gewone taal: **gebruikers, fustorders/-instellingen en de admin-instellingen worden niet
 aangeraakt.** Deze procedure vult alleen de Fabric-afgeleide tabellen.
 
 **`Supplier` is het anker en moet zijn id's houden.** Gebruikers, fustorders, prognoses en documenten
-hangen eraan; een nieuwe uuid maakt die wezen. Hetzelfde geldt voor `Document`: de blobs blijven
-bestaan, maar `SalesSheet.pdfDocumentId` wijst naar een afrekening die na de herbouw een nieuwe
-uuid heeft, dus die koppelingen moeten opnieuw gelegd worden — niet gemigreerd.
+hangen eraan; een nieuwe uuid maakt die wezen. `Document` is het spiegelbeeld: de blobs blijven
+bestaan, maar `SalesSheet.pdfDocumentId` wijst na de herbouw naar een afrekening met een nieuwe
+uuid. Die koppelingen worden opnieuw gelegd, niet gemigreerd — en de oude rijen gaan wég, anders
+staat elke afrekening dubbel in de documentenbibliotheek van de kweker. Alleen de
+salessheet-documenten; contracten en teeltplannen blijven staan.
 
 Op test is die rechterkolom bijna leeg (0 fustorders, 5 prognoses). Op productie niet. Meet het
 daar vóór je begint, niet erna.
 
-## Blokkade: 397 PDF's staan alleen in de blobopslag
+## Salessheet-PDF's: verse export als hoofdroute
 
-De herbouw koppelt salessheets vanuit `private_input/salessheets`. Van de gekoppelde afrekeningen
-zijn er 397 waarvan het bestand daar niet in zit: die kwamen via de e-mailstroom binnen en bestaan
-alleen als blob. Na een herbouw zijn die koppelingen weg en niet terug te leggen — de route heeft
-het bestand zelf nodig om de leverdatum te lezen, en die is sinds 29-08-2026 verplicht.
+De koppeling wordt na de herbouw opnieuw gelegd vanuit een **verse, volledige export** van alle
+afrekeningen. Dat is de hoofdroute, en die keuze maakt de rest van deze paragraaf klein.
 
-De `Document`-rij is de enige plek waar staat wélk bestand een blob is. De blobopslag zelf kent
-alleen paden. Zolang die rijen er zijn, is alles terug te halen; zijn ze weg, dan staan de
-bestanden er nog maar is niet meer vast te stellen bij welke levering ze horen.
+Waarom het moest veranderen: het archief in `private_input/salessheets` is een momentopname van
+vóór mei 2026 (4.636 bestanden). Sindsdien zet de e-mailstroom er elke maand ~100 afrekeningen bij
+die alleen als blob bestaan. Gemeten 07-09-2026 op productie: van de 415 documenten hebben er
+**407 geen tegenhanger in het archief**, ook niet op afrekeningsnummer — mei 60, juni 140, juli 129,
+augustus 86. Dat getal groeit door zolang de e-mailstroom draait, dus "eerst de blobs downloaden"
+was een oplossing die elke maand duurder werd.
 
-- [ ] **Eerst de lijst veiligstellen**, vóór er iets verwijderd wordt:
+- [ ] **Verse export ophalen** van alle afrekeningen en in `private_input/salessheets` zetten.
+- [ ] **Steekproef van tien bestanden** door `scripts/link-salessheet-pdfs.ts` halen vóór de grote
+      batch. Twee dingen om op te letten:
+      - *Naamgeving.* De koppelroute probeert eerst de bestandsnaam (drie bekende vormen, zie
+        `scripts/checks/salessheet-filename.ts`) en pas daarna de inhoud van de PDF. Komt de export
+        uit een ander systeem met een eigen conventie, dan valt alles terug op inhoudsparsing. Dat
+        werkt, maar het is prettiger om dat op tien bestanden te merken dan op vierduizend.
+      - *Herziene afrekeningen.* "De laatste versie" kan betekenen dat een sheet opnieuw is opgemaakt
+        sinds de kweker hem per mail kreeg. De koppeling gaat goed (nummer én leverdatum moeten
+        kloppen), maar de kweker ziet dan een ander bedrag dan in zijn mailbox.
+
+### Documenten opruimen: vóór het opnieuw koppelen
+
+Een opnieuw aangeboden PDF levert **altijd een nieuwe `Document`-rij en een nieuwe blob** op. De
+koppelroute uploadt onder `${Date.now()}` en doet `document.create()`, dus er wordt nooit
+hergebruikt. De enige opruimstap die de route zelf kent — het oude document weggooien als de
+gevonden afrekening al een `pdfDocumentId` heeft — vuurt na een herbouw nooit: die afrekeningen zijn
+vers en hebben er geen.
+
+Blijven de oude rijen staan, dan staat **elke afrekening twee keer in de documentenbibliotheek van
+de kweker**. `/api/documents` filtert alleen op leverancier, niet op "hangt aan een afrekening", dus
+een verweesde rij is gewoon zichtbaar.
+
+De volgorde is dus: **exporteren → `SalesSheet` leegmaken → documenten verwijderen → backfill →
+opnieuw koppelen (stap 5)**. Verwijderen vóór het leegmaken kan niet (de foreign key houdt het
+tegen) en erna koppelen zou de bibliotheek dubbel vullen.
+
+- [ ] **Lijst veiligstellen** (alleen lezen, dus dit kan gerust een paar keer):
 
       ```
       npx tsx scripts/export-documents.ts --env=production
       ```
 
       **Verwacht:** `Documenten: 415 (364 aan een afrekening, 51 los)` en een JSON in
-      `private_input/`. Alleen lezen, dus dit kan gerust vooraf een paar keer.
+      `private_input/`. Bewaar die: het is de enige plek waar staat wélk bestand een blob was.
 
-- [ ] **Daarna de bestanden zelf ophalen** naar het archief, zodat `link-salessheet-pdfs.ts` ze na
-      de herbouw opnieuw kan aanbieden:
+- [ ] **Vangnet, als de verse export onverhoopt niet compleet blijkt** — haalt de bestanden zelf
+      alsnog uit de blobopslag naar een map die de koppelscripts recursief aflopen:
 
       ```
       npx tsx scripts/export-documents.ts --env=production --download=private_input/salessheets-blob
       ```
 
-      **Verwacht:** één verzoek per bestand, dus dit duurt. Bestanden die er al staan worden
-      overgeslagen, dus onderbreken en opnieuw starten is veilig. Een dubbele bestandsnaam komt in
-      een genummerde submap terecht — hernoemen mag niet, want de koppelroute leest de
-      leverancierscode en het afrekeningsnummer uit de naam.
+- [ ] **Pas ná het leegmaken van `SalesSheet`** de salessheet-documenten verwijderen. In die volgorde,
+      want zolang een afrekening naar een document wijst houdt de foreign key het tegen:
 
-- [ ] Daarna `scripts/audit-salessheet-links.ts` erop draaien: nu zijn ze niet te controleren, en
-      dat is de enige groep waarvan we niet weten of de koppeling klopt.
+      ```sql
+      DELETE FROM "Document" WHERE type = 'salessheet';
+      ```
 
-**Twee dingen om tijdens de herbouw uit de buurt te houden:**
-
-- `Document` gaat niet vanzelf mee als je `SalesSheet` weggooit — de verwijzing loopt van de
-  afrekening náár het document, niet andersom. Dat is precies wat je wil: laat die rijen staan.
-- Draai in die periode géén `scripts/audit-salessheet-links.ts --apply`. Die verwijdert verweesde
-  `Document`-rijen, en na het leegmaken is élk document verweesd. Het bestand overleeft dat wel
-  (het script raakt de blob niet aan), maar de wetenschap wélk bestand het was verdwijnt.
+      **Alleen `type = 'salessheet'`.** Contracten, teeltplannen en de rest van de
+      documentenbibliotheek horen bij de leverancier, niet bij deze herbouw. Gemeten 07-09-2026 is
+      elk document in beide omgevingen van dit type (productie 415, test 4.171), maar dat is een
+      momentopname: zodra iemand een contract uploadt telt het onderscheid wél.
 
 **De blobopslag wordt niet leeggemaakt.** Test en productie delen één store (0,81 GB, gemeten
 07-09-2026) en test gebruikt de afrekeningen van productie. Verweesde bestanden kosten opslag en
@@ -215,8 +241,9 @@ mislukt de koppeling stil en moet het archief opnieuw langs.
 npx tsx scripts/audit-salessheet-links.ts --apply
 ```
 
-**Verwacht:** 0 afwijkingen (buiten de 397 blob-only PDF's uit de blokkade hierboven, die pas te
-controleren zijn nadat ze uit de blobopslag zijn gehaald). Geeft het er wél, dan is de koppelroute
+**Verwacht:** 0 afwijkingen. Met een verse, volledige export leest het script elke PDF uit het
+archief, dus de oude uitzondering — de bestanden die alleen als blob bestonden en daardoor niet
+te controleren waren — is er niet meer. Geeft het er wél, dan is de koppelroute
 niet streng genoeg en moet dát gerepareerd worden — niet de data met de hand.
 
 ---
