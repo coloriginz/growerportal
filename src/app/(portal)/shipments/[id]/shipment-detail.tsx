@@ -69,12 +69,6 @@ interface LotCorrection {
   correctionReasonId: number | null;
   correctionVolume: number | null;
   correctionColli: number | null;
-  correctionReason: {
-    code: string;
-    nameNl: string;
-    nameEn: string | null;
-    typeCode: string;
-  } | null;
 }
 
 interface Lot {
@@ -109,8 +103,15 @@ interface ShipmentDetailProps {
     id: string;
     invoiceNumber: string;
     ourInvoiceNumber: string | null;
+    /**
+     * Draagt de léverdatum, niet de factuurdatum. De lots-import zet daar sinds de
+     * eerste versie `deliveryDate` in omdat Fabric de verkoopfactuurdatum nergens
+     * in `marts` heeft staan. Niet tonen; `pdfInvoiceDate` is de echte.
+     */
     invoiceDate: string;
     deliveryDate: string;
+    /** De factuurdatum zoals die op de afrekening staat, als de PDF gelezen is. */
+    pdfInvoiceDate: string | null;
     totalTurnover: string;
     totalCosts: string;
     netResult: string;
@@ -160,25 +161,70 @@ export function ShipmentDetail({ shipment, correctionReasons = {}, status }: Shi
 
     const pass1: MergedTransaction[] = [];
 
+    /*
+     * De verkoop en de correctie blijven aparte regels, en dat is niet cosmetisch.
+     *
+     * Ze werden samengevoegd tot één regel met de brúto stelen van de originele
+     * orderregel en het nétto bedrag van alles bij elkaar. De prijs die daaruit
+     * volgde had nooit bestaan: partij 3980666 toonde 2.680 stelen voor EUR 794,80
+     * — dus EUR 0,297 per steel — terwijl er 2.680 stelen voor EUR 0,354 waren
+     * verkocht en er daarna EUR 154,00 was afgeboekt. Wie dat naast de sales sheet
+     * legt kan er niets van maken, want daar staat gewoon 0,354.
+     *
+     * Zo staat het nu zoals de afrekening het ook toont: de verkoop met zijn eigen
+     * prijs, en de correctie eronder met de zijne.
+     */
     for (const txs of ordregGroups.values()) {
       const origineel = txs.find(t => t.bronFeitExtra === "origineel");
-      const correctie = txs.find(t => t.bronFeitExtra === "correcties");
-      const hasCorrection = txs.some(t => t.bronFeitExtra !== "origineel");
-
+      const correcties = txs.filter(t => t.bronFeitExtra !== "origineel");
       const base = origineel ?? txs[0];
-      const stems = origineel ? origineel.stems : txs.reduce((s, t) => s + t.stems, 0);
-      const netAmount = txs.reduce((s, t) => s + parseFloat(t.amount), 0);
 
-      pass1.push({
-        id: base.id,
-        date: base.date,
-        salesType: base.salesType,
-        stems,
-        amount: netAmount,
-        pricePerStem: stems !== 0 ? netAmount / stems : 0,
-        hasCorrection,
-        correctionReasonId: correctie?.correctionReasonId ?? null,
-      });
+      if (origineel) {
+        pass1.push({
+          id: origineel.id,
+          date: origineel.date,
+          salesType: origineel.salesType,
+          stems: origineel.stems,
+          amount: parseFloat(origineel.amount),
+          pricePerStem: parseFloat(origineel.pricePerStem),
+          hasCorrection: false,
+          correctionReasonId: null,
+        });
+      }
+
+      const corrStems = correcties.reduce((s, t) => s + t.stems, 0);
+      const corrAmount = correcties.reduce((s, t) => s + parseFloat(t.amount), 0);
+
+      // Een correctie die per saldo niets verandert hoeft niemand te zien. Dat is
+      // geen zeldzaamheid: een `prullenbak-factcor`-rij draagt altijd nul, en een
+      // intrekking die meteen wordt teruggeboekt heft zichzelf op.
+      if (correcties.length > 0 && (corrStems !== 0 || corrAmount !== 0)) {
+        pass1.push({
+          id: correcties[0].id,
+          date: correcties[0].date,
+          salesType: (origineel ?? base).salesType,
+          stems: corrStems,
+          amount: corrAmount,
+          pricePerStem: corrStems !== 0 ? corrAmount / corrStems : 0,
+          hasCorrection: true,
+          correctionReasonId: correcties.find(t => t.correctionReasonId != null)?.correctionReasonId ?? null,
+        });
+      }
+
+      // Geen originele regel én geen correctie die iets doet: dan blijft er niets
+      // over om te tonen, maar de regel bestaat wel. Toon hem zoals hij is.
+      if (!origineel && (correcties.length === 0 || (corrStems === 0 && corrAmount === 0))) {
+        pass1.push({
+          id: base.id,
+          date: base.date,
+          salesType: base.salesType,
+          stems: txs.reduce((s, t) => s + t.stems, 0),
+          amount: txs.reduce((s, t) => s + parseFloat(t.amount), 0),
+          pricePerStem: parseFloat(base.pricePerStem),
+          hasCorrection: correcties.length > 0,
+          correctionReasonId: correcties.find(t => t.correctionReasonId != null)?.correctionReasonId ?? null,
+        });
+      }
     }
 
     for (const tx of ungrouped) {
@@ -199,7 +245,10 @@ export function ShipmentDetail({ shipment, correctionReasons = {}, status }: Shi
     for (const tx of pass1) {
       const dayKey = new Date(tx.date).toISOString().slice(0, 10);
       const channel = channelLabel(tx.salesType);
-      const key = `${dayKey}::${channel}`;
+      // Correcties krijgen een eigen sleutel, anders veegt deze stap ze alsnog bij
+      // de verkoop waar de vorige stap ze net van heeft gescheiden — en dan is de
+      // prijs weer het gemiddelde van twee dingen die niets met elkaar te maken hebben.
+      const key = `${dayKey}::${channel}::${tx.hasCorrection ? "corr" : "verkoop"}`;
       if (!dayGroups.has(key)) dayGroups.set(key, []);
       dayGroups.get(key)!.push(tx);
     }
@@ -271,10 +320,17 @@ export function ShipmentDetail({ shipment, correctionReasons = {}, status }: Shi
                   <dd className="tabular-nums">{shipment.ourInvoiceNumber}</dd>
                 </div>
               )}
-              <div className="flex gap-2">
-                <dt className="min-w-32 text-muted-foreground">{t("shipments.invoiceDate")}</dt>
-                <dd className="tabular-nums">{formatDate(shipment.invoiceDate)}</dd>
-              </div>
+              {/*
+                Alleen tonen als hij van de afrekening is gelezen. Hier stond
+                `invoiceDate`, en dat veld draagt de leverdatum — de kweker zag
+                dezelfde datum twee keer, één keer onder de verkeerde naam.
+              */}
+              {shipment.pdfInvoiceDate && (
+                <div className="flex gap-2">
+                  <dt className="min-w-32 text-muted-foreground">{t("shipments.invoiceDate")}</dt>
+                  <dd className="tabular-nums">{formatDate(shipment.pdfInvoiceDate)}</dd>
+                </div>
+              )}
             </dl>
           </div>
           {shipment.pdfDocument && (
@@ -455,23 +511,26 @@ export function ShipmentDetail({ shipment, correctionReasons = {}, status }: Shi
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {allCorrections.map((corr) => (
+                {allCorrections.map((corr) => {
+                  const reason = corr.correctionReasonId ? correctionReasons[corr.correctionReasonId] : null;
+                  return (
                   <TableRow key={corr.id} className="bg-red-50/50 dark:bg-red-950/10">
                     <TableCell className="font-medium">{corr.lotNumber}</TableCell>
                     <TableCell>{corr.productName}</TableCell>
                     <TableCell className="text-red-600 dark:text-red-400">
-                      {corr.correctionReason
-                        ? (language === "en" && corr.correctionReason.nameEn) || corr.correctionReason.nameNl
+                      {reason
+                        ? (language === "en" && reason.nameEn) || reason.nameNl
                         : corr.facttypeSub}
-                      {corr.correctionReason && (
-                        <span className="text-muted-foreground ml-2">({corr.correctionReason.code})</span>
+                      {reason && (
+                        <span className="text-muted-foreground ml-2">({reason.code})</span>
                       )}
                     </TableCell>
                     <TableCell className="text-right tabular-nums text-red-600 dark:text-red-400">
                       {corr.correctionVolume != null ? formatNumber(corr.correctionVolume) : "-"}
                     </TableCell>
                   </TableRow>
-                ))}
+                  );
+                })}
                 <TableRow className="font-semibold bg-red-50 dark:bg-red-950/20">
                   <TableCell colSpan={3}>{t("common.total")}</TableCell>
                   <TableCell className="text-right tabular-nums text-red-600 dark:text-red-400">

@@ -203,10 +203,11 @@
     "corrections": "Corrections",
     "correctionVolume": "Volume",
     "correctionColli": "Colli",
-    "correctionReason": "Reason ID",
+    "correctionReason": "Reason",
     "correctionType": "Type",
     "noCorrections": "No corrections",
-    "totalCorrectionVolume": "Total Correction Volume"
+    "totalCorrectionVolume": "Total Correction Volume",
+    "correctionBooking": "Correction"
   },
   "shipments": {
     "title": "Shipments",

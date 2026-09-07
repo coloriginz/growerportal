@@ -78,9 +78,11 @@ const PER_KWARTAAL: readonly SyncEndpoint[] = ["lots", "orders", "costs"];
  *
  * Kwekers staan vooraan en maar één keer: die query kent geen datumvenster —
  * hij pakt alle kwekers van deze leverancier via zijn partijen. Hij moet wél
- * eerst, want de lots-import gooit partijen stilzwijgend weg waarvan de kweker
- * ontbreekt. Zijn venster is de volle spanwijdte, puur omdat de kolommen niet
- * leeg mogen zijn; de query gebruikt het niet.
+ * eerst, want zonder die ronde maakt de orders-import (`src/app/api/import/orders/route.ts`)
+ * ontbrekende kwekers zelf aan als naamloos bijproduct — zonder code, land of
+ * plaats — om de orderregel niet te hoeven weggooien. De lots-import zelf noemt
+ * kwekers nergens. Zijn venster is de volle spanwijdte, puur omdat de kolommen
+ * niet leeg mogen zijn; de query gebruikt het niet.
  *
  * Leveranciers zitten er niet bij: die bestaat al, dat is de aanleiding.
  *

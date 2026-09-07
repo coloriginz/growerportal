@@ -506,7 +506,7 @@ async function fetchLotRecords(
             id: true,
             facttypeSub: true,
             correctionVolume: true,
-            correctionReason: { select: { code: true, nameEn: true, nameNl: true } },
+            correctionReasonId: true,
             lot: {
               select: {
                 id: true,
@@ -520,6 +520,17 @@ async function fetchLotRecords(
         }),
   ]);
 
+  // Geen Prisma-relatie meer op correctionReasonId (CorrectionReasonCode heeft geen FK,
+  // zie schema.prisma): namen apart opzoeken voor de codes die hier voorkomen.
+  const reasonIds = [...new Set(corrections.map(c => c.correctionReasonId).filter((id): id is number => id != null))];
+  const reasons = reasonIds.length === 0
+    ? []
+    : await prisma.correctionReasonCode.findMany({
+        where: { id: { in: reasonIds } },
+        select: { id: true, code: true, nameEn: true, nameNl: true },
+      });
+  const reasonById = new Map(reasons.map(r => [r.id, r]));
+
   return [
     ...lots.map(({ supplier, ...lot }): LotRecord => ({
       type: "lot",
@@ -528,7 +539,11 @@ async function fetchLotRecords(
       supplierName: supplier.name,
     })),
     ...corrections.map(
-      (correction): CorrectionRecord => ({
+      (correction): CorrectionRecord => {
+        const reason = correction.correctionReasonId != null
+          ? reasonById.get(correction.correctionReasonId)
+          : undefined;
+        return {
         type: "correction",
         id: correction.id,
         lotId: correction.lot.id,
@@ -537,13 +552,12 @@ async function fetchLotRecords(
         supplierName: correction.lot.supplier.name,
         productName: correction.lot.productName,
         facttypeSub: correction.facttypeSub,
-        reason: correction.correctionReason
-          ? correction.correctionReason.nameEn || correction.correctionReason.nameNl
-          : null,
-        reasonCode: correction.correctionReason?.code ?? null,
+        reason: reason ? (reason.nameEn || reason.nameNl) : null,
+        reasonCode: reason?.code ?? null,
         correctionVolume: correction.correctionVolume,
         deliveryDate: correction.lot.deliveryDate,
-      })
+        };
+      }
     ),
   ];
 }

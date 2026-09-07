@@ -31,8 +31,9 @@ interface IssueRow {
   supplierCode: string;
   supplierName: string;
   deliveredStems: number;
+  correctionStems: number;
   soldStems: number;
-  missingStems: number;
+  gapStems: number;
   costCount: number;
   hasPdf: boolean;
   pdfAmount: number | null;
@@ -61,9 +62,17 @@ const TABS: { type: IssueType; label: string; explanation: string }[] = [
   },
   {
     type: "stem-gap",
-    label: "Settled with missing stems",
+    /*
+     * "Missing stems" dekte de lading niet meer: de controle telt sinds vandaag
+     * het verschil in beide richtingen. Van de 858 leveringen die eruit komen
+     * verkopen er 813 minder dan aangevoerd plus correcties, maar 45 juist méér —
+     * en dat tweede geval is het vreemdere van de twee, want je kunt niet
+     * verkopen wat nooit is binnengekomen. Onder een kop die alleen over
+     * ontbrekende stelen praat, zou niemand daarnaar kijken.
+     */
+    label: "Settled: stems do not add up",
     explanation:
-      "Settled deliveries where fewer stems were sold than delivered. Usually an order line the warehouse filled in later — the settlement decides the status, so the gap would otherwise go unnoticed.",
+      "Settled deliveries where delivered plus corrections does not equal sold, by more than a few stems — in either direction. Fewer sold usually means an order line the warehouse filled in later; more sold than came in is the stranger case. The settlement decides the status, so the gap would otherwise go unnoticed.",
   },
   {
     type: "pdf-mismatch",
@@ -114,7 +123,7 @@ export function ShipmentIssuesTab() {
   const active = TABS.find((tab) => tab.type === type)!;
   const showStems = type === "stem-gap";
   const showAmounts = type === "pdf-mismatch";
-  const colSpan = showAmounts ? 6 : showStems ? 7 : 5;
+  const colSpan = showAmounts ? 6 : showStems ? 8 : 5;
 
   return (
     <div className="space-y-6">
@@ -181,8 +190,9 @@ export function ShipmentIssuesTab() {
                 {showStems ? (
                   <>
                     <TableHead className="text-right">{t("shipments.stems")}</TableHead>
+                    <TableHead className="text-right">Corrections</TableHead>
                     <TableHead className="text-right">{t("shipments.soldStems")}</TableHead>
-                    <TableHead className="text-right">Missing</TableHead>
+                    <TableHead className="text-right">Gap</TableHead>
                   </>
                 ) : (
                   <TableHead className="text-right">{t("shipments.stems")}</TableHead>
@@ -253,10 +263,13 @@ export function ShipmentIssuesTab() {
                     {showStems && (
                       <>
                         <TableCell className="text-right tabular-nums">
+                          {formatNumber(row.correctionStems)}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
                           {formatNumber(row.soldStems)}
                         </TableCell>
                         <TableCell className="text-right tabular-nums font-medium text-amber-600 dark:text-amber-400">
-                          {formatNumber(row.missingStems)}
+                          {formatNumber(row.gapStems)}
                         </TableCell>
                       </>
                     )}

@@ -245,6 +245,10 @@ async function processAttachment(
   let pdfTurnover: number | null = null;
   let pdfCosts: number | null = null;
   let pdfNetResult: number | null = null;
+  // Factuurdatum van de PDF, tegenover `deliveryDate` (leverdatum) hierboven.
+  // Buiten de try gedeclareerd om dezelfde reden als de bedragen: een
+  // gefaalde parse (catch hieronder) laat hem op null staan.
+  let pdfInvoiceDate: string | null = null;
   try {
     const pdfParsed = await parseSalesSheetPdf(pdfBuffer);
     pdfReference = pdfParsed.reference;
@@ -253,6 +257,7 @@ async function processAttachment(
     pdfTurnover = pdfParsed.turnover;
     pdfCosts = pdfParsed.costs;
     pdfNetResult = pdfParsed.netResult;
+    pdfInvoiceDate = pdfParsed.invoiceDate;
     pdfLeeg =
       pdfParsed.reference === null &&
       pdfParsed.deliveryDate === null &&
@@ -403,6 +408,9 @@ async function processAttachment(
       pdfTurnover,
       pdfCosts,
       pdfNetResult,
+      // "YYYY-MM-DD" naar Date; ontbreekt hij, dan blijft het veld leeg in
+      // plaats van "vandaag" te worden — new Date(null) zou dat wél doen.
+      pdfInvoiceDate: pdfInvoiceDate ? new Date(pdfInvoiceDate) : null,
       pdfParsedAt: new Date(),
     },
   });

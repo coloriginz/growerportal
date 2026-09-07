@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
           lotNumber: true,
           productName: true,
           articleGroup: true,
-          totalStems: true,
+          invoicedVolume: true,
           avgPrice: true,
           totalAmount: true,
           s1: true,
@@ -59,7 +59,12 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json(
     salesSheets.map((ss) => {
-      const totalStems = ss.lots.reduce((sum, l) => sum + l.totalStems, 0);
+      // invoicedVolume, niet totalStems: de orders-import overschrijft Lot.totalStems
+      // met de som van de verkochte stelen, dus die kolom draagt hier "verkocht" en
+      // niet "aangevoerd" (zie src/app/api/import/orders/route.ts en shipment-status.ts).
+      // De "Stems" kolom in het overzicht is juist bedoeld als het aangevoerde aantal,
+      // los van "Sold Stems".
+      const totalStems = ss.lots.reduce((sum, l) => sum + (l.invoicedVolume ?? 0), 0);
       const soldStems = soldBySheet.get(ss.id) ?? 0;
       return {
         id: ss.id,

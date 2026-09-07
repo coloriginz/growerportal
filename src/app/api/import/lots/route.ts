@@ -32,6 +32,7 @@ const partijSchema = z.object({
   "Inslagcorrectie volume": z.number().nullable().optional(), // legacy, replaced by "Inslag aantal correctie"
   "Inslag aantal correctie": z.number().nullable().optional(),
   "Facttype Sub": z.string().nullable().optional(),
+  "Correctie Datum": z.string().nullable().optional(),
 });
 
 type Partij = z.infer<typeof partijSchema>;
@@ -750,6 +751,10 @@ async function upsertLots(partijen: Partij[], batchId: string | null) {
         facttypeSub: row["Facttype Sub"]?.toLowerCase().trim() || "correctie",
         correctionReasonId: row.reden_id_correctie || null,
         correctionVolume: row["Inslag aantal correctie"] ?? row["Inslagcorrectie volume"] ?? null,
+        // Wanneer de correctie is geboekt (marts.dim_partijcorrecties), niet de
+        // leverdatum van de zending. Kan ontbreken bij een correctie zonder
+        // matchende rij in die tabel.
+        correctionDate: row["Correctie Datum"] || null,
       });
     }
 
@@ -775,6 +780,7 @@ async function upsertLots(partijen: Partij[], batchId: string | null) {
         `INSERT INTO "LotCorrection" (
            id, "lotId", "fabricPartId", "facttypeSub",
            "correctionReasonId", "correctionVolume", "correctionColli",
+           "correctionDate",
            "lastImportBatchId",
            "createdAt", "updatedAt"
          )
@@ -786,6 +792,7 @@ async function upsertLots(partijen: Partij[], batchId: string | null) {
            (v.val->>'correctionReasonId')::int,
            (v.val->>'correctionVolume')::int,
            NULL,
+           (v.val->>'correctionDate')::timestamp,
            $2,
            NOW(),
            NOW()

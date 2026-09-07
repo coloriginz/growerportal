@@ -1,16 +1,41 @@
 /**
- * Copy all data from dev database to production database.
+ * WAARSCHUWING: dit script schrijft naar PRODUCTIE (.env.production, DIRECT_URL).
+ * Het kopieert dev over de bestaande data heen — er is geen prullenbak.
+ *
+ * Standaard is dit een dry run: alleen tonen welke tabellen, hoeveel rijen per
+ * tabel en naar welke databasehost, zonder iets te schrijven. Pas met --apply
+ * voert het script de kopie ook echt uit.
+ *
+ * De tabellijst hieronder wordt met de hand bijgehouden en loopt dus achter
+ * zodra het schema verandert — gemeten op 31-08-2026: van de 44 modellen in
+ * prisma/schema.prisma staan er 39 hieronder. De vijf die ontbreken:
+ * SyncJob, SyncSchedule, RfhInvoice, RfhInvoiceLine, RfhVoucherAllocation.
+ * Ze zijn hier bewust niet toegevoegd: SyncJob en SyncSchedule beschrijven een
+ * lopende synchronisatie en het kopiëren daarvan zou een sync op productie
+ * kunnen overschrijven met de wachtrijstand van dev; of de Rfh-tabellen mee
+ * moeten is aan de eigenaar van dit script.
+ *
  * Handles circular FK dependencies by nullifying backreferences, inserting, then updating.
  */
 import { neon } from "@neondatabase/serverless";
 import * as dotenv from "dotenv";
 import * as fs from "fs";
 
+const APPLY = process.argv.includes("--apply");
+
 const devEnv = dotenv.parse(fs.readFileSync(".env"));
 const prodEnv = dotenv.parse(fs.readFileSync(".env.production"));
 
 const devSql = neon(devEnv.DIRECT_URL!);
 const prodSql = neon(prodEnv.DIRECT_URL!);
+
+function targetHost(): string {
+  try {
+    return new URL(prodEnv.DIRECT_URL!).hostname;
+  } catch {
+    return "(onleesbare DIRECT_URL)";
+  }
+}
 
 // Tables in strict dependency order
 // Phase 1: tables with no or only forward FK dependencies (with nullable backrefs nullified)
@@ -73,6 +98,15 @@ const PHASE4_TABLES = [
 ];
 
 async function copyTable(table: string, nullifyCols: string[] = []) {
+  if (!APPLY) {
+    // Dry run: alleen tellen, niets ophalen of schrijven.
+    const [{ count }] = (await devSql.query(`SELECT COUNT(*) FROM "${table}"`)) as [
+      { count: string },
+    ];
+    console.log(`  ${table}: ${count} rows -> ${targetHost()}`);
+    return;
+  }
+
   const rows = await devSql.query(`SELECT * FROM "${table}"`);
   if (rows.length === 0) {
     console.log(`  ${table}: 0 rows (skip)`);
@@ -115,6 +149,14 @@ async function copyTable(table: string, nullifyCols: string[] = []) {
 }
 
 async function updateBackrefs(table: string, col: string) {
+  if (!APPLY) {
+    const [{ count }] = (await devSql.query(
+      `SELECT COUNT(*) FROM "${table}" WHERE "${col}" IS NOT NULL`,
+    )) as [{ count: string }];
+    console.log(`  ${table}.${col}: ${count} rows -> ${targetHost()}`);
+    return;
+  }
+
   // Read original values from dev
   const rows = await devSql.query(`SELECT "id", "${col}" FROM "${table}" WHERE "${col}" IS NOT NULL`);
   if (rows.length === 0) return;
@@ -129,6 +171,14 @@ async function updateBackrefs(table: string, col: string) {
 
 // For _UserCompanies (no id column)
 async function copyJoinTable(table: string) {
+  if (!APPLY) {
+    const [{ count }] = (await devSql.query(`SELECT COUNT(*) FROM "${table}"`)) as [
+      { count: string },
+    ];
+    console.log(`  ${table}: ${count} rows -> ${targetHost()}`);
+    return;
+  }
+
   const rows = await devSql.query(`SELECT * FROM "${table}"`);
   if (rows.length === 0) {
     console.log(`  ${table}: 0 rows (skip)`);
@@ -147,7 +197,14 @@ async function copyJoinTable(table: string) {
 }
 
 async function main() {
-  console.log("Copying dev database to production...\n");
+  if (!APPLY) {
+    console.log(
+      `DRY RUN — showing what would be copied to ${targetHost()}. Nothing is written.\n` +
+        `Pass --apply to actually run the copy.\n`,
+    );
+  } else {
+    console.log(`Copying dev database to production (${targetHost()})...\n`);
+  }
 
   // Phase 1: Independent tables
   console.log("Phase 1: Independent tables");
@@ -202,7 +259,7 @@ async function main() {
     }
   }
 
-  console.log("\nDone!");
+  console.log(APPLY ? "\nDone!" : "\nDry run done. Pass --apply to actually write this.");
 }
 
 main().catch(console.error);

@@ -8,7 +8,7 @@ async function main() {
     where: { lotNumber },
     include: {
       transactions: { orderBy: { date: "asc" } },
-      corrections: { include: { correctionReason: true } },
+      corrections: true,
       supplier: { select: { code: true, name: true } },
       salesSheet: { select: { invoiceNumber: true } },
     },
@@ -39,8 +39,15 @@ async function main() {
   console.log(`  TOTAL: ${txTotal} stems from ${lot.transactions.length} transactions`);
 
   console.log("\n=== CORRECTIONS ===");
+  // correctionReasonId heeft geen FK (zie schema.prisma), dus de naam apart opzoeken.
+  const reasonIds = [...new Set(lot.corrections.map(c => c.correctionReasonId).filter((id): id is number => id != null))];
+  const reasons = reasonIds.length === 0
+    ? []
+    : await prisma.correctionReasonCode.findMany({ where: { id: { in: reasonIds } } });
+  const reasonById = new Map(reasons.map(r => [r.id, r]));
   for (const c of lot.corrections) {
-    console.log(`  ${c.facttypeSub} | reasonId: ${c.correctionReasonId} (${c.correctionReason?.nameEn || c.correctionReason?.nameNl || 'unknown'}) | volume: ${c.correctionVolume} | fabricPartId: ${c.fabricPartId}`);
+    const reason = c.correctionReasonId != null ? reasonById.get(c.correctionReasonId) : undefined;
+    console.log(`  ${c.facttypeSub} | reasonId: ${c.correctionReasonId} (${reason?.nameEn || reason?.nameNl || 'unknown'}) | volume: ${c.correctionVolume} | fabricPartId: ${c.fabricPartId}`);
   }
 
   // Check if there are other lots with same lotNumber (different suppliers?)

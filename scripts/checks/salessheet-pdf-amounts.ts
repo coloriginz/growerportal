@@ -1,4 +1,4 @@
-import { parseSalesSheetAmounts } from "../../src/lib/salessheet-pdf-parser";
+import { parseSalesSheetAmounts, parseInvoiceDate } from "../../src/lib/salessheet-pdf-parser";
 
 let failures = 0;
 function check(label: string, condition: boolean, detail?: string) {
@@ -131,6 +131,35 @@ check(
   "specifiek nettolabel wint van 'Subtotaal'",
   specifiekWint.netResult === 500,
   `kreeg ${specifiekWint.netResult}`
+);
+
+/*
+ * Twee echte fragmenten (COLXGREE 17806 en het Engelse voorbeeld hierboven,
+ * COL/2025/1 leverancier ALTINOVA): de factuurdatum staat vlak achter de
+ * leverdatum met een tijd erachter en een tweecijferig jaar — "30-3-26 22:04",
+ * "15-1-25 22:03". Geverifieerd tegen 60 echte PDF's uit private_input/salessheets,
+ * zie .superpowers/sdd/datums/pdf-factuurdatum.md.
+ */
+check(
+  "factuurdatum: D-M-JJ H:MM met tweecijferig jaar",
+  parseInvoiceDate("... 19-03-2026 30-3-26 22:04 AWB nummer Stolperweg 41 ...") === "2026-03-30",
+  `kreeg ${parseInvoiceDate("... 19-03-2026 30-3-26 22:04 AWB nummer Stolperweg 41 ...")}`
+);
+check(
+  "factuurdatum: eencijferige dag en maand",
+  parseInvoiceDate("... 02-01-2025 15-1-25 22:03 AWB number ALTINOVA ...") === "2025-01-15",
+  `kreeg ${parseInvoiceDate("... 02-01-2025 15-1-25 22:03 AWB number ALTINOVA ...")}`
+);
+
+/*
+ * De leverdatum ervóór heeft een viercijferig jaar en géén tijd erachter, dus
+ * mag nooit als factuurdatum worden gelezen — alleen het patroon met de tijd
+ * telt.
+ */
+check(
+  "factuurdatum: de leverdatum zelf wordt niet gelezen als er geen tijd achter staat",
+  parseInvoiceDate("... 19-03-2026 AWB nummer Stolperweg 41 ...") === null,
+  `kreeg ${parseInvoiceDate("... 19-03-2026 AWB nummer Stolperweg 41 ...")}`
 );
 
 console.log(failures === 0 ? "\nalle checks geslaagd" : `\n${failures} check(s) gefaald`);
