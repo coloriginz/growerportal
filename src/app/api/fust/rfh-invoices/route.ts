@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireAuth } from "@/lib/api-helpers";
 import { put } from "@vercel/blob";
+import { blobKey } from "@/lib/blob-paths";
 import {
   parseRfhInvoicePdf,
   parseRfhDate,
@@ -139,9 +140,12 @@ export async function POST(request: NextRequest) {
 
   // Upload PDF to Vercel Blob
   const blob = await put(
-    `rfh-invoices/${parsed.rfhInvoiceNumber}.pdf`,
+    blobKey(`rfh-invoices/${parsed.rfhInvoiceNumber}.pdf`),
     buffer,
-    { access: "public", contentType: "application/pdf" }
+    // Een vast pad zonder suffix laat dezelfde naam twee keer landen: het factuur-
+    // nummer telt per omgeving door, dus test en productie komen op hetzelfde pad
+    // uit en zouden elkaars bestand geruisloos overschrijven.
+    { access: "public", contentType: "application/pdf", addRandomSuffix: true }
   );
 
   // Parse invoice date

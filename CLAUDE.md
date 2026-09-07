@@ -77,7 +77,7 @@ The codebase uses specific terminology that maps to the business domain:
 | Validation | Zod |
 | i18n | Custom JSON-based system (EN/NL) |
 | Email | Nodemailer (Ethereal dev, Resend prod) |
-| File Storage | Vercel Blob |
+| File Storage | Vercel Blob (one store, shared by test and production) |
 | PDF Parsing | pdfjs-dist v4 (legacy build for Vercel serverless) |
 | Deployment | Vercel (test + production targets) |
 
@@ -732,6 +732,7 @@ Supplier accounts are created via admin UI with activation emails.
 | **Schema migrations** | `prisma db push` | Simpler for small team. No migration history. |
 | **Multi-tenancy** | URL param `?supplierId=` + role check | Enforced by `resolveSupplierId` + `buildSupplierScope`. |
 | **Multi-company branding** | Company entity + base64 logos | CID email attachments. |
+| **Blob storage** | One store, a folder per environment | Two stores would turn every copy of production down to test into a file migration. A `${env}/` prefix keeps the environments from overwriting or deleting each other's files instead — `src/lib/blob-paths.ts`. |
 | **Fust portal** | Separate route group + middleware URL rewrite | Standalone portal for transporteurs. Shares API routes. |
 | **Email templates** | Inline HTML with VML for Outlook | Per-template translation maps (not i18n JSON). |
 | **Fust soft delete** | `deletedAt` + `deletedById` | Audit trail and voucher links must persist. |
@@ -760,6 +761,7 @@ Supplier accounts are created via admin UI with activation emails.
 ### Known Security Considerations
 - Import API key comparison is constant-time over SHA-256 digests. `IMPORT_API_KEY_PREVIOUS` is accepted alongside `IMPORT_API_KEY` so keys can be rotated without a gap; drop it once the flows are migrated
 - Blob uploads use `access: "public"` — financial documents accessible if URL known (fix planned)
+- **Test and production share one blob store, and that is deliberate.** Two stores would make every copy of the production database down to test a file migration as well. What was not deliberate was that both environments wrote into the same folders: measured 7 September 2026, 38 voucher PDFs were pointed at by *both* databases (same URL, a leftover from `copy-db`), so a delete in test removed a production file with nothing to show for it. Since then every upload goes under `${env}/` and `deleteOwnBlob()` only deletes inside its own folder — `src/lib/blob-paths.ts`, covered by `scripts/checks/blob-paths.ts`. Files from before the split carry no folder and belong to nobody: they are never deleted, since the other environment may still be using them. An unknown `NEXT_PUBLIC_APP_ENV` gets its own folder rather than falling back to `test/`, because falling back is exactly how production files would end up somewhere test is allowed to delete them
 - Fust types endpoint lacks `requireAuth()` (fix planned)
 - No rate limiting on login attempts
 

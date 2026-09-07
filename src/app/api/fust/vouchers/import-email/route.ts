@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { put } from "@vercel/blob";
+import { blobKey } from "@/lib/blob-paths";
 import {
   parseIssuanceVoucherPdf,
   parseRfhDate,
@@ -126,7 +127,7 @@ export async function POST(request: NextRequest) {
 
   // Store in Vercel Blob
   const blob = await put(
-    `fust-vouchers/${Date.now()}-voucher-${transactionNumber}.pdf`,
+    blobKey(`fust-vouchers/${Date.now()}-voucher-${transactionNumber}.pdf`),
     pdfBuffer,
     { access: "public", contentType: "application/pdf" }
   );
@@ -335,7 +336,7 @@ export async function processEmailIngestion(ingestionId: string) {
 
   // Store in Vercel Blob
   const blob = await put(
-    `fust-vouchers/${Date.now()}-voucher-${transactionNumber}.pdf`,
+    blobKey(`fust-vouchers/${Date.now()}-voucher-${transactionNumber}.pdf`),
     pdfBuffer,
     { access: "public", contentType: "application/pdf" }
   );

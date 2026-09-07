@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { Prisma } from "@/generated/prisma";
-import { put, del } from "@vercel/blob";
+import { put } from "@vercel/blob";
+import { blobKey, deleteOwnBlob } from "@/lib/blob-paths";
 import { requireImportAuth } from "@/lib/import-auth";
 import {
   parseSalesSheetFilename,
@@ -350,11 +351,8 @@ async function processAttachment(
       where: { id: salesSheet.pdfDocumentId },
     });
     if (oldDoc) {
-      try {
-        await del(oldDoc.fileUrl);
-      } catch {
-        // Blob deletion failed — not critical
-      }
+      // Alleen een bestand uit onze eigen omgevingsmap; zie deleteOwnBlob.
+      await deleteOwnBlob(oldDoc.fileUrl);
       await prisma.document.delete({ where: { id: oldDoc.id } });
     }
   }
@@ -371,7 +369,7 @@ async function processAttachment(
   let blob: Awaited<ReturnType<typeof put>>;
   try {
     blob = await put(
-      `salessheets/${Date.now()}-${attachment.name}`,
+      blobKey(`salessheets/${Date.now()}-${attachment.name}`),
       pdfBuffer,
       { access: "public", contentType: "application/pdf" }
     );

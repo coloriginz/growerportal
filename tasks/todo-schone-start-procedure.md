@@ -62,10 +62,48 @@ zijn er 397 waarvan het bestand daar niet in zit: die kwamen via de e-mailstroom
 alleen als blob. Na een herbouw zijn die koppelingen weg en niet terug te leggen — de route heeft
 het bestand zelf nodig om de leverdatum te lezen, en die is sinds 29-08-2026 verplicht.
 
-- [ ] Die 397 blobs eerst naar het archief halen, vóór de herbouw. `Document.fileUrl` staat in de
-      database, dus het is een download per stuk.
+De `Document`-rij is de enige plek waar staat wélk bestand een blob is. De blobopslag zelf kent
+alleen paden. Zolang die rijen er zijn, is alles terug te halen; zijn ze weg, dan staan de
+bestanden er nog maar is niet meer vast te stellen bij welke levering ze horen.
+
+- [ ] **Eerst de lijst veiligstellen**, vóór er iets verwijderd wordt:
+
+      ```
+      npx tsx scripts/export-documents.ts --env=production
+      ```
+
+      **Verwacht:** `Documenten: 415 (364 aan een afrekening, 51 los)` en een JSON in
+      `private_input/`. Alleen lezen, dus dit kan gerust vooraf een paar keer.
+
+- [ ] **Daarna de bestanden zelf ophalen** naar het archief, zodat `link-salessheet-pdfs.ts` ze na
+      de herbouw opnieuw kan aanbieden:
+
+      ```
+      npx tsx scripts/export-documents.ts --env=production --download=private_input/salessheets-blob
+      ```
+
+      **Verwacht:** één verzoek per bestand, dus dit duurt. Bestanden die er al staan worden
+      overgeslagen, dus onderbreken en opnieuw starten is veilig. Een dubbele bestandsnaam komt in
+      een genummerde submap terecht — hernoemen mag niet, want de koppelroute leest de
+      leverancierscode en het afrekeningsnummer uit de naam.
+
 - [ ] Daarna `scripts/audit-salessheet-links.ts` erop draaien: nu zijn ze niet te controleren, en
       dat is de enige groep waarvan we niet weten of de koppeling klopt.
+
+**Twee dingen om tijdens de herbouw uit de buurt te houden:**
+
+- `Document` gaat niet vanzelf mee als je `SalesSheet` weggooit — de verwijzing loopt van de
+  afrekening náár het document, niet andersom. Dat is precies wat je wil: laat die rijen staan.
+- Draai in die periode géén `scripts/audit-salessheet-links.ts --apply`. Die verwijdert verweesde
+  `Document`-rijen, en na het leegmaken is élk document verweesd. Het bestand overleeft dat wel
+  (het script raakt de blob niet aan), maar de wetenschap wélk bestand het was verdwijnt.
+
+**De blobopslag wordt niet leeggemaakt.** Test en productie delen één store (0,81 GB, gemeten
+07-09-2026) en test gebruikt de afrekeningen van productie. Verweesde bestanden kosten opslag en
+verder niets; een ten onrechte verwijderd bestand is niet terug te halen. Sinds 07-09-2026 schrijft
+elke omgeving in haar eigen map (`prod/`, `test/`) en mag ze alleen daarbinnen verwijderen — zie
+`src/lib/blob-paths.ts`. Bestanden van vóór die scheiding staan zonder map en zijn daarmee van
+niemand: die blijven staan tot er een opruimronde komt die beide databases tegelijk kan raadplegen.
 
 ---
 

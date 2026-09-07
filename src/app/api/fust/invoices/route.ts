@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireAuth } from "@/lib/api-helpers";
 import { put } from "@vercel/blob";
+import { blobKey } from "@/lib/blob-paths";
 import { parseFustInvoicePdf } from "@/features/fust/lib/invoice-parser";
 import { logFustEvent } from "@/lib/fust-audit";
 
@@ -59,7 +60,7 @@ export async function POST(request: NextRequest) {
 
   // Store in Vercel Blob
   const blob = await put(
-    `fust-invoices/${Date.now()}-${file.name}`,
+    blobKey(`fust-invoices/${Date.now()}-${file.name}`),
     buffer,
     { access: "public", contentType: file.type }
   );

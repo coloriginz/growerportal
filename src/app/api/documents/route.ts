@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { put } from "@vercel/blob";
+import { blobKey } from "@/lib/blob-paths";
 import { prisma } from "@/lib/db";
 import { requireAuth, resolveSupplierId, buildSupplierScope } from "@/lib/api-helpers";
 import { DOCUMENT_TYPES } from "@/types";
@@ -71,7 +72,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Upload to Vercel Blob
-    const blob = await put(`documents/${supplierId}/${file.name}`, file, {
+    const blob = await put(blobKey(`documents/${supplierId}/${file.name}`), file, {
       access: "public",
       addRandomSuffix: true,
     });
