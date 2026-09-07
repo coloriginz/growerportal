@@ -33,7 +33,13 @@
     "preferredLanguage": "Communicatietaal",
     "preferredLanguageDescription": "Taal die gebruikt wordt voor e-mails naar deze leverancier.",
     "showMore": "Meer tonen",
-    "showLess": "Minder tonen"
+    "showLess": "Minder tonen",
+    "showingRange": "{from}-{to} van {total}",
+    "pageOf": "Pagina {page} van {total}",
+    "previousPage": "Vorige pagina",
+    "nextPage": "Volgende pagina",
+    "goToPage": "Ga naar pagina",
+    "exportFailed": "Export mislukt"
   },
   "auth": {
     "login": "Inloggen",

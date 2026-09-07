@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
+import { toast } from "sonner";
 import { SelectSupplierPrompt } from "@/components/ui/select-supplier-prompt";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -22,8 +23,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
+import { ListPagination } from "@/components/list-pagination";
 import { RiSearchLine, RiStackLine, RiDownloadLine } from "@remixicon/react";
 import { exportToCSV } from "@/lib/export-csv";
+import { fetchAllPages, type PagedResponse } from "@/lib/fetch-all-pages";
 import { useFetch } from "@/hooks/use-fetch";
 import { ErrorState } from "@/components/ui/error-state";
 import { formatTime } from "@/lib/format";
@@ -60,17 +63,74 @@ const statusVariant: Record<LotStatus, "default" | "secondary" | "destructive" |
   sold: "default",
 };
 
+const PAGE_SIZE = 50;
+
 export function LotsContent({ supplierId }: { supplierId: string | null }) {
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [page, setPage] = useState(1);
+  const [exporting, setExporting] = useState(false);
   const { t } = useLanguage();
 
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+      setPage(1);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  // De filters zonder paginanummer. Dat is ook precies wat de CSV-export vraagt,
+  // maar dan over alle pagina's.
+  const params = useMemo(() => {
+    const p = new URLSearchParams();
+    if (supplierId) p.set("supplierId", supplierId);
+    if (debouncedSearch) p.set("search", debouncedSearch);
+    if (statusFilter !== "all") p.set("status", statusFilter);
+    return p.toString();
+  }, [supplierId, debouncedSearch, statusFilter]);
+
+  // Zonder leverancier toont dit scherm de leverancierskiezer, dus dan ook niet
+  // ophalen.
   const url = useMemo(() => {
-    const params = new URLSearchParams();
-    if (supplierId) params.set("supplierId", supplierId);
-    return `/api/lots?${params}`;
-  }, [supplierId]);
-  const { data: lots, loading, error, lastUpdated, refetch } = useFetch<LotRow[]>(url);
+    if (!supplierId) return null;
+    const p = new URLSearchParams(params);
+    p.set("page", String(page));
+    p.set("limit", String(PAGE_SIZE));
+    return "/api/lots?" + p.toString();
+  }, [supplierId, params, page]);
+
+  const { data, loading, error, lastUpdated, refetch } = useFetch<PagedResponse<LotRow>>(url);
+
+  const lots = data?.items ?? [];
+  const total = data?.total ?? 0;
+  const totalPages = data?.totalPages ?? 0;
+  // Zie de toelichting bij hetzelfde in shipments-content.
+  const currentPage = data?.page ?? page;
+
+  async function handleExport() {
+    setExporting(true);
+    try {
+      const rows = await fetchAllPages<LotRow>("/api/lots?" + params);
+      exportToCSV(rows, "lots-export", [
+        { key: "lotNumber", header: "Lot Number" },
+        { key: "productName", header: "Product" },
+        { key: "articleGroup", header: "Article Group" },
+        { key: "colli", header: "Colli" },
+        { key: "stemLength", header: "Length (cm)" },
+        { key: "totalStems", header: "Stems" },
+        { key: "avgPrice", header: "Avg Price" },
+        { key: "totalAmount", header: "Amount" },
+        { key: "deliveryDate", header: "Delivery Date" },
+        { key: "status", header: "Status" },
+      ]);
+    } catch {
+      toast.error(t("common.exportFailed"));
+    } finally {
+      setExporting(false);
+    }
+  }
 
   if (!supplierId) return <SelectSupplierPrompt />;
 
@@ -82,43 +142,16 @@ export function LotsContent({ supplierId }: { supplierId: string | null }) {
     );
   }
 
-  const filtered = (lots || []).filter((lot) => {
-    const matchesSearch =
-      !search ||
-      lot.lotNumber.toLowerCase().includes(search.toLowerCase()) ||
-      lot.productName.toLowerCase().includes(search.toLowerCase()) ||
-      lot.articleGroup.toLowerCase().includes(search.toLowerCase());
-    const matchesStatus = statusFilter === "all" || lot.status === statusFilter;
-    return matchesSearch && matchesStatus;
-  });
-
   return (
     <div className="page-content">
       <div className="page-header">
         <h1>{t("lots.title")}</h1>
         <div className="flex items-center gap-2">
-          {filtered.length > 0 && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() =>
-                exportToCSV(filtered, "lots-export", [
-                { key: "lotNumber", header: "Lot Number" },
-                { key: "productName", header: "Product" },
-                { key: "articleGroup", header: "Article Group" },
-                { key: "colli", header: "Colli" },
-                { key: "stemLength", header: "Length (cm)" },
-                { key: "totalStems", header: "Stems" },
-                { key: "avgPrice", header: "Avg Price" },
-                { key: "totalAmount", header: "Amount" },
-                { key: "deliveryDate", header: "Delivery Date" },
-                { key: "status", header: "Status" },
-              ])
-            }
-          >
-            <RiDownloadLine className="mr-2 h-4 w-4" />
-            {t("common.exportCSV")}
-          </Button>
+          {total > 0 && (
+            <Button variant="outline" size="sm" disabled={exporting} onClick={handleExport}>
+              <RiDownloadLine className="mr-2 h-4 w-4" />
+              {t("common.exportCSV")}
+            </Button>
           )}
           {lastUpdated && (
             <span className="text-xs text-muted-foreground">
@@ -142,7 +175,15 @@ export function LotsContent({ supplierId }: { supplierId: string | null }) {
             className="pl-10"
           />
         </div>
-        <Select value={statusFilter} onValueChange={(v) => { if (v !== null) setStatusFilter(v); }}>
+        <Select
+          value={statusFilter}
+          onValueChange={(v) => {
+            if (v !== null) {
+              setStatusFilter(v);
+              setPage(1);
+            }
+          }}
+        >
           <SelectTrigger className="w-[160px]">
             <SelectValue placeholder={t("lots.status")} />
           </SelectTrigger>
@@ -157,7 +198,7 @@ export function LotsContent({ supplierId }: { supplierId: string | null }) {
 
       {/* Mobile card list */}
       <div className="space-y-3 md:hidden">
-        {filtered.map((lot) => (
+        {lots.map((lot) => (
           <Link key={lot.id} href={`/lots/${lot.id}${supplierId ? `?supplierId=${supplierId}` : ""}`} className="block">
             <Card className="transition-colors hover:bg-accent/50">
               <CardContent className="p-4">
@@ -196,7 +237,7 @@ export function LotsContent({ supplierId }: { supplierId: string | null }) {
             </Card>
           </Link>
         ))}
-        {filtered.length === 0 && !loading && (
+        {lots.length === 0 && !loading && (
           <div className="empty-state">
             <div className="empty-state-icon">
               <RiStackLine />
@@ -225,7 +266,7 @@ export function LotsContent({ supplierId }: { supplierId: string | null }) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.map((lot) => (
+              {lots.map((lot) => (
                 <TableRow key={lot.id}>
                   <TableCell className="font-medium">
                     <Link
@@ -257,7 +298,7 @@ export function LotsContent({ supplierId }: { supplierId: string | null }) {
                   </TableCell>
                 </TableRow>
               ))}
-              {filtered.length === 0 && !loading && (
+              {lots.length === 0 && !loading && (
                 <TableRow className="hover:bg-transparent">
                   <TableCell colSpan={11} className="py-0">
                     <div className="empty-state">
@@ -272,6 +313,15 @@ export function LotsContent({ supplierId }: { supplierId: string | null }) {
             </TableBody>
           </Table>
       </div>
+
+      <ListPagination
+        page={currentPage}
+        totalPages={totalPages}
+        total={total}
+        pageSize={PAGE_SIZE}
+        onPageChange={setPage}
+        disabled={loading}
+      />
     </div>
   );
 }

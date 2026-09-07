@@ -13,7 +13,9 @@ export default async function LotsPage({ searchParams }: Props) {
 
   return (
     <Suspense fallback={<Skeleton className="h-96" />}>
-      <LotsContent supplierId={supplierId} />
+      {/* key op de leverancier: bij wisselen begint de lijst weer op pagina 1
+          in plaats van op het paginanummer van de vorige leverancier. */}
+      <LotsContent key={supplierId ?? "none"} supplierId={supplierId} />
     </Suspense>
   );
 }

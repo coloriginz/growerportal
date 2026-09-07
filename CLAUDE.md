@@ -381,8 +381,8 @@ The local archive in `private_input/salessheets` is pushed through this same rou
 | `/api/sales` | GET | Sales data with period/product/channel/length/grower filters |
 | `/api/sales/filters` | GET | Available filter options for sales |
 | `/api/sales/trends` | GET | Price trends, stem length breakdown, channel distribution |
-| `/api/lots` | GET | Lots with pagination and filters |
-| `/api/shipments` | GET | Salessheets with pagination |
+| `/api/lots` | GET | Lots, paginated (`page`/`limit`, 50 per page, max 500). Search and status filter live in the query, not on the screen |
+| `/api/shipments` | GET | Salessheets, paginated the same way. The status filter costs an aggregate over every settlement in scope rather than only the page: the status is derived from three import-fed numbers (`resolveShipmentStatus`), so there is no column to filter or count on, and a `LIMIT` in SQL would save nothing — Postgres has to aggregate the whole scope for the total either way. Measured on test at 100-150 ms warm for the largest suppliers, against 214 ms for the `take: 200` query it replaces |
 | `/api/shipments/ingestions` | GET | Salessheet PDF import log |
 | `/api/quality` | GET | Quality issues |
 | `/api/documents` | GET, POST | Document list and upload |
