@@ -266,7 +266,7 @@ Supplier -> has many -> FustOrders -> has one -> FustDelivery
 
 ### Important Constraints
 - `Lot.lotNumber + Lot.supplierId` is unique
-- `Transaction.fabricOrdregId + Transaction.lotId` is **not** unique, and must not be made unique. One orderregel is delivered in parts: `marts.fct_orders` returns a row per part — 200 + 1800 stems under one `ordreg_id`, same sales type, same price, same grower. 2.132 pairs on test carry more than one row and they are all genuine. A unique index there would silently drop half of every split line
+- `Transaction.fabricOrdregId + Transaction.lotId` is **not** unique, and must not be made unique. One orderregel is delivered in parts: `marts.fct_orders` returns a row per part — 200 + 1800 stems under one `ordreg_id`, same sales type, same price, same grower. 2.132 pairs on test carry more than one row and they are all genuine. A unique index there would silently drop half of every split line. The screen has to add those parts up for the same reason, and did not: `mergeTransactions()` groups by `ordreg_id` to keep a sale and its correction on separate lines, and it took only the *first* original row of a group. Lot 3645448 (PCXRONEN) printed 3.000 auctioned stems for EUR 558,00 on its sales sheet and showed 2.400 for EUR 446,40 in the portal. Measured on test: 1.205 split order lines over 742 deliveries at 43 suppliers, hiding 402.480 to 1.266.414 stems and EUR 102.245 to EUR 320.498 — a range rather than a number because the rows were sorted on a non-unique `date`, so which one survived was up to the query plan. `src/lib/transaction-merge.ts`, covered by `scripts/checks/transaction-merge.ts`
 - `SalesSheet.invoiceNumber` is unique
 - `Supplier.code` is unique
 - `Supplier.fabricId` is unique (nullable)
