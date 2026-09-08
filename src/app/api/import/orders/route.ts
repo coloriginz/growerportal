@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { runImport } from "@/lib/import-batch";
 import { resolveWithdrawalScope } from "@/lib/sync/withdrawal";
 import { parseFabricDate } from "@/lib/sync/fabric-date";
+import { markAfterSettlement } from "@/lib/sync/after-settlement";
 import { isoDate } from "@/lib/sync/queries/helpers";
 import { findJobForBatch, resolveScopedSupplierId } from "@/lib/sync/job-context";
 
@@ -445,6 +446,10 @@ async function upsertOrders(orders: Order[], batchId: string | null, priorRows: 
     const affectedLotIdArr = [...affectedLotIds];
 
     // Single SQL: aggregate transactions + update lots + assign grower via JOIN
+    // Eerst bepalen wat er ná de afrekening geboekt is, want de som hieronder
+    // laat die rijen weg. Zie src/lib/sync/after-settlement.ts.
+    await markAfterSettlement(affectedLotIdArr);
+
     lotsRecalculated = await prisma.$executeRawUnsafe(
       `UPDATE "Lot" AS l
        SET
@@ -458,8 +463,8 @@ async function upsertOrders(orders: Order[], batchId: string | null, priorRows: 
        FROM (
          SELECT
            "lotId",
-           SUM(stems)::int as total_stems,
-           SUM(amount) as total_amount,
+           SUM(stems) FILTER (WHERE NOT "afterSettlement")::int as total_stems,
+           SUM(amount) FILTER (WHERE NOT "afterSettlement") as total_amount,
            MIN("fabricGrowerId") FILTER (WHERE "fabricGrowerId" IS NOT NULL) as fabric_grower_id
          FROM "Transaction"
          WHERE "lotId" IN (SELECT jsonb_array_elements_text($1::jsonb))

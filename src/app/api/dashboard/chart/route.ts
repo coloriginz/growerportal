@@ -47,11 +47,15 @@ export async function GET(request: NextRequest) {
 
     const [currentTx, lastYearTx] = await Promise.all([
       prisma.transaction.findMany({
-        where: { ...supplierFilter, date: { gte: weekStart, lt: weekEnd } },
+        where: {
+          // Verkopen van ná de afrekening tellen niet mee; zie Transaction.afterSettlement.
+          afterSettlement: false, ...supplierFilter, date: { gte: weekStart, lt: weekEnd } },
         select: { date: true, stems: true, amount: true },
       }),
       prisma.transaction.findMany({
-        where: { ...supplierFilter, date: { gte: lyWeekStart, lt: lyWeekEnd } },
+        where: {
+          // Verkopen van ná de afrekening tellen niet mee; zie Transaction.afterSettlement.
+          afterSettlement: false, ...supplierFilter, date: { gte: lyWeekStart, lt: lyWeekEnd } },
         select: { date: true, stems: true, amount: true },
       }),
     ]);
@@ -81,11 +85,15 @@ export async function GET(request: NextRequest) {
       const lyMonthEnd = new Date(chartYear - 1, m + 1, 1);
       const [cur, ly] = await Promise.all([
         prisma.transaction.aggregate({
-          where: { ...supplierFilter, date: { gte: monthStart, lt: monthEnd } },
+          where: {
+            // Verkopen van ná de afrekening tellen niet mee; zie Transaction.afterSettlement.
+            afterSettlement: false, ...supplierFilter, date: { gte: monthStart, lt: monthEnd } },
           _sum: { stems: true, amount: true },
         }),
         prisma.transaction.aggregate({
-          where: { ...supplierFilter, date: { gte: lyMonthStart, lt: lyMonthEnd } },
+          where: {
+            // Verkopen van ná de afrekening tellen niet mee; zie Transaction.afterSettlement.
+            afterSettlement: false, ...supplierFilter, date: { gte: lyMonthStart, lt: lyMonthEnd } },
           _sum: { stems: true, amount: true },
         }),
       ]);
@@ -118,11 +126,15 @@ export async function GET(request: NextRequest) {
 
     const [currentTx, lastYearTx] = await Promise.all([
       prisma.transaction.findMany({
-        where: { ...supplierFilter, date: { gte: monthStart, lt: monthEnd } },
+        where: {
+          // Verkopen van ná de afrekening tellen niet mee; zie Transaction.afterSettlement.
+          afterSettlement: false, ...supplierFilter, date: { gte: monthStart, lt: monthEnd } },
         select: { date: true, stems: true, amount: true },
       }),
       prisma.transaction.findMany({
-        where: { ...supplierFilter, date: { gte: lyMonthStart, lt: lyMonthEnd } },
+        where: {
+          // Verkopen van ná de afrekening tellen niet mee; zie Transaction.afterSettlement.
+          afterSettlement: false, ...supplierFilter, date: { gte: lyMonthStart, lt: lyMonthEnd } },
         select: { date: true, stems: true, amount: true },
       }),
     ]);
@@ -156,7 +168,9 @@ export async function GET(request: NextRequest) {
   // Top products for the selected period
   const topProductsRaw = await prisma.transaction.groupBy({
     by: ["lotId"],
-    where: { ...supplierFilter, date: { gte: periodStart, lt: periodEnd } },
+    where: {
+      // Verkopen van ná de afrekening tellen niet mee; zie Transaction.afterSettlement.
+      afterSettlement: false, ...supplierFilter, date: { gte: periodStart, lt: periodEnd } },
     _sum: { stems: true, amount: true },
   });
 

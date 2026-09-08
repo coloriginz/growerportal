@@ -15,7 +15,10 @@ export async function GET(request: NextRequest) {
   }
 
   const lotWhere = supplierId ? { supplierId } : { supplier: scope };
-  const txWhere = supplierId ? { lot: { supplierId } } : { lot: { supplier: scope } };
+  // Verkopen van ná de afrekening tellen niet mee; zie Transaction.afterSettlement.
+  const txWhere = supplierId
+    ? { lot: { supplierId }, afterSettlement: false }
+    : { lot: { supplier: scope }, afterSettlement: false };
   const growerWhere = supplierId ? { supplierId } : { supplier: scope };
 
   const [products, salesTypes, stemLengths, growers] = await Promise.all([
