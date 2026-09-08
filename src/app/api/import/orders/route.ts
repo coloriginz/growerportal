@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { runImport } from "@/lib/import-batch";
 import { resolveWithdrawalScope } from "@/lib/sync/withdrawal";
+import { parseFabricDate } from "@/lib/sync/fabric-date";
 import { isoDate } from "@/lib/sync/queries/helpers";
 import { findJobForBatch, resolveScopedSupplierId } from "@/lib/sync/job-context";
 
@@ -24,6 +25,11 @@ const orderSchema = z.object({
   "Gem afrekenprijs": z.number().nullable().optional(),
   bron_feit_extra: z.string().nullable().optional(),
   reden_id: z.number().nullable().optional(),
+  // De creditfactuur waarop een correctie is geboekt. Alleen gevuld op
+  // correctierijen; zie de toelichting bij ordersQuery. Het nummer komt als
+  // string uit de warehouse maar kan als getal binnenkomen, vandaar de union.
+  Creditfactuurnummer: z.union([z.string(), z.number()]).nullable().optional(),
+  Creditfactuurdatum: z.string().nullable().optional(),
 });
 
 type Order = z.infer<typeof orderSchema>;
@@ -250,7 +256,7 @@ async function upsertOrders(orders: Order[], batchId: string | null, priorRows: 
       continue;
     }
 
-    const date = new Date(row._datum_key_vertrek);
+    const date = parseFabricDate(row._datum_key_vertrek);
     if (isNaN(date.getTime())) {
       txSkipped++;
       keepLotIds.add(lotInfo.id);
@@ -264,6 +270,15 @@ async function upsertOrders(orders: Order[], batchId: string | null, priorRows: 
     const bronFeitExtra = row.bron_feit_extra?.trim() || "origineel";
     const correctionReasonId = row.reden_id ?? null;
 
+    // Een onleesbare creditfactuurdatum wordt null en laat de rij verder met
+    // rust: het is aanvullende duiding bij een correctie, geen bedrag. De rij
+    // erom laten vallen zou een orderregel weggooien om een datum.
+    const creditNummer =
+      row.Creditfactuurnummer != null ? String(row.Creditfactuurnummer).trim() || null : null;
+    const creditDatumRuw = row.Creditfactuurdatum ? parseFabricDate(row.Creditfactuurdatum) : null;
+    const creditDatum =
+      creditDatumRuw && !isNaN(creditDatumRuw.getTime()) ? creditDatumRuw.toISOString() : null;
+
     if (!txDataByLot.has(lotInfo.id)) txDataByLot.set(lotInfo.id, []);
     txDataByLot.get(lotInfo.id)!.push({
       lotId: lotInfo.id,
@@ -276,6 +291,8 @@ async function upsertOrders(orders: Order[], batchId: string | null, priorRows: 
       amount: Math.round(amount * 1000) / 1000,
       bronFeitExtra,
       correctionReasonId,
+      creditInvoiceNumber: creditNummer,
+      creditInvoiceDate: creditDatum,
     });
     affectedLotIds.add(lotInfo.id);
   }
@@ -392,7 +409,8 @@ async function upsertOrders(orders: Order[], batchId: string | null, priorRows: 
           `INSERT INTO "Transaction" (
              id, "lotId", "fabricOrdregId", "fabricGrowerId",
              date, "salesType", stems, "pricePerStem", amount,
-             "bronFeitExtra", "correctionReasonId", "lastImportBatchId",
+             "bronFeitExtra", "correctionReasonId",
+             "creditInvoiceNumber", "creditInvoiceDate", "lastImportBatchId",
              "createdAt", "updatedAt"
            )
            SELECT
@@ -407,6 +425,8 @@ async function upsertOrders(orders: Order[], batchId: string | null, priorRows: 
              COALESCE((v.val->>'amount')::numeric, 0),
              COALESCE(v.val->>'bronFeitExtra', 'origineel'),
              (v.val->>'correctionReasonId')::int,
+             v.val->>'creditInvoiceNumber',
+             (v.val->>'creditInvoiceDate')::timestamptz,
              $2,
              NOW(),
              NOW()
