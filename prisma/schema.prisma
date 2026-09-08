@@ -446,6 +446,26 @@ model Transaction {
   /// om het te meten.
   creditInvoiceNumber String?
   creditInvoiceDate   DateTime?
+
+  /// Deze verkoop is geboekt ná de datum die op de afrekening staat
+  /// (`SalesSheet.pdfInvoiceDate`), en telt daarom niet mee in de portal.
+  ///
+  /// De afrekening is een momentopname. Wat er daarna nog op een levering wordt
+  /// geboekt staat niet op het papier dat de kweker heeft, en zolang het wel
+  /// meetelde week de portal af van zijn eigen afrekening. Gemeten op test:
+  /// 38 transacties over 27 leveringen, 30.915 stelen, EUR 2.178,68 — bij 19
+  /// van die 27 sluit de omzet zonder deze rijen exact aan, en er ging er geen
+  /// enkele door stuk.
+  ///
+  /// Bewust een opgeslagen vlag en geen filter in elke query: de vergelijking
+  /// vraagt een join naar de afrekening die Prisma niet als kolomvergelijking
+  /// kan uitdrukken, en zo is ook op te vragen hoeveel omzet er verborgen wordt.
+  /// Dat laatste is de prijs van deze keuze en die hoort zichtbaar te blijven.
+  ///
+  /// De vlag wordt gezet door de orders-import en opnieuw bepaald zodra een
+  /// sales sheet-PDF wordt gekoppeld of losgemaakt — dan pas is `pdfInvoiceDate`
+  /// bekend, of verdwijnt hij weer.
+  afterSettlement     Boolean  @default(false)
   createdAt           DateTime @default(now())
   updatedAt           DateTime @default(now()) @updatedAt
 
@@ -459,6 +479,7 @@ model Transaction {
   @@index([salesType])
   @@index([fabricOrdregId])
   @@index([bronFeitExtra])
+  @@index([afterSettlement])
   @@index([correctionReasonId])
   @@index([lastImportBatchId])
 }

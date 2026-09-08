@@ -1,7 +1,9 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
+import { parseFabricDate } from "@/lib/sync/fabric-date";
 import { runImport } from "@/lib/import-batch";
+import { resolveShipmentNumber } from "@/lib/sync/shipment-number";
 import {
   planReattributionRemoval,
   type ReattributedSheet,
@@ -216,7 +218,7 @@ async function upsertLots(partijen: Partij[], batchId: string | null) {
     }),
     prisma.salesSheet.findMany({
       where: { fabricParthdrId: { in: allParthdrIds } },
-      select: { id: true, fabricParthdrId: true },
+      select: { id: true, fabricParthdrId: true, invoiceNumber: true },
     }),
     prisma.lot.findMany({
       where: { fabricPartId: { in: allPartIds } },
@@ -230,8 +232,12 @@ async function upsertLots(partijen: Partij[], batchId: string | null) {
   }
 
   const ssMap = new Map<number, string>();
+  const ssNummer = new Map<number, string>();
   for (const ss of existingSalesSheets) {
-    if (ss.fabricParthdrId) ssMap.set(ss.fabricParthdrId, ss.id);
+    if (ss.fabricParthdrId) {
+      ssMap.set(ss.fabricParthdrId, ss.id);
+      ssNummer.set(ss.fabricParthdrId, ss.invoiceNumber);
+    }
   }
 
   const lotExistsSet = new Set<number>();
@@ -239,32 +245,41 @@ async function upsertLots(partijen: Partij[], batchId: string | null) {
     if (l.fabricPartId) lotExistsSet.add(l.fabricPartId);
   }
 
-  // Phase 2: Collect potential invoice numbers for new salessheets and check collisions
-  const newSsInvoiceNumbers: string[] = [];
+  // Phase 2: welke zendingnummers wil deze ronde gebruiken, en zijn ze vrij?
+  //
+  // Ook voor leveringen die al bestaan, niet alleen voor nieuwe. De bron schoont
+  // die nummers na de aanvoer op en tot 8 september 2026 schreef alleen de
+  // insert-tak ze weg, waardoor de eerste waarde voor altijd bleef staan — zie
+  // `src/lib/sync/shipment-number.ts`.
+  const kandidaten: string[] = [];
   for (const [parthdrId, rows] of byParthdr) {
-    if (ssMap.has(parthdrId)) continue;
     if (gemengdeLeveringen.has(parthdrId)) continue;
-    const supplierId = supplierMap.get(rows[0].rel_id_leverancier);
-    if (!supplierId) continue;
-    let inv = rows[0]["Inkoop Factuur Nummer"]?.trim() || null;
-    if (!inv || ["", "xxx", "volgt", "test", "restpartijen"].includes(inv)) {
-      inv = `FABRIC-${parthdrId}`;
-    }
-    newSsInvoiceNumbers.push(inv);
+    if (!supplierMap.get(rows[0].rel_id_leverancier)) continue;
+    const bron = rows[0]["Inkoop Factuur Nummer"]?.trim();
+    if (bron) kandidaten.push(bron);
+    if (!ssMap.has(parthdrId)) kandidaten.push(`FABRIC-${parthdrId}`);
   }
 
-  const existingInvoices =
-    newSsInvoiceNumbers.length > 0
-      ? await prisma.salesSheet.findMany({
-          where: { invoiceNumber: { in: newSsInvoiceNumbers } },
-          select: { invoiceNumber: true },
-        })
-      : [];
-  const usedInvoiceNumbers = new Set(existingInvoices.map((inv) => inv.invoiceNumber));
+  // Met parthdr_id erbij: een nummer dat deze levering zelf al draagt is geen
+  // botsing, en zonder die vergelijking zou elke ronde er een achtervoegsel
+  // achter plakken.
+  const bezetteNummers = new Map<string, number | null>();
+  if (kandidaten.length > 0) {
+    const rijen = await prisma.salesSheet.findMany({
+      where: { invoiceNumber: { in: [...new Set(kandidaten)] } },
+      select: { invoiceNumber: true, fabricParthdrId: true },
+    });
+    for (const r of rijen) bezetteNummers.set(r.invoiceNumber, r.fabricParthdrId);
+  }
+  const isBezet = (nummer: string, parthdrId: number) => {
+    if (!bezetteNummers.has(nummer)) return false;
+    return bezetteNummers.get(nummer) !== parthdrId;
+  };
 
   // Phase 3: Build salessheet operations
   let ssCreated = 0,
-    ssUpdated = 0;
+    ssUpdated = 0,
+    ssNummersBijgewerkt = 0;
   let lotCreated = 0,
     lotUpdated = 0;
   let skipped = 0;
@@ -297,7 +312,12 @@ async function upsertLots(partijen: Partij[], batchId: string | null) {
    *
    * Fabric is de bron voor deze toewijzing, dus de portal volgt hem.
    */
-  const ssUpdateData: { fabricParthdrId: number; deliveryDate: string; supplierId: string }[] = [];
+  const ssUpdateData: {
+    fabricParthdrId: number;
+    deliveryDate: string;
+    supplierId: string;
+    invoiceNumber: string | null;
+  }[] = [];
 
   /** Overgeslagen leveringen: `parthdr_id` -> de relatie die Fabric eraan geeft. */
   const overgeslagenParthdrs = new Map<number, number>();
@@ -326,28 +346,31 @@ async function upsertLots(partijen: Partij[], batchId: string | null) {
     }
 
     const deliveryDate = firstRow["Lever Datum/Tijd"]
-      ? new Date(firstRow["Lever Datum/Tijd"])
+      ? parseFabricDate(firstRow["Lever Datum/Tijd"])
       : new Date();
 
+    const besluit = resolveShipmentNumber({
+      bron: firstRow["Inkoop Factuur Nummer"],
+      opgeslagen: ssNummer.get(parthdrId) ?? null,
+      parthdrId,
+      bezet: (nummer) => isBezet(nummer, parthdrId),
+    });
+    // Binnen dezelfde ronde meetellen, anders kiezen twee leveringen in één
+    // payload hetzelfde vrije nummer en valt de unieke index erover.
+    if (besluit.nummer) bezetteNummers.set(besluit.nummer, parthdrId);
+
     if (ssMap.has(parthdrId)) {
+      if (besluit.nummer) ssNummersBijgewerkt++;
       ssUpdateData.push({
         fabricParthdrId: parthdrId,
         deliveryDate: deliveryDate.toISOString(),
         supplierId,
+        // null laat het bestaande nummer staan; zie de COALESCE hieronder.
+        invoiceNumber: besluit.nummer,
       });
       ssUpdated++;
     } else {
-      let invoiceNumber = firstRow["Inkoop Factuur Nummer"]?.trim() || null;
-      if (
-        !invoiceNumber ||
-        ["", "xxx", "volgt", "test", "restpartijen"].includes(invoiceNumber)
-      ) {
-        invoiceNumber = `FABRIC-${parthdrId}`;
-      }
-      if (usedInvoiceNumbers.has(invoiceNumber)) {
-        invoiceNumber = `${invoiceNumber}-${parthdrId}`;
-      }
-      usedInvoiceNumbers.add(invoiceNumber);
+      const invoiceNumber = besluit.nummer ?? `FABRIC-${parthdrId}`;
 
       ssCreateData.push({
         invoiceNumber,
@@ -370,6 +393,7 @@ async function upsertLots(partijen: Partij[], batchId: string | null) {
        SET
          "deliveryDate" = (u.val->>'deliveryDate')::timestamp,
          "supplierId" = u.val->>'supplierId',
+         "invoiceNumber" = COALESCE(u.val->>'invoiceNumber', t."invoiceNumber"),
          "updatedAt" = NOW()
        FROM jsonb_array_elements($1::jsonb) AS u(val)
        WHERE t."fabricParthdrId" = (u.val->>'fabricParthdrId')::int`,
@@ -448,7 +472,7 @@ async function upsertLots(partijen: Partij[], batchId: string | null) {
     if (!salesSheetId) continue;
 
     const deliveryDate = firstRow["Lever Datum/Tijd"]
-      ? new Date(firstRow["Lever Datum/Tijd"])
+      ? parseFabricDate(firstRow["Lever Datum/Tijd"])
       : new Date();
 
     for (const row of rows) {
@@ -909,7 +933,7 @@ async function upsertLots(partijen: Partij[], batchId: string | null) {
     // skippedPurchaseTypes per code.
     skipped: skipped + correctionsSkipped + skippedNotConsignment,
     details: {
-      salesSheets: { created: ssCreated, updated: ssUpdated },
+      salesSheets: { created: ssCreated, updated: ssUpdated, shipmentNumbersUpdated: ssNummersBijgewerkt },
       lots: { created: lotCreated, updated: lotUpdated },
       corrections: {
         created: correctionsNew,
@@ -945,7 +969,7 @@ async function upsertLots(partijen: Partij[], batchId: string | null) {
         : {}),
     },
     extra: {
-      salesSheets: { created: ssCreated, updated: ssUpdated },
+      salesSheets: { created: ssCreated, updated: ssUpdated, shipmentNumbersUpdated: ssNummersBijgewerkt },
       lots: { created: lotCreated, updated: lotUpdated },
       corrections: {
         created: correctionsNew,

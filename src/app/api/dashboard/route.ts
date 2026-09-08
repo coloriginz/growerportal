@@ -68,24 +68,34 @@ export async function GET(request: NextRequest) {
     recentShipments,
   ] = await Promise.all([
     prisma.transaction.aggregate({
-      where: { ...supplierFilter, date: { gte: todayStart } },
+      where: {
+        // Verkopen van ná de afrekening tellen niet mee; zie Transaction.afterSettlement.
+        afterSettlement: false, ...supplierFilter, date: { gte: todayStart } },
       _sum: { stems: true, amount: true },
     }),
     prisma.transaction.aggregate({
-      where: { ...supplierFilter, date: { gte: yesterdayStart, lt: todayStart } },
+      where: {
+        // Verkopen van ná de afrekening tellen niet mee; zie Transaction.afterSettlement.
+        afterSettlement: false, ...supplierFilter, date: { gte: yesterdayStart, lt: todayStart } },
       _sum: { stems: true },
     }),
     prisma.transaction.aggregate({
-      where: { ...supplierFilter, date: { gte: ytdStart } },
+      where: {
+        // Verkopen van ná de afrekening tellen niet mee; zie Transaction.afterSettlement.
+        afterSettlement: false, ...supplierFilter, date: { gte: ytdStart } },
       _sum: { stems: true, amount: true },
     }),
     prisma.transaction.aggregate({
-      where: { ...supplierFilter, date: { gte: lastYearYtdStart, lte: lastYearSameDate } },
+      where: {
+        // Verkopen van ná de afrekening tellen niet mee; zie Transaction.afterSettlement.
+        afterSettlement: false, ...supplierFilter, date: { gte: lastYearYtdStart, lte: lastYearSameDate } },
       _sum: { stems: true, amount: true },
     }),
     prisma.transaction.groupBy({
       by: ["lotId"],
-      where: { ...supplierFilter, date: { gte: ytdStart } },
+      where: {
+        // Verkopen van ná de afrekening tellen niet mee; zie Transaction.afterSettlement.
+        afterSettlement: false, ...supplierFilter, date: { gte: ytdStart } },
       _sum: { stems: true, amount: true },
     }),
     // Net yield: use SalesSheet as single source of truth (turnover + costs from same invoice)

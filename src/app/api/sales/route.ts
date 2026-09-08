@@ -94,6 +94,8 @@ export async function GET(request: NextRequest) {
   const baseWhere: Record<string, any> = {
     lot: lotFilter,
     date: dateFilter,
+    // Verkopen van ná de afrekening tellen niet mee; zie Transaction.afterSettlement.
+    afterSettlement: false,
   };
   if (filterSalesTypes.length > 0) baseWhere.salesType = { in: filterSalesTypes };
 

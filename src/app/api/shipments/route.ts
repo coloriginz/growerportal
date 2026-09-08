@@ -103,6 +103,7 @@ export async function GET(request: NextRequest) {
       FROM "Transaction" tx
       JOIN "Lot" lo ON lo.id = tx."lotId"
       WHERE lo."supplierId" = ANY(${supplierIds}::text[])
+        AND NOT tx."afterSettlement"
       GROUP BY lo."salesSheetId"
     ) t ON t.sid = ss.id
     LEFT JOIN (

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { markAfterSettlement, recalculateAfterSettlement } from "@/lib/sync/after-settlement";
 import { Prisma } from "@/generated/prisma";
 import { put } from "@vercel/blob";
 import { blobKey, deleteOwnBlob } from "@/lib/blob-paths";
@@ -200,11 +201,13 @@ async function processAttachment(
 
   // Step 1: Try filename parsing
   let reference: string | null = null;
+  let referenceHead: string | null = null;
   let ourInvoiceNumber: string | null = null;
 
   const parsed = parseSalesSheetFilename(attachment.name);
   if (parsed) {
     reference = parsed.reference;
+    referenceHead = parsed.referenceHead;
     ourInvoiceNumber = parsed.ourInvoiceNumber;
   } else {
     // Fallback: simple filename like "135-23-380914.pdf", then the loose form
@@ -277,7 +280,7 @@ async function processAttachment(
   // another supplier's PDF in the first place.
   if (!deliveryDate) deliveryDate = parsed?.deliveryDate ?? null;
 
-  let candidates = await findCandidates([reference, pdfReference], ourInvoiceNumber);
+  let candidates = await findCandidates([reference, referenceHead, pdfReference], ourInvoiceNumber);
   reference = reference || pdfReference;
 
   if (candidates.length === 0) {
@@ -412,6 +415,20 @@ async function processAttachment(
       pdfParsedAt: new Date(),
     },
   });
+
+  /*
+   * Pas hier is de factuurdatum bekend, en daarmee welke verkopen ná de
+   * afrekening zijn geboekt. Die tellen niet mee, dus de partij- en
+   * leveringstotalen moeten opnieuw. Zonder deze stap zou een levering pas bij
+   * de eerstvolgende orders-ronde kloppen, en oude vensters komen niet terug.
+   */
+  const geraakteLots = await prisma.lot.findMany({
+    where: { salesSheetId: salesSheet.id },
+    select: { id: true },
+  });
+  const lotIds = geraakteLots.map((l) => l.id);
+  await markAfterSettlement(lotIds);
+  await recalculateAfterSettlement(lotIds);
 
   return {
     ok: true,

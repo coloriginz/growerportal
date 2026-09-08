@@ -43,6 +43,8 @@ export async function GET(request: NextRequest) {
   const txWhere = supplierId ? { lot: { supplierId } } : { lot: { supplier: scope } };
   const totalStemsAgg = await prisma.transaction.aggregate({
     where: {
+      // Verkopen van ná de afrekening tellen niet mee; zie Transaction.afterSettlement.
+      afterSettlement: false,
       ...txWhere,
       date: { gte: ytdStart },
     },
