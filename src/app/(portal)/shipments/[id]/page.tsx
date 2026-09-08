@@ -22,7 +22,11 @@ export default async function ShipmentDetailPage({ params }: Props) {
         orderBy: { lotNumber: "asc" },
         include: {
           transactions: {
-            orderBy: { date: "asc" },
+            // id achter de datum: datums zijn niet uniek, en zonder tweede
+            // sleutel ligt de volgorde binnen een dag niet vast. mergeTransactions
+            // leest datum en kanaal van de eerste rij van een groep, dus dan
+            // hangt de uitkomst af van het queryplan.
+            orderBy: [{ date: "asc" }, { id: "asc" }],
             select: {
               id: true,
               fabricOrdregId: true,
