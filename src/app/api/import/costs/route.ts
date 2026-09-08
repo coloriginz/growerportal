@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
+import { parseFabricDate } from "@/lib/sync/fabric-date";
 import { runImport } from "@/lib/import-batch";
 
 // Vercel kapt een functie zonder dit af op de standaardlimiet; de lots- en
@@ -285,14 +286,14 @@ async function upsertCosts(costs: Cost[], batchId: string | null) {
       if (!ssId) continue;
 
       if (row["Laatste Ontvangstdatum"]) {
-        const d = new Date(row["Laatste Ontvangstdatum"]);
+        const d = parseFabricDate(row["Laatste Ontvangstdatum"]);
         if (!isNaN(d.getTime())) {
           const current = ssReceiptDates.get(ssId);
           if (!current || d > current) ssReceiptDates.set(ssId, d);
         }
       }
       if (row["Laatste Aanmelddatum"]) {
-        const d = new Date(row["Laatste Aanmelddatum"]);
+        const d = parseFabricDate(row["Laatste Aanmelddatum"]);
         if (!isNaN(d.getTime())) {
           const current = ssRegistrationDates.get(ssId);
           if (!current || d > current) ssRegistrationDates.set(ssId, d);
