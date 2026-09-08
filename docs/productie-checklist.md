@@ -1,41 +1,45 @@
 # Wat productie nog nodig heeft
 
-> Bijgewerkt: 20 augustus 2026. Dit is de losse lijst van dingen die op **test** staan en op
+> Bijgewerkt: 8 september 2026. Dit is de losse lijst van dingen die op **test** staan en op
 > **productie** nog moeten gebeuren. Instellingen en schemawijzigingen reizen niet mee met een deploy;
 > alleen code doet dat. Streep af wat gedaan is en verwijder dit bestand zodra het leeg is.
+>
+> **Alles hieronder is op 8 september 2026 tegen de productiedatabase nagelezen** in plaats van
+> overgeschreven. Dat was nodig: de lijst noemde punten 2 tot en met 8 nog als openstaand terwijl ze
+> al maanden draaien, en een checklist die dingen als open toont die gedaan zijn is op termijn
+> schadelijker dan geen checklist — je gaat hem wantrouwen, en dan mis je het punt dat er wél toe doet.
+> Wat er echt nog ligt staat in §8.
 
-## 1. Schemawijzigingen — GEDAAN op 24 augustus 2026
+**Stand van productie op 8 september 2026:** 56 leveranciers, 7.983 afrekeningen (31-12-2024 tot
+08-09-2026), 68.550 partijen, 344.892 transacties, 17.342 partijcorrecties. 3.575 importrondes sinds
+10 mei 2026, waarvan 49 mislukt. Beide schedules staan aan en draaiden voor het laatst om 17:04.
 
-Uitgevoerd via de Neon HTTP-driver tegen `.env.production`. Het bleken er meer dan de twee die hier
-stonden: `lastImportBatchId` ontbrak op vijf tabellen, niet op één.
+## 1. Schemawijzigingen — GEDAAN
 
-> Dat het met de hand ging was overigens niet nodig: poort 5432 blijkt per netwerk te verschillen en
-> stond op dat moment gewoon open, dus `prisma db push` had gekund. Meet het eerst — zie de
-> ontwikkelnotities in `CLAUDE.md`.
+Twee rondes:
 
-```sql
-ALTER TABLE "Grower"         ADD COLUMN "lastImportBatchId" TEXT;
-ALTER TABLE "Lot"            ADD COLUMN "lastImportBatchId" TEXT;
-ALTER TABLE "LotCorrection"  ADD COLUMN "lastImportBatchId" TEXT;
-ALTER TABLE "SalesSheetCost" ADD COLUMN "lastImportBatchId" TEXT;
-ALTER TABLE "Transaction"    ADD COLUMN "lastImportBatchId" TEXT;
-ALTER TABLE "SyncJob" ADD COLUMN "priority" INTEGER NOT NULL DEFAULT 0;
--- plus een index per lastImportBatchId-kolom,
--- SyncJob_status_createdAt_idx vervangen door SyncJob_status_priority_createdAt_idx
-```
+- **24 augustus 2026** — `lastImportBatchId` op vijf tabellen plus `SyncJob.priority`, uitgevoerd via
+  de Neon HTTP-driver tegen `.env.production`. Het bleken er meer dan de twee die hier stonden.
+- **8 september 2026** — `Transaction.creditInvoiceNumber` en `creditInvoiceDate`, met
+  `prisma db push` tegen `.env.production`, vóór de merge naar `main` (de sync draait daar elke vijf
+  minuten, dus code die naar die kolommen schrijft mag er niet eerder zijn dan de kolommen zelf).
 
-Geen handwerk meer nodig om te weten wát er mist: lees `prisma/schema.prisma`, vraag
-`information_schema.columns` op tegen de productiedatabase en vergelijk de twee. Dat vond hier vier
-kolommen die niemand had opgeschreven.
+`npx prisma migrate diff --from-url "<productie DIRECT_URL>" --to-schema-datamodel prisma/schema.prisma --script`
+geeft sindsdien "This is an empty migration". **Dat is de manier om dit te controleren** — geen
+handwerk, geen lijst die je moet bijhouden. Poort 5432 blijkt per netwerk te verschillen; meet het
+eerst (zie de ontwikkelnotities in `CLAUDE.md`), dan weet je of `db push` kan of dat het via de
+HTTP-driver moet.
 
-## 2. Omgevingsvariabelen
+## 2. Omgevingsvariabelen — GEDAAN, voor zover van buiten te zien
 
-- **`NEXT_PUBLIC_APP_ENV=production`** — zonder deze variabele antwoordt `/api/sync/tick` met
-  `{"dryRun":true,"reason":"development"}` en gebeurt er niets. De sync staat dan stil zonder dat er
-  ergens een fout verschijnt.
+- **`NEXT_PUBLIC_APP_ENV=production`** — staat er. Niet rechtstreeks af te lezen van buiten Vercel,
+  maar wel te bewijzen: zonder deze variabele weigert `/api/sync/tick` te versturen en zou er niets
+  syncen. Er draaien 3.575 geslaagde importrondes, dus hij staat goed. Dezelfde variabele bepaalt
+  sinds 7 september ook in welke map blobuploads landen (`prod/`); zonder haar zouden die in
+  `unknown/` terechtkomen.
 - **`CRON_SECRET`** — staat er al.
-- **`IMPORT_API_KEY_PREVIOUS`** — mag eruit zodra alle Power Automate-flows op de nieuwe sleutel
-  draaien. Zolang hij er staat wordt de oude sleutel nog geaccepteerd.
+- **`IMPORT_API_KEY_PREVIOUS`** — nog niet nagekeken; van buiten Vercel niet te zien. Mag eruit zodra
+  alle Power Automate-flows op de nieuwe sleutel draaien.
 
 ## 3. Power Automate
 
@@ -52,51 +56,59 @@ achtervoegsel en blijft het oude adres antwoorden op een leeg omhulsel. `SELECT 
 met `marts.` faalt. **Dit gaat nog eens gebeuren** — herken het aan een keten die vastloopt op
 `suppliers`, de kleinste query die we hebben.
 
-De ophaal-flow was op 20 augustus nog niet omgezet terwijl de vraag-flow dat wel was; controleer ze dus
-allebei.
+Beide flows werken: er draaien geslaagde rondes op productie.
 
-## 4. Instellingen die per omgeving gezet moeten worden
+**Nog niet bewezen, en het is de enige echte onbekende van de laatste wijziging.** De ordersquery
+leest sinds 8 september ook uit `intermediate.int_order_correctie` en `staging.stg_kbtpro__fact`, een
+laag onder de marts. Via de **vraag**-flow werkt dat aantoonbaar — de gecombineerde query met
+`marts.fct_orders` erin draait daar zonder mopperen, dus die verbinding mag bij beide schema's. De
+**haal**-flow is een andere flow en is er nog niet langs geweest. Gaat dat mis, dan zie je het niet
+aan een foutmelding: die flow antwoordt 202 zodra hij start, dus de job blijft op `dispatched` staan
+tot de reaper hem na een kwartier omlegt. Kijk na de eerste orders-ronde of er een geslaagde batch
+staat.
 
-- **De twee `SyncSchedule`-rijen.** Op test staat `intraday` op elke 6 uur met een venster van 2 dagen,
-  en `nightly` op 03:00 met 7 dagen en `windowOverrides: {"costs": 28}`. Kosten hebben een breder
-  venster nodig omdat afrekenen weken achterloopt op leveren.
-  **Zet ze op productie pas aan als de rest klopt** — een ronde die draait terwijl het schema niet
-  compleet is trekt gaten.
-- **De basisdatum voor backfills** (`Setting`-sleutel `sync.backfillStartDate`). Op test `2024-01-01`.
-  Zonder deze instelling weigert een backfill met een leesbare melding; hij gokt niet.
+## 4. Instellingen per omgeving — GEDAAN
 
-## 4b. Salessheet-pdf's koppelen
+- **De twee `SyncSchedule`-rijen** staan aan: `intraday` elke 360 minuten over 2 dagen
+  (`lots`, `orders`), `nightly` om 03:00 over 7 dagen (alle vijf endpoints) met
+  `windowOverrides: {"costs": 28}`. Laatste ronde 8 september 17:04.
+- **`sync.backfillStartDate`** staat op `2024-01-01`.
 
-Na de sync en na de backfills — anders bestaan de afrekeningen nog niet om aan te koppelen. Op test
-leverde dit 1.369 koppelingen op; zie [salessheet-pdfs-gekoppeld-2026-08-21.md](salessheet-pdfs-gekoppeld-2026-08-21.md)
-voor wat er precies gebeurde en [salessheet-pdfs-koppelen.md](salessheet-pdfs-koppelen.md) voor het commando.
+## 4b. Salessheet-pdf's koppelen — NOG NIET AF
 
-Draai eerst zonder `--apply`: dat is de standaard en toont wat hij zou doen.
+**364 van de 7.983 afrekeningen hebben een gekoppelde pdf (4,6%), waarvan er 362 zijn uitgelezen.**
+Op test is dat 4.061. Zolang dit niet gedraaid is, dekt de `pdf-mismatch`-controle op productie bijna
+niets af en is de omzetaansluiting daar niet te maken.
 
----
+Draai eerst zonder `--apply`: dat is de standaard en toont wat hij zou doen. Zie
+[salessheet-pdfs-gekoppeld-2026-08-21.md](salessheet-pdfs-gekoppeld-2026-08-21.md) voor wat er op test
+gebeurde en [salessheet-pdfs-koppelen.md](salessheet-pdfs-koppelen.md) voor het commando.
 
-## 5. Volgorde
+## 5. Volgorde — grotendeels afgewerkt
 
-1. ~~SQL uit §1 tegen de productiedatabase~~ — gedaan 24 augustus 2026
-2. `NEXT_PUBLIC_APP_ENV` zetten
-3. Beide Power Automate-verbindingen controleren
-4. ~~Merge naar `main` en laten deployen~~ — gedaan 24 augustus 2026 (`1d05752`)
-5. Eén ronde met de hand aftikken en de aantallen nalopen vóór je het schema aanzet
-6. Schedules aanzetten, basisdatum zetten
-7. Backfills draaien voor de leveranciers die je wilt
-8. Salessheet-pdf's koppelen (§4b)
+1. ~~SQL uit §1 tegen de productiedatabase~~ — gedaan 24 augustus 2026, aangevuld 8 september 2026
+2. ~~`NEXT_PUBLIC_APP_ENV` zetten~~ — gedaan (zie §2)
+3. ~~Beide Power Automate-verbindingen controleren~~ — gedaan; er draaien rondes
+4. ~~Merge naar `main` en laten deployen~~ — gedaan 24 augustus 2026 (`1d05752`), laatste 8 september (`bdc92f3`)
+5. ~~Eén ronde met de hand aftikken en de aantallen nalopen~~ — gedaan; 3.575 rondes sindsdien
+6. ~~Schedules aanzetten, basisdatum zetten~~ — gedaan (zie §4)
+7. Backfills draaien voor de leveranciers die je wilt — deels; zie §8
+8. Salessheet-pdf's koppelen (§4b) — nog niet
 
-## 6. Waar je op moet letten bij die eerste ronde
+## 6. Waar je op moet letten
 
 - **Het ordersvenster.** Sinds het consignatie-filter aan de bronkant zit haalt een ronde over acht
   dagen 7.009 rijen op in plaats van 15.229. Power Automate kwam niet terug bij 15.229 en net wel bij
   11.128, dus het venster van 7 dagen houdt stand — maar de dichtheid groeit, dus dit is geen
   instelling die je één keer goed zet.
-- **De overgeslagen leveranciers.** Na de eerste ronde staat er een lijst met relaties die geen
-  leverancier in de portal hebben. Op test zijn dat er 19, allemaal echte consignatie-kwekers. Zet er
-  alleen aan wat je bewust wilt: aanzetten haalt zijn historie op, en dat is uren werk.
-- **Niet-consignatie.** `SELECT COUNT(*) FROM "Lot" WHERE "purchaseType" <> 'CONS'` hoort nul te zijn
-  en te blijven. Staat er iets, dan is het filter niet meegekomen.
+- **De overgeslagen leveranciers.** Na een ronde staat er een lijst met relaties die geen leverancier
+  in de portal hebben. Zet er alleen aan wat je bewust wilt: aanzetten haalt zijn historie op, en dat
+  is uren werk.
+- **Niet-consignatie.** `SELECT COUNT(*) FROM "Lot" WHERE "purchaseType" <> 'CONS'` hoort nul te zijn.
+  **Op 8 september staan er 3.** Klein, maar het hoort nul te zijn, dus het is de moeite waard om te
+  kijken wanneer die binnengekomen zijn — het filter zit sindsdien aan de bronkant, dus vermoedelijk
+  zijn het rijen van vóór die wijziging.
+- **49 mislukte importrondes** van de 3.575. Niet nagelopen waarop.
 
 ## 7. Later, geen blokkade: sleutel per omgeving
 
@@ -119,3 +131,42 @@ Twee dingen die daarbij horen:
 - **De huidige sleutel vervangen** bij die gelegenheid; hij is in een screenshot terechtgekomen.
   Roteren kan zonder onderbreking: nieuwe als `IMPORT_API_KEY`, huidige als
   `IMPORT_API_KEY_PREVIOUS`, flow omzetten, `PREVIOUS` weghalen.
+
+## 8. Wat er nog ligt
+
+### 8a. Productie mist vrijwel al zijn orderregelcorrecties
+
+Gemeten op 8 september 2026, `Transaction` naar `bronFeitExtra`:
+
+| | productie | test |
+|---|---|---|
+| origineel | 344.867 | 347.131 |
+| correcties | **18** | 2.460 |
+| prullenbak-factcor | **7** | 739 |
+
+Partijcorrecties zijn er wél (17.342 tegen 17.714 op test), dus het zit niet in de lots-import maar
+in de orders-import. De aantallen originele regels lopen bijna gelijk, dus het is geen kwestie van
+minder historie: de correctierijen ontbreken.
+
+Dat is geen cosmetisch verschil. Correcties zijn negatief — op test gaat het om −EUR 313.993 over
+2.454 rijen. Ontbreken ze, dan staat de omzet in de portal te hoog, en dat is precies het getal dat
+de kweker op zijn afrekening naast de portal legt.
+
+**Vermoeden, niet gemeten:** de warehouse voegt correcties ná de levering toe en het schuivende
+venster komt daar nooit meer langs. Op test zijn sinds april meerdere inhaalrondes over oude
+kwartalen gedraaid (`repair-zero-orders.ts`, `repair-costs.ts`, `backfill-credit-invoices.ts`); op
+productie is dat nooit gebeurd. Dat verklaart het patroon, maar het is niet nagetrokken.
+
+Wat het níét oplost: `scripts/backfill-credit-invoices.ts` haalt alleen de creditfactuur op bij
+correcties die er al staan. Voor productie is een gewone **orders-backfill over 2025 en 2026** nodig
+die de ontbrekende rijen alsnog binnenhaalt. Meet daarna opnieuw.
+
+### 8b. Salessheet-pdf's koppelen
+
+Zie §4b. 364 van 7.983.
+
+### 8c. Kleine dingen
+
+- 3 partijen met een ander inkooptype dan `CONS` (§6).
+- 49 mislukte importrondes van de 3.575, oorzaak niet nagelopen.
+- `IMPORT_API_KEY_PREVIOUS` opruimen (§2) en de sleutel per omgeving scheiden (§7).
