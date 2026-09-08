@@ -57,7 +57,9 @@ async function main() {
           productName: true,
           invoicedVolume: true,
           grower: { select: { code: true } },
-          transactions: { select: { stems: true, amount: true, bronFeitExtra: true } },
+          transactions: {
+            select: { stems: true, amount: true, bronFeitExtra: true, creditInvoiceDate: true },
+          },
         },
         orderBy: { lotNumber: "asc" },
       },
@@ -98,6 +100,23 @@ async function main() {
     // wordt tegengeboekt en opnieuw geboekt, en het saldo is wat de afrekening drukt.
     const tegen = s.lots.flatMap((l) => l.transactions.filter((t) => t.bronFeitExtra !== "origineel"));
     const tegenBedrag = rond(tegen.reduce((a, t) => a + Number(t.amount), 0));
+    /*
+     * Welke van die tegenboekingen zijn geboekt op een creditfactuur die er nog
+     * niet was toen de afrekening werd gedrukt? Die staan niet op het papier dat
+     * de kweker heeft, terwijl de portal ze wel aftrekt — en dat is precies het
+     * verschil dat dit werkboek zoekt.
+     *
+     * De redencode zegt hier niets: alle negen VRK-codes komen in vrijwel
+     * dezelfde verhouding voor op leveringen die kloppen en op leveringen die
+     * afwijken. De creditfactuurdatum wel: gemeten over 438 leveringen valt 90%
+     * aan de juiste kant van `pdfInvoiceDate`.
+     */
+    const naAfrekening = s.pdfInvoiceDate
+      ? tegen.filter((t) => t.creditInvoiceDate !== null && t.creditInvoiceDate > s.pdfInvoiceDate!)
+      : [];
+    const naBedrag = rond(naAfrekening.reduce((a, t) => a + Number(t.amount), 0));
+    const zonderCredit = tegen.filter((t) => t.creditInvoiceDate === null).length;
+
     const zonderVerkoop = s.lots.filter((l) => l.transactions.length === 0 && (l.invoicedVolume ?? 0) > 0);
     const zonderVerkoopStelen = zonderVerkoop.reduce((a, l) => a + (l.invoicedVolume ?? 0), 0);
 
@@ -115,6 +134,12 @@ async function main() {
       verklaring =
         `${zonderVerkoop.length} partij(en) met samen ${zonderVerkoopStelen} aangevoerde stelen en geen enkele transactie: ` +
         zonderVerkoop.map((l) => l.lotNumber).join(", ");
+    } else if (naAfrekening.length > 0 && dekt(-naBedrag, d)) {
+      klasse = "creditfactuur na de afrekening dekt het gat";
+      verklaring =
+        `${naAfrekening.length} tegenboeking(en) van samen EUR ${naBedrag.toFixed(2)} staan op een creditfactuur ` +
+        `van ná ${datum(s.pdfInvoiceDate)}, de datum op de afrekening. Die stonden er dus nog niet op toen de ` +
+        `kweker zijn papier kreeg, terwijl de portal ze wel aftrekt.`;
     } else if (tegen.length > 0 && dekt(-tegenBedrag, d)) {
       klasse = "tegenboekingen dekken het gat";
       verklaring = `${tegen.length} tegenboeking(en) van samen EUR ${tegenBedrag.toFixed(2)}; de afrekening drukt die niet af of zet ze op EUR 0,00.`;
@@ -149,6 +174,9 @@ async function main() {
       verschilNetto: nettoPdf === null ? null : rond(nettoPdf - Number(s.netResult)),
       tegenboekingen: tegen.length,
       bedragTegenboekingen: tegenBedrag,
+      naAfrekening: naAfrekening.length,
+      bedragNaAfrekening: naBedrag,
+      zonderCreditfactuur: zonderCredit,
       klasse,
       verklaring,
       bestand: s.pdfDocument?.fileName ?? "",
@@ -217,6 +245,9 @@ async function schrijf(
     { header: "Verschil netto", key: "verschilNetto", width: 14 },
     { header: "Tegenboekingen", key: "tegenboekingen", width: 15 },
     { header: "Bedrag tegenboekingen", key: "bedragTegenboekingen", width: 20 },
+    { header: "Waarvan na afrekening", key: "naAfrekening", width: 20 },
+    { header: "Bedrag na afrekening", key: "bedragNaAfrekening", width: 20 },
+    { header: "Zonder creditfactuur", key: "zonderCreditfactuur", width: 20 },
     { header: "Klasse", key: "klasse", width: 34 },
     { header: "Verklaring", key: "verklaring", width: 80 },
     { header: "Bestand", key: "bestand", width: 44 },
