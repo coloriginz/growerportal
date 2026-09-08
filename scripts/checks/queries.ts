@@ -133,17 +133,50 @@ check(
   "orders: venster eindigt exclusief op _datum_key_vertrek",
   /_datum_key_vertrek\s*<\s*'2026-08-01'/.test(ordersPlain)
 );
-check("orders: geen leveranciersfilter zonder id", !/AND\s+rel_id_leverancier\s*=/.test(ordersPlain));
+check("orders: geen leveranciersfilter zonder id", !/AND\s+o\.rel_id_leverancier\s*=/.test(ordersPlain));
 check("orders: gebruikt vor_omzet niet", !/vor_omzet/.test(ordersPlain));
 check(
   "orders: berekent Afrekenomzet met afrekenprijs_per_steel",
-  /vor_aantal\s*\*\s*afrekenprijs_per_steel/.test(ordersPlain)
+  /o\.vor_aantal\s*\*\s*o\.afrekenprijs_per_steel/.test(ordersPlain)
+);
+
+// De creditfactuur bij een correctie. Zie de toelichting in queries/orders.ts:
+// dit is het enige kenmerk dat voorspelt of een correctie op de afrekening van de
+// kweker staat, en het komt uit de intermediate-laag omdat de mart het niet draagt.
+check(
+  "orders: haalt de creditfactuur uit de intermediate-laag",
+  ordersPlain.includes("intermediate.int_order_correctie") &&
+    ordersPlain.includes("staging.stg_kbtpro__fact")
+);
+check(
+  "orders: levert nummer en datum van de creditfactuur",
+  /AS "Creditfactuurnummer"/.test(ordersPlain) && /AS "Creditfactuurdatum"/.test(ordersPlain)
+);
+check(
+  "orders: koppelt de creditfactuur alleen aan correctieregels",
+  /AND o\.bronfeit_extra = 'correcties'/.test(ordersPlain),
+  "zonder deze voorwaarde plakt dezelfde credit ook aan de originele verkoop van hetzelfde ordreg_id"
+);
+check(
+  "orders: kiest per orderregel één creditfactuur",
+  /ROW_NUMBER\(\) OVER/.test(ordersPlain) && /WHERE g\.rn = 1/.test(ordersPlain),
+  "MAX per kolom zou een datum aan het nummer van een andere factuur kunnen plakken"
+);
+check(
+  "orders: begrenst de creditfactuur op hetzelfde venster",
+  /c\.vertrekdatum\s*>=\s*'2026-07-01'/.test(ordersPlain) &&
+    /c\.vertrekdatum\s*<\s*'2026-08-01'/.test(ordersPlain),
+  "zonder venster leest de subquery de hele correctietabel"
+);
+check(
+  "orders: koppelt op ordreg_id en part_id samen",
+  /cc\.ordreg_id = o\.ordreg_id/.test(ordersPlain) && /cc\.part_id\s*= o\.part_id/.test(ordersPlain)
 );
 
 const ordersFiltered = ordersQuery({ ...sampleWindow, supplierFabricId: 12345 });
 check(
   "orders: filtert op leverancier met id",
-  /AND\s+rel_id_leverancier\s*=\s*12345/.test(ordersFiltered)
+  /AND\s+o\.rel_id_leverancier\s*=\s*12345/.test(ordersFiltered)
 );
 
 // --- first delivery ---

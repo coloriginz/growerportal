@@ -426,6 +426,26 @@ model Transaction {
   amount              Decimal  @db.Decimal(12, 3)
   bronFeitExtra       String   @default("origineel") // "origineel", "correcties", "prullenbak-factcor"
   correctionReasonId  Int?     // reden_id from Fabric (no FK — safe with missing codes)
+
+  /// De creditfactuur waarop deze correctie is geboekt, uit
+  /// `intermediate.int_order_correctie.factuurnummer` gekoppeld aan
+  /// `staging.stg_kbtpro__fact`. Alleen gevuld op correctierijen.
+  ///
+  /// Dit is het enige kenmerk dat voorspelt of een correctie op de afrekening
+  /// van de kweker staat. De redencode doet dat niet: alle negen VRK-codes staan
+  /// in vrijwel dezelfde verhouding op leveringen die kloppen en op leveringen
+  /// die afwijken. De creditfactuurdatum wél — gemeten op 438 leveringen valt
+  /// 90% aan de goede kant van `SalesSheet.pdfInvoiceDate`: staat de credit ná
+  /// het drukken, dan mist de correctie op het papier (66 tegen 21), staat hij
+  /// ervoor, dan staat hij erop (328 tegen 23).
+  ///
+  /// `marts.fct_orders` draagt dit niet; het komt een laag lager vandaan. Dat is
+  /// bewust een risico: de intermediate-laag is dbt-binnenwerk en verandert
+  /// eerder van vorm dan de marts, die dat zelf ook al zonder aankondiging doen.
+  /// De duurzame plek is de mart — zolang dat er niet is, is dit de enige manier
+  /// om het te meten.
+  creditInvoiceNumber String?
+  creditInvoiceDate   DateTime?
   createdAt           DateTime @default(now())
   updatedAt           DateTime @default(now()) @updatedAt
 
