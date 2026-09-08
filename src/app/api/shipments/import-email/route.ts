@@ -200,11 +200,13 @@ async function processAttachment(
 
   // Step 1: Try filename parsing
   let reference: string | null = null;
+  let referenceHead: string | null = null;
   let ourInvoiceNumber: string | null = null;
 
   const parsed = parseSalesSheetFilename(attachment.name);
   if (parsed) {
     reference = parsed.reference;
+    referenceHead = parsed.referenceHead;
     ourInvoiceNumber = parsed.ourInvoiceNumber;
   } else {
     // Fallback: simple filename like "135-23-380914.pdf", then the loose form
@@ -277,7 +279,7 @@ async function processAttachment(
   // another supplier's PDF in the first place.
   if (!deliveryDate) deliveryDate = parsed?.deliveryDate ?? null;
 
-  let candidates = await findCandidates([reference, pdfReference], ourInvoiceNumber);
+  let candidates = await findCandidates([reference, referenceHead, pdfReference], ourInvoiceNumber);
   reference = reference || pdfReference;
 
   if (candidates.length === 0) {

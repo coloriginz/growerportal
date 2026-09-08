@@ -31,6 +31,30 @@ check("het rijke formaat leest de leverdatum maandeerst",
 check("een referentie met een spatie overleeft het rijke formaat",
   parseSalesSheetFilename("COLXTOG2 - 06_24_2026 00_15_00 - 20169 240626 - 405912.PDF")?.reference ===
     "20169 240626");
+
+/*
+ * Een referentie die zelf een " - " bevat. De afrekening staat in de database
+ * als "C843 - Gribholm" — 80 van deze op zowel test als productie, en op
+ * 8 september 2026 was er geen enkele van gekoppeld. Het laatste segment pakken
+ * gaf referentie "Gribholm", de naam van de kwekerij, en dus `no_match`.
+ */
+{
+  const vijf = parseSalesSheetFilename("COLOZFL - 08_29_2026 00_15_00 - C843 - Gribholm - 409039.PDF");
+  check(
+    "een referentie met een streepje erin blijft heel",
+    vijf?.reference === "C843 - Gribholm",
+    String(vijf?.reference)
+  );
+  check("en het eerste deel gaat als tweede kandidaat mee", vijf?.referenceHead === "C843");
+  check("ons factuurnummer blijft het laatste segment", vijf?.ourInvoiceNumber === "409039");
+  check("de leverancier blijft het eerste", vijf?.supplierCode === "COLOZFL");
+  check("de datum wordt nog steeds gelezen", vijf?.deliveryDate === "2026-08-29");
+}
+
+check(
+  "bij één middensegment is er geen tweede kandidaat",
+  parseSalesSheetFilename("COLCICE - 04_23_2026 00_15_00 - 212-28 - 401546.PDF")?.referenceHead === null
+);
 check("een onmogelijke datum levert geen datum op",
   parseSalesSheetFilename("COLCICE - 02_30_2026 00_15_00 - 212-28 - 401546.PDF")?.deliveryDate === null,
   "liever geen datum dan een verzonnen datum");

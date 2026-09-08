@@ -10,7 +10,28 @@
  */
 export interface ParsedFilename {
   supplierCode: string;
+  /**
+   * Alles tussen het datumsegment en ons factuurnummer, met " - " ertussen als
+   * het er meer dan één is.
+   *
+   * Niet alleen het laatste segment. "COLOZFL - 08_29_2026 00_15_00 - C843 -
+   * Gribholm - 409039.PDF" heeft er twee, en de database draagt ze samen als
+   * "C843 - Gribholm" — 80 afrekeningen op zowel test als productie, waarvan er
+   * op 8 september 2026 geen enkele gekoppeld was. Het laatste segment pakken
+   * leverde referentie "Gribholm", de naam van de kwekerij, die nergens op
+   * matcht.
+   */
   reference: string;
+  /**
+   * Het eerste segment van dat middenstuk, als er meer dan één is.
+   *
+   * Sommige leveringen dragen alleen dat deel ("C705" waar het bestand
+   * "C705 - Gribholm" zegt). Het gaat als tweede kandidaat mee naar de
+   * matching; de leverdatum op het document beslist alsnog of er gekoppeld
+   * wordt, dus een extra kandidaat verruimt de zoektocht zonder de controle te
+   * verzwakken.
+   */
+  referenceHead: string | null;
   ourInvoiceNumber: string;
   /**
    * Delivery date as YYYY-MM-DD, or null when the filename carries none that
@@ -59,12 +80,20 @@ export function parseSalesSheetFilename(filename: string): ParsedFilename | null
   if (parts.length < 4) return null;
 
   const supplierCode = parts[0].trim();
-  const reference = parts[parts.length - 2].trim();
+  const midden = parts.slice(2, -1).map((p) => p.trim());
+  const reference = midden.join(" - ");
+  const referenceHead = midden.length > 1 ? midden[0] : null;
   const ourInvoiceNumber = parts[parts.length - 1].trim();
 
   if (!supplierCode || !reference || !ourInvoiceNumber) return null;
 
-  return { supplierCode, reference, ourInvoiceNumber, deliveryDate: parseFilenameDate(parts[1]) };
+  return {
+    supplierCode,
+    reference,
+    referenceHead,
+    ourInvoiceNumber,
+    deliveryDate: parseFilenameDate(parts[1]),
+  };
 }
 
 /**
