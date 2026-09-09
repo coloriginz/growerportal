@@ -11,6 +11,7 @@ import {
   parseSalesSheetFilenameLoose,
 } from "@/lib/salessheet-filename-parser";
 import { parseSalesSheetPdf } from "@/lib/salessheet-pdf-parser";
+import { resolveLotOverlap } from "@/lib/salessheet-pdf-lines";
 import { z } from "zod";
 
 // Elke bijlage kost een PDF-parse plus een blob-upload; een mail met een handvol
@@ -253,6 +254,8 @@ async function processAttachment(
   // Buiten de try gedeclareerd om dezelfde reden als de bedragen: een
   // gefaalde parse (catch hieronder) laat hem op null staan.
   let pdfInvoiceDate: string | null = null;
+  // De partijnummers van het document; leeg als de parser geen tabel zag.
+  let pdfLotNumbers: string[] = [];
   try {
     const pdfParsed = await parseSalesSheetPdf(pdfBuffer);
     pdfReference = pdfParsed.reference;
@@ -262,6 +265,7 @@ async function processAttachment(
     pdfCosts = pdfParsed.costs;
     pdfNetResult = pdfParsed.netResult;
     pdfInvoiceDate = pdfParsed.invoiceDate;
+    pdfLotNumbers = pdfParsed.lotNumbers;
     pdfLeeg =
       pdfParsed.reference === null &&
       pdfParsed.deliveryDate === null &&
@@ -345,6 +349,33 @@ async function processAttachment(
         : pdfLeeg
           ? `pdf_empty:${reference}`
           : `no_delivery_date:${reference}`,
+    };
+  }
+
+  /*
+   * Stap 3b: de partijtabel van het document naast de partijen van de levering.
+   *
+   * Het nummer en de leverdatum samen bleken niet genoeg. COLXROOD kreeg de
+   * afrekening van COLXBAK omdat de leverancierscode uit de bestandsnaam alleen
+   * meetelt zolang die een kandidaat overlaat, en MPOIACOM kreeg die van COLXSHA
+   * omdat referentie "1" via de ontdubbelregel op `1-2255425` matcht. Beide keren
+   * klopte de leverdatum aan weerszijden. De partijnummers liegen niet.
+   *
+   * `unknown` — geen partijtabel gelezen — laat de koppeling staan; zie
+   * `resolveLotOverlap` voor waarom dat de veilige kant is.
+   */
+  const leveringLots = await prisma.lot.findMany({
+    where: { salesSheetId: salesSheet.id },
+    select: { lotNumber: true },
+  });
+  const overlap = resolveLotOverlap(
+    pdfLotNumbers,
+    leveringLots.map((l) => l.lotNumber)
+  );
+  if (overlap === "mismatch") {
+    return {
+      ok: false,
+      reason: `lot_mismatch:${reference}:${salesSheet.invoiceNumber}`,
     };
   }
 

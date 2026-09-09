@@ -160,3 +160,39 @@ export function parseSalesSheetLots(text: string): SalesSheetLot[] {
   }
   return lots;
 }
+
+/** Wat de partijtabel zegt over de vraag of dit document bij deze levering hoort. */
+export type LotOverlap = "match" | "mismatch" | "unknown";
+
+/**
+ * Hoort deze sales sheet bij deze levering, gemeten aan de partijnummers?
+ *
+ * De koppelroute matcht op het afrekeningnummer en bewijst de leverdatum, en
+ * dat is niet genoeg gebleken. Twee gevallen die er allebei doorheen kwamen:
+ *
+ * - COLXROOD kreeg `COLXBAK - 08_24_2026 00_00_00 - 24082026 - 408811.PDF`. De
+ *   leverancierscode in de bestandsnaam wordt alleen gebruikt als hij een
+ *   kandidaat overlaat, en COLXBAK had geen levering met dat nummer — dus viel
+ *   het filter weg. De leverdatum klopte aan beide kanten.
+ * - MPOIACOM kreeg `1-375118.pdf`. Referentie "1" matcht via de
+ *   ontdubbelregel op `1-2255425`, en de vijftien partijen op dat document
+ *   dragen allemaal COLXSHA.
+ *
+ * De partijnummers liegen niet: staat er geen enkele van het document op de
+ * levering, dan is het niet haar afrekening. Gemeten over 150 bestaande
+ * koppelingen delen alle 150 minstens één partij — nul valse alarmen.
+ *
+ * **Niets kunnen lezen is geen bewijs van ongelijk.** Vindt de parser geen
+ * partijtabel, dan blijft de uitkomst `unknown` en beslist deze controle niet
+ * mee. Anders zou een layout die wij niet lezen een goede koppeling losmaken:
+ * afrekening C00003596 (SCXGOLFB) is precies dat geval — partij 3659565 staat
+ * er wél op, maar de kopregel valt buiten wat de parser herkent.
+ */
+export function resolveLotOverlap(
+  pdfLotNumbers: readonly string[],
+  deliveryLotNumbers: readonly string[]
+): LotOverlap {
+  if (pdfLotNumbers.length === 0 || deliveryLotNumbers.length === 0) return "unknown";
+  const opLevering = new Set(deliveryLotNumbers);
+  return pdfLotNumbers.some((n) => opLevering.has(n)) ? "match" : "mismatch";
+}
