@@ -63,7 +63,12 @@ function issueBody(type: IssueType, search: string) {
     type === "missing-pdf"
       ? Prisma.sql`ss."pdfDocumentId" IS NULL`
       : type === "stem-gap"
-        ? Prisma.sql`ABS(COALESCE(l.delivered, 0) + COALESCE(corr.corrections, 0) - COALESCE(t.sold, 0)) > ${STEM_GAP_MARGIN}`
+        ? Prisma.sql`ABS(
+            COALESCE(l.delivered, 0)
+            + COALESCE(corr.corrections, 0)
+            + COALESCE(oc.ordercorr, 0)
+            - COALESCE(t.sold, 0)
+          ) > ${STEM_GAP_MARGIN}`
         : Prisma.sql`
             ss."pdfDocumentId" IS NOT NULL
             AND ss."pdfParsedAt" IS NOT NULL
@@ -128,6 +133,21 @@ function issueBody(type: IssueType, search: string) {
       FROM "Transaction" tx JOIN "Lot" lo ON lo.id = tx."lotId"
       WHERE lo."salesSheetId" IS NOT NULL GROUP BY lo."salesSheetId"
     ) t ON t."salesSheetId" = ss.id
+    -- Het tweede correctiespoor, en zonder dit klopt de som niet. Een correctie op
+    -- een orderregel verlaagt "verkocht" — Fabric draait de verkoop terug en boekt
+    -- hem opnieuw — maar hij hoort net zo goed bij het aangevoerde volume als een
+    -- partijcorrectie. Partij 3588009 (PCFFARCO) laat het zien: 14.400 aangevoerd,
+    -- -50 "less in box" als partijcorrectie, -180 "less delivered than ordered by
+    -- customer" als orderregelcorrectie, 14.170 verkocht. Zonder deze term meldt de
+    -- controle daar een gat van 180 terwijl de afrekening tot op de cent aansluit;
+    -- het papier drukt die 180 gewoon als nulregel af. Gemeten op test: 868 gevlagde
+    -- leveringen worden er 95, en er komt er geen enkele bij.
+    LEFT JOIN (
+      SELECT lo."salesSheetId", SUM(tx.stems) AS ordercorr
+      FROM "Transaction" tx JOIN "Lot" lo ON lo.id = tx."lotId"
+      WHERE lo."salesSheetId" IS NOT NULL AND tx."bronFeitExtra" <> 'origineel'
+      GROUP BY lo."salesSheetId"
+    ) oc ON oc."salesSheetId" = ss.id
     WHERE ${settledFilter}
       ${condition}
       ${searchFilter}
@@ -146,7 +166,7 @@ const pageSql = (body: Prisma.Sql, limit: number, offset: number) => Prisma.sql`
          sup.code AS "supplierCode",
          sup.name AS "supplierName",
          CAST(COALESCE(l.delivered, 0) AS INT) AS "deliveredStems",
-         CAST(COALESCE(corr.corrections, 0) AS INT) AS "correctionStems",
+         CAST(COALESCE(corr.corrections, 0) + COALESCE(oc.ordercorr, 0) AS INT) AS "correctionStems",
          CAST(COALESCE(t.sold, 0) AS INT) AS "soldStems",
          CAST((SELECT COUNT(*) FROM "SalesSheetCost" c WHERE c."salesSheetId" = ss.id) AS INT) AS "costCount",
          (ss."pdfDocumentId" IS NOT NULL) AS "hasPdf",
