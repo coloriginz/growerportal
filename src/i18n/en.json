@@ -103,6 +103,7 @@
   },
   "dashboard": {
     "title": "Dashboard",
+    "welcome": "Welcome",
     "stemsToday": "Stems Today",
     "stemsYesterday": "Stems Yesterday",
     "stemsSTD": "Stems STD",

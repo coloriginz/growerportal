@@ -103,6 +103,7 @@
   },
   "dashboard": {
     "title": "Dashboard",
+    "welcome": "Welkom",
     "stemsToday": "Stelen Vandaag",
     "stemsYesterday": "Stelen Gisteren",
     "stemsSTD": "Stelen STD",
