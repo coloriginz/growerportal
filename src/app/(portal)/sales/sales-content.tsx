@@ -24,7 +24,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { Button } from "@/components/ui/button";
-import { RiPlantLine, RiMoneyEuroCircleLine, RiLineChartLine, RiDownloadLine } from "@remixicon/react";
+import { RiPlantLine, RiMoneyEuroCircleLine, RiLineChartLine, RiDownloadLine, RiLoader4Line } from "@remixicon/react";
 import { exportToCSV } from "@/lib/export-csv";
 import { useFetch } from "@/hooks/use-fetch";
 import { ErrorState } from "@/components/ui/error-state";
@@ -314,8 +314,21 @@ export function SalesContent({ supplierId }: { supplierId: string | null }) {
         </div>
       )}
 
-      {data && !loading && (
-        <>
+      {/*
+        Tijdens het laden blijft het vorige antwoord staan, gedimd, met een
+        spinner erover. Hier stond `!loading`, waardoor het blok uit de DOM
+        verdween zodra je een andere periode koos: de hoogte klapte naar nul en
+        de Trends-sectie eronder sprong omhoog en daarna weer terug. useFetch
+        houdt `data` vast tot het nieuwe antwoord binnen is, dus er valt tijdens
+        het wachten iets te tonen.
+      */}
+      {data && (
+        <div className="relative">
+          <div
+            className={`space-y-8 transition-opacity duration-200 ${
+              loading ? "pointer-events-none opacity-40" : ""
+            }`}
+          >
           {/* Summary cards */}
           <div className="grid gap-4 sm:grid-cols-3">
             <Card>
@@ -548,7 +561,16 @@ export function SalesContent({ supplierId }: { supplierId: string | null }) {
               </CardContent>
             </Card>
           )}
-        </>
+          </div>
+          {loading && (
+            <div className="pointer-events-none absolute inset-0 z-10 flex justify-center">
+              {/* sticky: bij een lang blok blijft de spinner in beeld terwijl je scrollt */}
+              <div className="bg-background/90 ring-border sticky top-24 h-fit rounded-full p-2 shadow-sm ring-1">
+                <RiLoader4Line className="text-muted-foreground h-5 w-5 animate-spin" />
+              </div>
+            </div>
+          )}
+        </div>
       )}
 
       {/* Trends section */}
