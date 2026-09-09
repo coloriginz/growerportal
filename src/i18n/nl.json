@@ -103,6 +103,7 @@
   },
   "dashboard": {
     "title": "Dashboard",
+    "welcome": "Welkom",
     "stemsToday": "Stelen Vandaag",
     "stemsYesterday": "Stelen Gisteren",
     "stemsSTD": "Stelen STD",
@@ -318,6 +319,9 @@
     "suppliers": "Leveranciers",
     "users": "Gebruikers",
     "createUser": "Nieuwe Gebruiker",
+    "firstName": "Voornaam",
+    "middleName": "Tussenvoegsel",
+    "lastName": "Achternaam",
     "createSupplier": "Leverancier Aanmaken",
     "editSupplier": "Leverancier Bewerken",
     "activateAccount": "Account Activeren",

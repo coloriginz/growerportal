@@ -103,6 +103,7 @@
   },
   "dashboard": {
     "title": "Dashboard",
+    "welcome": "Welcome",
     "stemsToday": "Stems Today",
     "stemsYesterday": "Stems Yesterday",
     "stemsSTD": "Stems STD",
@@ -318,6 +319,9 @@
     "suppliers": "Suppliers",
     "users": "Users",
     "createUser": "New User",
+    "firstName": "First name",
+    "middleName": "Prefix",
+    "lastName": "Last name",
     "createSupplier": "Create Supplier",
     "editSupplier": "Edit Supplier",
     "activateAccount": "Activate Account",

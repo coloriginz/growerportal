@@ -23,6 +23,12 @@ Twee rondes:
 - **8 september 2026** — `Transaction.creditInvoiceNumber` en `creditInvoiceDate`, met
   `prisma db push` tegen `.env.production`, vóór de merge naar `main` (de sync draait daar elke vijf
   minuten, dus code die naar die kolommen schrijft mag er niet eerder zijn dan de kolommen zelf).
+- **10 september 2026** — `User.firstName`, `middleName` en `lastName`, alle drie nullable, met
+  `prisma db push` tegen `.env.production`, gevolgd door `scripts/backfill-user-names.ts --apply`:
+  17 gebruikers, geen enkele overgeslagen. Die ronde vult de drie velden uit de bestaande `name` en
+  laat `name` zelf ongemoeid — nagemeten na afloop wijkt geen enkele weergavenaam af van zijn delen,
+  dus in de portal is er niets aan te zien en hij kan zonder gevolgen nog eens. De kolommen gingen
+  bewust vóór de code: productie draait `main` en de schrijvende kant komt pas mee met de merge.
 
 `npx prisma migrate diff --from-url "<productie DIRECT_URL>" --to-schema-datamodel prisma/schema.prisma --script`
 geeft sindsdien "This is an empty migration". **Dat is de manier om dit te controleren** — geen

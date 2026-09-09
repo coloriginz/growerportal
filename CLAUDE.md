@@ -230,7 +230,7 @@ Role switching, supplier switching, and transporter switching are only available
 
 ### Other Entities
 - **Company** — Multi-tenant company entity (Coloriginz, OZ Import, MyPeony). Determines branding.
-- **User** — Authentication. Has role, optional supplierId/transporterId, kbtCode, company access.
+- **User** — Authentication. Has role, optional supplierId/transporterId, kbtCode, company access. The name is stored in three parts (`firstName`, `middleName` for the Dutch tussenvoegsel, `lastName`) with `name` kept alongside as the display name — the sidebar, the mail templates and the frozen `actorName` in the fust audit all read a single name. `composeName()` in `src/lib/person-name.ts` builds it on every create and update so the two can never disagree; `splitPersonName()` does the reverse for names entered before the split, greedily matching the longest particle so "Jan van der Berg" does not strand on "der Berg". A one-word name yields an empty surname on purpose: visibly incomplete asks to be filled in where an invented surname hides it. Covered by `scripts/checks/person-name.ts`; `scripts/backfill-user-names.ts` is the catch-up round and refuses any name it cannot rebuild exactly.
 - **Transporter** — Logistics partner for fust operations.
 - **Document** — Uploaded files (salessheet PDFs, contracts, growing plans).
 - **QualityIssue** — Quality problems on lots (code + stems affected).

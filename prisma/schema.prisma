@@ -33,7 +33,14 @@ model User {
   id             String   @id @default(uuid())
   email          String   @unique
   passwordHash   String?
+  // De weergavenaam, samengesteld uit de drie velden hieronder via
+  // composeName() in src/lib/person-name.ts. Blijft bestaan omdat de sidebar,
+  // de e-mailsjablonen en de bevroren actorName in de fust-audit hem als een
+  // enkele naam lezen.
   name           String
+  firstName      String?
+  middleName     String?  // tussenvoegsel: van, de, van der
+  lastName       String?
   role           String   @default("supplier") // supplier, commercie, admin, transporteur, finance
   kbtCode        String?  // KBT identifier for account linking
   // Microsoft Entra object id. Written best-effort on every SSO login. Email is

@@ -11,6 +11,8 @@
  * Uses pdfjs-dist legacy build for Vercel serverless compatibility.
  */
 
+import { parseSalesSheetLots } from "./salessheet-pdf-lines";
+
 export interface ParsedSalesSheetPdf {
   reference: string | null;
   ourInvoiceNumber: string | null;
@@ -27,6 +29,14 @@ export interface ParsedSalesSheetPdf {
   turnover: number | null;
   costs: number | null;
   netResult: number | null;
+  /**
+   * De partijnummers uit de tabel op het document.
+   *
+   * Alleen om te controleren of dit document bij de gekozen levering hoort —
+   * zie `resolveLotOverlap`. Leeg betekent dat de parser geen partijtabel zag,
+   * niet dat het document er geen heeft; die twee mogen niet door elkaar lopen.
+   */
+  lotNumbers: string[];
 }
 
 /** Convert a Dutch "DD-MM-YYYY" or "DD-MM-YY" date to "YYYY-MM-DD". */
@@ -305,7 +315,11 @@ export async function parseSalesSheetPdf(pdfBuffer: Buffer): Promise<ParsedSales
     // pagina 1, en amountsText is al over alle pagina's opgebouwd.
     const invoiceDate = parseInvoiceDate(amountsText);
 
-    return { reference, ourInvoiceNumber, deliveryDate, invoiceDate, turnover, costs, netResult };
+    // Zelfde tekst als de bedragen: de partijtabel over alle pagina's, in de vorm
+    // die parseSalesSheetLots verwacht (items met een spatie aaneen).
+    const lotNumbers = parseSalesSheetLots(amountsText).map((l) => l.lotNumber);
+
+    return { reference, ourInvoiceNumber, deliveryDate, invoiceDate, turnover, costs, netResult, lotNumbers };
   } finally {
     await doc.destroy();
   }

@@ -27,9 +27,28 @@
 | kweker anders naamloos aangemaakt door de orders-import | ja (volgorde: kwekers vóór orders, zie stap 3) | |
 | backfill start bij de eerste consignatiepartij | ja (`sync/backfill-start`) | |
 | PDF-koppeling controleert leverdatum en leverancier | ja (`shipments/import-email`) | |
+| verkopen ná de afrekeningsdatum tellen niet mee | ja (`import/orders` markeert, `shipments/import-email` herrekent bij het koppelen) | |
+| creditfactuur bij een correctie meenemen | ja (`sync/queries/orders` + `import/orders`) | |
+| zendingnummer volgt de bron als die wordt opgeschoond | ja (`import/lots`, ook op de update-tak) | |
+| Fabric-datum als UTC lezen | ja (alle vier de importroutes, `sync/fabric-date`) | |
+| referentie met " - " erin blijft heel bij het koppelen | ja (`salessheet-filename-parser` + `shipments/import-email`) | |
 | **historie navullen na een herziening** | **nee** | `repair-zero-orders.ts`, `repair-costs.ts` |
 
-Die laatste is bewust: het schuivende syncvenster komt niet terug op oude periodes. Na een schone
+Drie dingen die deze week zijn bijgekomen en die de procedure raken:
+
+- **De tijdzonefix haalt een val weg die precies bij een herbouw toeslaat.** Fabric levert datums
+  zonder tijdzone en JavaScript las die als lokale tijd, dus een backfill die vanaf een laptop wordt
+  aangestuurd schoof elke levering een dag terug. Op Vercel viel dat nooit op omdat die in UTC
+  draait. Sinds `parseFabricDate()` maakt het niet meer uit vanwaar je de rondes aanstuurt.
+- **De koppelstap (stap 5) heeft baat bij de parserfix.** Een bestandsnaam waarin de referentie zelf
+  een " - " bevat werd gelezen als alleen het laatste deel — "C843 - Gribholm" werd "Gribholm" en
+  koppelde nergens aan. Dat raakt 80 afrekeningen per omgeving; zonder die fix zouden die in de
+  grote batch stilletjes overslaan.
+- **Twee wijzigingen zijn weergave en geen import**, en hoeven dus niets in deze volgorde: een
+  gesplitste orderregel volledig tonen (`lib/transaction-merge`) en de stem-gap die beide
+  correctiesporen telt (`admin/shipment-issues`). Ze werken vanzelf zodra de data er staat.
+
+Die laatste rij in de tabel is bewust: het schuivende syncvenster komt niet terug op oude periodes. Na een schone
 start is dat geen probleem — de backfill haalt alles één keer op — maar zodra het warehouse
 historie herziet, loopt de portal weer achter. Dat vraagt een terugkerende ronde, geen eenmalige.
 **Ze horen dus niet in deze procedure thuis**: pas weer nodig zodra het warehouse ná de herbouw
@@ -255,7 +274,10 @@ niet streng genoeg en moet dát gerepareerd worden — niet de data met de hand.
       binnenkomen in plaats van pas bij de volgende reconciliatie.
 - [ ] **Partijen-backfill.** Orders en kosten zijn deze week portalbreed opnieuw opgehaald, partijen
       niet. Steellengtes, colli, kwaliteitscodes en correcties dateren dus nog van vóór de
-      reparaties, en de leveranciertoewijzing verhuist pas als er een lots-ronde langskomt.
+      reparaties, en de leveranciertoewijzing verhuist pas als er een lots-ronde langskomt. Sinds
+      9 september repareert zo'n ronde ook de zendingnummers die de bron inmiddels heeft
+      opgeschoond: gemeten over de 300 nieuwste leveringen 17 op productie en 13 op test. Dat is
+      geen cosmetiek — de PDF-koppeling matcht op dat nummer, dus een verouderd nummer koppelt nooit.
 - [ ] **Beslissen over `Grower.supplierId`** (zie `todo-kweker-bij-meerdere-leveranciers.md`). Bij
       een schone start is dat het moment om het model goed te zetten, want dan is er nog niets om te
       migreren.
