@@ -224,6 +224,7 @@
     "deliveryDate": "Delivery Date",
     "lots": "Lots",
     "stems": "Stems",
+    "totalStemsSuffix": "total stems",
     "turnover": "Turnover",
     "costs": "Costs",
     "netResult": "Net Result",
