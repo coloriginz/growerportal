@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { requireAuth } from "@/lib/api-helpers";
 import { z } from "zod";
 import { ROLES } from "@/types";
+import { composeName } from "@/lib/person-name";
 
 export async function GET(request: NextRequest) {
   const { error } = await requireAuth(["admin"]);
@@ -31,6 +32,9 @@ export async function GET(request: NextRequest) {
     users.map((u) => ({
       id: u.id,
       name: u.name,
+      firstName: u.firstName,
+      middleName: u.middleName,
+      lastName: u.lastName,
       email: u.email,
       role: u.role,
       kbtCode: u.kbtCode,
@@ -44,7 +48,12 @@ export async function GET(request: NextRequest) {
 }
 
 const createUserSchema = z.object({
-  name: z.string().min(1),
+  // De naam komt in drie delen binnen; `name` wordt eruit samengesteld en niet
+  // apart aangeleverd, zodat de weergavenaam nooit iets anders kan zeggen dan
+  // de losse velden.
+  firstName: z.string().trim().min(1),
+  middleName: z.string().trim().optional(),
+  lastName: z.string().trim().min(1),
   email: z.string().email(),
   role: z.enum(ROLES as unknown as [string, ...string[]]),
   kbtCode: z.string().nullable().optional(),
@@ -63,7 +72,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  const { name, email, role, kbtCode, transporterId, companyIds } = parsed.data;
+  const { firstName, middleName, lastName, email, role, kbtCode, transporterId, companyIds } = parsed.data;
+  const name = composeName({ firstName, middleName, lastName });
 
   // Transporteur role requires a transporter link
   if (role === "transporteur" && !transporterId) {
@@ -81,6 +91,9 @@ export async function POST(request: NextRequest) {
   const user = await prisma.user.create({
     data: {
       name,
+      firstName,
+      middleName: middleName || null,
+      lastName,
       email,
       role,
       kbtCode: kbtCode || null,

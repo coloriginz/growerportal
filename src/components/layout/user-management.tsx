@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useLanguage } from "@/components/providers/language-provider";
 import { useFetch } from "@/hooks/use-fetch";
+import { composeName, splitPersonName } from "@/lib/person-name";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -42,7 +43,11 @@ import type { Role } from "@/types";
 
 interface UserRow {
   id: string;
+  /** Weergavenaam, samengesteld uit de drie velden hieronder. */
   name: string;
+  firstName: string | null;
+  middleName: string | null;
+  lastName: string | null;
   email: string;
   role: string;
   kbtCode: string | null;
@@ -104,7 +109,9 @@ export function UserManagement({ allowedRoles, transporters: externalTransporter
   const [deleteDialog, setDeleteDialog] = useState<UserRow | null>(null);
 
   // Form state
-  const [formName, setFormName] = useState("");
+  const [formFirstName, setFormFirstName] = useState("");
+  const [formMiddleName, setFormMiddleName] = useState("");
+  const [formLastName, setFormLastName] = useState("");
   const [formEmail, setFormEmail] = useState("");
   const [formRole, setFormRole] = useState<string>(allowedRoles[0]);
   const [formKbtCode, setFormKbtCode] = useState("");
@@ -113,14 +120,24 @@ export function UserManagement({ allowedRoles, transporters: externalTransporter
 
   const openDialog = (user: UserRow | "new") => {
     if (user === "new") {
-      setFormName("");
+      setFormFirstName("");
+      setFormMiddleName("");
+      setFormLastName("");
       setFormEmail("");
       setFormRole(allowedRoles[0]);
       setFormKbtCode("");
       setFormTransporterId(null);
       setFormCompanyIds([]);
     } else {
-      setFormName(user.name);
+      // Gebruikers van vóór de gesplitste velden hebben alleen `name`. Die
+      // wordt hier alsnog uit elkaar gehaald, zodat het formulier niet leeg
+      // opent en de naam bij opslaan niet verdwijnt.
+      const parts = user.firstName || user.lastName
+        ? { firstName: user.firstName ?? "", middleName: user.middleName ?? "", lastName: user.lastName ?? "" }
+        : splitPersonName(user.name);
+      setFormFirstName(parts.firstName);
+      setFormMiddleName(parts.middleName);
+      setFormLastName(parts.lastName);
       setFormEmail(user.email);
       setFormRole(user.role);
       setFormKbtCode(user.kbtCode || "");
@@ -131,7 +148,7 @@ export function UserManagement({ allowedRoles, transporters: externalTransporter
   };
 
   const saveUser = async () => {
-    if (!formName.trim() || !formEmail.trim()) return;
+    if (!formFirstName.trim() || !formLastName.trim() || !formEmail.trim()) return;
     if (formRole === "transporteur" && !formTransporterId) {
       toast.error(t("admin.transporterRequired" as Parameters<typeof t>[0]));
       return;
@@ -146,7 +163,9 @@ export function UserManagement({ allowedRoles, transporters: externalTransporter
       const method = isNew ? "POST" : "PATCH";
 
       const body: Record<string, unknown> = {
-        name: formName.trim(),
+        firstName: formFirstName.trim(),
+        middleName: formMiddleName.trim(),
+        lastName: formLastName.trim(),
         email: formEmail.trim(),
         role: formRole,
         kbtCode: formKbtCode.trim() || null,
@@ -332,18 +351,44 @@ export function UserManagement({ allowedRoles, transporters: externalTransporter
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>
-              {editDialog === "new" ? t("admin.createUser") : `${formName}`}
+              {editDialog === "new"
+                ? t("admin.createUser")
+                : composeName({ firstName: formFirstName, middleName: formMiddleName, lastName: formLastName })}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
-            <div className="space-y-2">
-              <Label htmlFor="user-name">{t("fust.name")} *</Label>
-              <Input
-                id="user-name"
-                value={formName}
-                onChange={(e) => setFormName(e.target.value)}
-                required
-              />
+            {/*
+              Drie velden in plaats van één. Het tussenvoegsel staat er los
+              tussen omdat "de Vries" onder V hoort en niet onder D — met de
+              hele naam in één veld valt dat onderscheid niet te maken.
+            */}
+            <div className="grid grid-cols-[1fr_auto_1fr] gap-2">
+              <div className="space-y-2">
+                <Label htmlFor="user-first-name">{t("admin.firstName")} *</Label>
+                <Input
+                  id="user-first-name"
+                  value={formFirstName}
+                  onChange={(e) => setFormFirstName(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="w-20 space-y-2">
+                <Label htmlFor="user-middle-name">{t("admin.middleName")}</Label>
+                <Input
+                  id="user-middle-name"
+                  value={formMiddleName}
+                  onChange={(e) => setFormMiddleName(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="user-last-name">{t("admin.lastName")} *</Label>
+                <Input
+                  id="user-last-name"
+                  value={formLastName}
+                  onChange={(e) => setFormLastName(e.target.value)}
+                  required
+                />
+              </div>
             </div>
             <div className="space-y-2">
               <Label htmlFor="user-email">{t("fust.email")} *</Label>
@@ -433,7 +478,7 @@ export function UserManagement({ allowedRoles, transporters: externalTransporter
             </Button>
             <Button
               onClick={saveUser}
-              disabled={saving || !formName.trim() || !formEmail.trim()}
+              disabled={saving || !formFirstName.trim() || !formLastName.trim() || !formEmail.trim()}
             >
               {editDialog === "new" ? t("fust.create") : t("fust.save")}
             </Button>
