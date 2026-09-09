@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -111,9 +111,16 @@ interface ShipmentDetailProps {
   };
   correctionReasons?: Record<number, CorrectionReason>;
   status: ShipmentStatus;
+  /**
+   * Aangevoerde stelen: som van `Lot.invoicedVolume` over de partijen van deze
+   * levering. Niet `Lot.totalStems` — die kolom wordt door de orders-import
+   * overschreven met het verkochte aantal (zie shipment-status.ts). Wordt alleen
+   * getoond zolang de levering nog verkoopt; daarna is verkocht het hele verhaal.
+   */
+  deliveredStems: number;
 }
 
-export function ShipmentDetail({ shipment, correctionReasons = {}, status }: ShipmentDetailProps) {
+export function ShipmentDetail({ shipment, correctionReasons = {}, status, deliveredStems }: ShipmentDetailProps) {
   const { t, language } = useLanguage();
   const [expandedLots, setExpandedLots] = useState<Set<string>>(new Set());
 
@@ -204,7 +211,20 @@ export function ShipmentDetail({ shipment, correctionReasons = {}, status }: Shi
         <Card>
           <CardContent className="pt-6">
             <p className="kpi-label">{t("shipments.stems")}</p>
-            <p className="mt-1 text-2xl font-bold tabular-nums">{formatNumber(totalStems)}</p>
+            <div className="mt-1 flex items-baseline justify-between gap-2">
+              <p className="text-2xl font-bold tabular-nums">{formatNumber(totalStems)}</p>
+              {/*
+                Zolang er nog verkocht wordt, zegt het verkochte aantal alleen iets
+                naast de omvang van de levering: 4.200 van 12.000 is een heel ander
+                bericht dan 4.200 van 4.300. Bij Finalizing en Completed is verkocht
+                per definitie (bijna) de hele partij en voegt de noemer niets toe.
+              */}
+              {status === "selling" && deliveredStems > 0 && (
+                <span className="text-muted-foreground shrink-0 text-sm tabular-nums">
+                  / {formatNumber(deliveredStems)} {t("shipments.totalStemsSuffix")}
+                </span>
+              )}
+            </div>
           </CardContent>
         </Card>
         <Card>
@@ -258,9 +278,8 @@ export function ShipmentDetail({ shipment, correctionReasons = {}, status }: Shi
                 const hasTransactions = lot.transactions.length > 0;
                 const stems = lotStems(lot);
                 return (
-                  <>
+                  <Fragment key={lot.id}>
                     <TableRow
-                      key={lot.id}
                       className={hasTransactions ? "cursor-pointer hover:bg-accent/50" : ""}
                       onClick={() => hasTransactions && toggleLot(lot.id)}
                     >
@@ -319,7 +338,7 @@ export function ShipmentDetail({ shipment, correctionReasons = {}, status }: Shi
                         </TableRow>
                       );
                     })}
-                  </>
+                  </Fragment>
                 );
               })}
               {shipment.lots.length > 1 && (

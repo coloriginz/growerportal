@@ -108,6 +108,7 @@ export default async function ShipmentDetailPage({ params }: Props) {
       shipment={JSON.parse(JSON.stringify(salesSheet))}
       correctionReasons={correctionReasons}
       status={status}
+      deliveredStems={deliveredStems}
     />
   );
 }

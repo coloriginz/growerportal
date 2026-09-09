@@ -224,6 +224,7 @@
     "deliveryDate": "Leverdatum",
     "lots": "Partijen",
     "stems": "Stelen",
+    "totalStemsSuffix": "totaal stelen",
     "turnover": "Omzet",
     "costs": "Kosten",
     "netResult": "Nettoresultaat",
